@@ -33,6 +33,7 @@ export const folders = sqliteTable(
     order: integer("order").notNull().default(0),
     organizationId: text("organization_id")
       .notNull()
+      .default("local-dev-org")
       .references(() => organizations.id),
   },
   (table) => [index("folders_org_idx").on(table.organizationId)]
@@ -57,6 +58,7 @@ export const testCases = sqliteTable(
       .default("normal"),
     organizationId: text("organization_id")
       .notNull()
+      .default("local-dev-org")
       .references(() => organizations.id),
     createdAt: integer("created_at", { mode: "timestamp" })
       .notNull()
@@ -100,6 +102,7 @@ export const testRuns = sqliteTable(
     description: text("description"),
     organizationId: text("organization_id")
       .notNull()
+      .default("local-dev-org")
       .references(() => organizations.id),
     // Linear integration fields
     linearProjectId: text("linear_project_id"),

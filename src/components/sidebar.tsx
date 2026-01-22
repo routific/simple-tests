@@ -8,6 +8,9 @@ import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Button } from "@/components/ui/button";
 
+// Check if we're in local dev mode (client-side check via env exposure)
+const isLocalDevMode = !process.env.NEXT_PUBLIC_HAS_LINEAR_AUTH;
+
 const navItems = [
   { href: "/", label: "Dashboard", icon: HomeIcon },
   { href: "/cases", label: "Test Cases", icon: TestCaseIcon },
@@ -141,7 +144,35 @@ export function Sidebar() {
 
       {/* User Section */}
       <div className={cn("border-t border-border", collapsed ? "p-2" : "p-4")}>
-        {status === "loading" ? (
+        {isLocalDevMode ? (
+          // Local dev mode - show local dev indicator
+          <div
+            className={cn(
+              "flex items-center",
+              collapsed ? "justify-center" : "gap-3"
+            )}
+          >
+            <div
+              className="w-9 h-9 rounded-full bg-amber-500/10 flex items-center justify-center shrink-0"
+              title={collapsed ? "Local Development" : undefined}
+            >
+              <CodeIcon className="w-4 h-4 text-amber-600" />
+            </div>
+            <div
+              className={cn(
+                "flex-1 min-w-0 overflow-hidden transition-all duration-300",
+                collapsed ? "w-0 opacity-0" : "w-auto opacity-100"
+              )}
+            >
+              <div className="text-sm font-medium truncate text-foreground">
+                Local Dev
+              </div>
+              <div className="text-xs text-muted-foreground">
+                No auth required
+              </div>
+            </div>
+          </div>
+        ) : status === "loading" ? (
           <div
             className={cn(
               "flex items-center",
@@ -199,16 +230,16 @@ export function Sidebar() {
           </div>
         ) : collapsed ? (
           <button
-            onClick={() => signIn("google")}
-            title="Sign in with Google"
+            onClick={() => signIn("linear")}
+            title="Sign in with Linear"
             className="w-9 h-9 rounded-full bg-brand-500 flex items-center justify-center text-white hover:bg-brand-600 transition-colors mx-auto"
           >
-            <GoogleIcon className="w-4 h-4" />
+            <LinearIcon className="w-4 h-4" />
           </button>
         ) : (
-          <Button onClick={() => signIn("google")} className="w-full" size="sm">
-            <GoogleIcon className="w-4 h-4" />
-            Sign in with Google
+          <Button onClick={() => signIn("linear")} className="w-full" size="sm">
+            <LinearIcon className="w-4 h-4" />
+            Sign in with Linear
           </Button>
         )}
       </div>
@@ -306,24 +337,42 @@ function RunIcon({ className }: { className?: string }) {
   );
 }
 
-function GoogleIcon({ className }: { className?: string }) {
+function LinearIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24">
+    <svg className={className} viewBox="0 0 100 100" fill="none">
       <path
+        d="M1.22541 61.5228c-.2225-.9485.90748-1.5459 1.59638-.857L39.3342 97.1782c.6889.6889.0915 1.8189-.857 1.5765C17.7148 93.8498 3.60073 79.3544 1.22541 61.5228zM96.7746 38.4772c.2225.9485-.9075 1.5459-1.5964.857L58.6658 2.82183c-.6889-.68886-.0915-1.81892.857-1.57646C80.2852 6.15023 94.3993 20.6456 96.7746 38.4772z"
         fill="currentColor"
-        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
       />
       <path
+        d="M87.2112 59.5496c.4076-.9266-.2877-1.9659-1.2984-1.9659H63.2174c-.7093 0-1.3429.4504-1.5759 1.1229l-7.5127 21.6712c-.3424.9876.5028 1.9938 1.5418 1.8352 16.4176-2.5085 30.0102-13.3052 31.5406-22.6634zM12.7888 40.4504c-.4076.9266.2877 1.9659 1.2984 1.9659h22.6954c.7093 0 1.3429-.4504 1.5759-1.1229l7.5127-21.6712c.3424-.9876-.5028-1.9937-1.5418-1.8352-16.4176 2.5085-30.0102 13.3052-31.5406 22.6634z"
         fill="currentColor"
-        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
       />
       <path
+        d="M73.7646 13.8795c.8162-.6373.7204-1.8946-.1753-2.3919-3.8424-2.13323-8.0476-3.62939-12.4849-4.39629-.9762-.16889-1.8091.66728-1.6091 1.63629l7.2174 34.8958c.1704.8243 1.0855 1.2353 1.8207.8074l5.2312-3.2473z"
         fill="currentColor"
-        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
       />
       <path
+        d="M26.2354 86.1205c-.8162.6373-.7204 1.8946.1753 2.3919 3.8424 2.1332 8.0476 3.6294 12.4849 4.3963.9762.1689 1.8091-.6673 1.6091-1.6363l-7.2174-34.8958c-.1704-.8243-1.0855-1.2353-1.8207-.8074l-5.2312 3.2473z"
         fill="currentColor"
-        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+      />
+    </svg>
+  );
+}
+
+function CodeIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={1.5}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5"
       />
     </svg>
   );

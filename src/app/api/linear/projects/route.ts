@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getProjects } from "@/lib/linear";
 import { getSessionWithOrg } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   const session = await getSessionWithOrg();
   if (!session) {
