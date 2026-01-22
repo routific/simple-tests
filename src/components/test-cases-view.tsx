@@ -693,7 +693,7 @@ function NewCaseModal({
           : "Create a new test case"
       }
     >
-      <div className="p-6 space-y-4">
+      <div className="p-6 space-y-4 min-h-[400px]">
         {error && (
           <div className="p-3 bg-destructive/10 border border-destructive/20 text-destructive rounded-lg text-sm">
             {error}
