@@ -555,13 +555,13 @@ function FolderItem({
         onDrop={(e) => onDrop(e, folder.id)}
         onContextMenu={(e) => onContextMenu(e, folder.id, folder.name, folder.parentId ?? null)}
         className={cn(
-          "flex items-center gap-1.5 py-1.5 rounded-lg mx-2 relative transition-all cursor-grab",
+          "flex items-center gap-2 py-2 pr-2 rounded-lg mx-2 relative transition-all cursor-grab",
           isSelected
             ? "bg-brand-500/10 text-brand-600 dark:text-brand-400 font-medium"
             : "hover:bg-muted text-muted-foreground hover:text-foreground",
           isDropTarget && "ring-2 ring-brand-500 bg-brand-500/10"
         )}
-        style={{ paddingLeft: `${8 + level * 20}px` }}
+        style={{ paddingLeft: `${12 + level * 20}px` }}
       >
         {hasChildren ? (
           <button
@@ -617,7 +617,7 @@ function FolderItem({
         )}
 
         {totalCount > 0 && !isRenaming && (
-          <span className="text-xs text-muted-foreground pr-2 tabular-nums">
+          <span className="text-xs text-muted-foreground tabular-nums">
             {totalCount}
           </span>
         )}
