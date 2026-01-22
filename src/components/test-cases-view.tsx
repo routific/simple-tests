@@ -53,6 +53,9 @@ interface TestCasesViewProps {
   currentFolderName: string | null;
   search: string;
   stateFilter: string;
+  totalCount: number;
+  hasMore: boolean;
+  currentOffset: number;
 }
 
 export function TestCasesView({
@@ -62,6 +65,9 @@ export function TestCasesView({
   currentFolderName,
   search,
   stateFilter,
+  totalCount,
+  hasMore,
+  currentOffset,
 }: TestCasesViewProps) {
   const router = useRouter();
   const [isNewCaseModalOpen, setIsNewCaseModalOpen] = useState(false);
@@ -132,7 +138,8 @@ export function TestCasesView({
             {currentFolderName || "All Test Cases"}
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {cases.length} test case{cases.length !== 1 ? "s" : ""}
+            {totalCount} test case{totalCount !== 1 ? "s" : ""}
+            {hasMore && ` (showing ${cases.length})`}
           </p>
         </div>
         <Button size="sm" onClick={() => setIsNewCaseModalOpen(true)}>
@@ -149,6 +156,8 @@ export function TestCasesView({
         search={search}
         stateFilter={stateFilter}
         selectedCases={selectedCases}
+        hasMore={hasMore}
+        currentOffset={currentOffset}
         onCaseClick={handleCaseClick}
         onToggleSelection={toggleCaseSelection}
         onSelectAll={selectAllCases}
@@ -164,6 +173,8 @@ export function TestCasesView({
           } else {
             params.delete("q");
           }
+          // Reset offset when search changes
+          params.delete("offset");
           router.push(`/cases?${params.toString()}`);
         }}
         onStateFilterChange={(value) => {
@@ -173,6 +184,13 @@ export function TestCasesView({
           } else {
             params.delete("state");
           }
+          // Reset offset when filter changes
+          params.delete("offset");
+          router.push(`/cases?${params.toString()}`);
+        }}
+        onLoadMore={() => {
+          const params = new URLSearchParams(window.location.search);
+          params.set("offset", String(currentOffset + 100));
           router.push(`/cases?${params.toString()}`);
         }}
       />
@@ -208,6 +226,8 @@ function TestCaseListContent({
   search,
   stateFilter,
   selectedCases,
+  hasMore,
+  currentOffset,
   onCaseClick,
   onToggleSelection,
   onSelectAll,
@@ -215,6 +235,7 @@ function TestCaseListContent({
   onSelectionAction,
   onSearchChange,
   onStateFilterChange,
+  onLoadMore,
 }: {
   cases: TestCase[];
   folders: Folder[];
@@ -222,6 +243,8 @@ function TestCaseListContent({
   search: string;
   stateFilter: string;
   selectedCases: Set<number>;
+  hasMore: boolean;
+  currentOffset: number;
   onCaseClick: (testCase: TestCase) => void;
   onToggleSelection: (id: number, e: React.MouseEvent) => void;
   onSelectAll: () => void;
@@ -229,6 +252,7 @@ function TestCaseListContent({
   onSelectionAction: () => void;
   onSearchChange: (value: string) => void;
   onStateFilterChange: (value: string) => void;
+  onLoadMore: () => void;
 }) {
   const [isPending, startTransition] = useTransition();
   const [showMoveModal, setShowMoveModal] = useState(false);
@@ -470,7 +494,7 @@ function TestCaseListContent({
           title="Move to Folder"
           description={`Move ${selectedCases.size} test case(s) to a folder`}
         >
-          <div className="p-6">
+          <div className="p-6 min-h-[400px]">
             <FolderPicker
               folders={folders}
               value={null}
