@@ -17,3 +17,35 @@ export function buildFolderTree(
       children: buildFolderTree(folders, folder.id),
     }));
 }
+
+/**
+ * Build breadcrumb path from root to target folder
+ * Returns array of folder names: ["Parent", "Child", "Grandchild"]
+ */
+export function buildFolderBreadcrumb(
+  folderId: number | null,
+  folders: Pick<Folder, "id" | "name" | "parentId">[]
+): string[] {
+  if (!folderId) return [];
+
+  const folderMap = new Map(folders.map((f) => [f.id, f]));
+  const path: string[] = [];
+  let currentId: number | null = folderId;
+
+  while (currentId !== null) {
+    const folder = folderMap.get(currentId);
+    if (!folder) break;
+    path.unshift(folder.name);
+    currentId = folder.parentId;
+  }
+
+  return path;
+}
+
+/**
+ * Format breadcrumb array as display string
+ * ["Parent", "Child", "Grandchild"] -> "Parent > Child > Grandchild"
+ */
+export function formatBreadcrumb(path: string[], separator = " > "): string {
+  return path.join(separator);
+}

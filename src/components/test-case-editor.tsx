@@ -1,17 +1,26 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { TestCase, Folder } from "@/lib/db/schema";
-import { GherkinEditor } from "./gherkin-editor";
+import { ScenarioAccordion } from "./scenario-accordion";
 import {
   saveTestCase,
   deleteTestCase,
 } from "@/app/cases/actions";
+import { getScenarios, saveScenario } from "@/app/cases/scenario-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { FolderPicker } from "@/components/folder-picker";
+
+interface Scenario {
+  id: number;
+  title: string;
+  gherkin: string;
+  order: number;
+}
 
 interface Props {
   testCase: TestCase | null;
@@ -29,14 +38,25 @@ export function TestCaseEditor({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [title, setTitle] = useState(testCase?.title || "");
-  const [gherkin, setGherkin] = useState(testCase?.gherkin || "");
-  const [folderId, setFolderId] = useState(
-    testCase?.folderId || defaultFolderId || ""
+  const [folderId, setFolderId] = useState<number | null>(
+    testCase?.folderId ?? defaultFolderId ?? null
   );
   const [state, setState] = useState(testCase?.state || "active");
+  const [scenarios, setScenarios] = useState<Scenario[]>([]);
+  const [loadingScenarios, setLoadingScenarios] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const isNew = !testCase;
+
+  // Fetch scenarios when editing existing test case
+  useEffect(() => {
+    if (testCase?.id) {
+      setLoadingScenarios(true);
+      getScenarios(testCase.id)
+        .then((data) => setScenarios(data))
+        .finally(() => setLoadingScenarios(false));
+    }
+  }, [testCase?.id]);
 
   const handleSave = () => {
     if (!title.trim()) {
@@ -50,16 +70,27 @@ export function TestCaseEditor({
         const result = await saveTestCase({
           id: testCase?.id,
           title: title.trim(),
-          gherkin,
-          folderId: folderId ? Number(folderId) : null,
+          folderId: folderId,
           state: state as "active" | "draft" | "retired" | "rejected",
         });
 
         if (result.error) {
           setError(result.error);
         } else if (isNew && result.id) {
+          // Create a default scenario for new test case
+          await saveScenario({
+            testCaseId: result.id,
+            title: "Default Scenario",
+            gherkin: "",
+            order: 0,
+          });
           router.push(`/cases/${result.id}`);
         } else {
+          // Save scenarios using the global function
+          const saveScenariosFn = (window as Window & { __saveScenarios?: () => Promise<boolean> }).__saveScenarios;
+          if (saveScenariosFn) {
+            await saveScenariosFn();
+          }
           router.refresh();
         }
       } catch {
@@ -163,18 +194,12 @@ export function TestCaseEditor({
               <label className="block text-sm font-medium text-foreground mb-2">
                 Folder
               </label>
-              <select
+              <FolderPicker
+                folders={folders}
                 value={folderId}
-                onChange={(e) => setFolderId(e.target.value)}
-                className="w-full px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
-              >
-                <option value="">No folder</option>
-                {folders.map((folder) => (
-                  <option key={folder.id} value={folder.id}>
-                    {folder.name}
-                  </option>
-                ))}
-              </select>
+                onChange={setFolderId}
+                placeholder="No folder"
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">
@@ -193,13 +218,30 @@ export function TestCaseEditor({
             </div>
           </div>
 
-          {/* Gherkin Editor */}
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-2">
-              Gherkin Scenarios
-            </label>
-            <GherkinEditor value={gherkin} onChange={setGherkin} />
-          </div>
+          {/* Scenarios */}
+          {!isNew && (
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Scenarios
+              </label>
+              {loadingScenarios ? (
+                <div className="text-sm text-muted-foreground">Loading scenarios...</div>
+              ) : (
+                <ScenarioAccordion
+                  testCaseId={testCase!.id}
+                  scenarios={scenarios}
+                  isEditing={true}
+                  onChange={setScenarios}
+                />
+              )}
+            </div>
+          )}
+
+          {isNew && (
+            <p className="text-sm text-muted-foreground">
+              You can add scenarios after creating the test case.
+            </p>
+          )}
         </div>
       </div>
     </>

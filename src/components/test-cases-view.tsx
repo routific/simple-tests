@@ -1,22 +1,32 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/modal";
 import { SlidePanel } from "@/components/ui/slide-panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { GherkinEditor, GherkinDisplay } from "@/components/gherkin-editor";
+import { ScenarioAccordion } from "@/components/scenario-accordion";
 import { saveTestCase, deleteTestCase } from "@/app/cases/actions";
+import { getScenarios, saveScenario } from "@/app/cases/scenario-actions";
 import { cn } from "@/lib/utils";
+import { buildFolderBreadcrumb, formatBreadcrumb } from "@/lib/folders";
+import { FolderPicker } from "@/components/folder-picker";
+
+interface Scenario {
+  id: number;
+  title: string;
+  gherkin: string;
+  order: number;
+}
 
 interface TestCase {
   id: number;
   title: string;
   state: string;
   template: string;
-  gherkin?: string;
+  scenarioCount?: number;
   updatedAt: Date | null;
   folderName: string | null;
   folderId?: number | null;
@@ -25,6 +35,7 @@ interface TestCase {
 interface Folder {
   id: number;
   name: string;
+  parentId: number | null;
 }
 
 interface TestCasesViewProps {
@@ -89,6 +100,7 @@ export function TestCasesView({
       {/* Test Case List */}
       <TestCaseListContent
         cases={cases}
+        folders={folders}
         search={search}
         stateFilter={stateFilter}
         onCaseClick={handleCaseClick}
@@ -138,6 +150,7 @@ export function TestCasesView({
 // Test Case List Content
 function TestCaseListContent({
   cases,
+  folders,
   search,
   stateFilter,
   onCaseClick,
@@ -145,6 +158,7 @@ function TestCaseListContent({
   onStateFilterChange,
 }: {
   cases: TestCase[];
+  folders: Folder[];
   search: string;
   stateFilter: string;
   onCaseClick: (testCase: TestCase) => void;
@@ -242,10 +256,10 @@ function TestCaseListContent({
                     {testCase.title}
                   </div>
                   <div className="text-sm text-muted-foreground flex items-center gap-2 mt-0.5">
-                    {testCase.folderName && (
+                    {testCase.folderId && (
                       <>
                         <FolderIcon className="w-3.5 h-3.5" />
-                        <span>{testCase.folderName}</span>
+                        <span>{formatBreadcrumb(buildFolderBreadcrumb(testCase.folderId, folders))}</span>
                         <span className="text-border">·</span>
                       </>
                     )}
@@ -293,10 +307,7 @@ function NewCaseModal({
 }) {
   const [isPending, startTransition] = useTransition();
   const [title, setTitle] = useState("");
-  const [gherkin, setGherkin] = useState("");
-  const [folderId, setFolderId] = useState<string>(
-    currentFolderId?.toString() || ""
-  );
+  const [folderId, setFolderId] = useState<number | null>(currentFolderId);
   const [state, setState] = useState<string>("active");
   const [error, setError] = useState<string | null>(null);
 
@@ -311,17 +322,23 @@ function NewCaseModal({
       try {
         const result = await saveTestCase({
           title: title.trim(),
-          gherkin,
-          folderId: folderId ? Number(folderId) : null,
+          folderId: folderId,
           state: state as "active" | "draft" | "retired" | "rejected",
         });
 
         if (result.error) {
           setError(result.error);
-        } else {
+        } else if (result.id) {
+          // Create a default scenario for the new test case
+          await saveScenario({
+            testCaseId: result.id,
+            title: "Default Scenario",
+            gherkin: "",
+            order: 0,
+          });
+
           // Reset form and close
           setTitle("");
-          setGherkin("");
           setState("active");
           setError(null);
           onClose();
@@ -336,8 +353,7 @@ function NewCaseModal({
   // Reset folder when modal opens
   const handleClose = () => {
     setTitle("");
-    setGherkin("");
-    setFolderId(currentFolderId?.toString() || "");
+    setFolderId(currentFolderId);
     setState("active");
     setError(null);
     onClose();
@@ -379,18 +395,12 @@ function NewCaseModal({
             <label className="block text-sm font-medium text-foreground mb-2">
               Folder
             </label>
-            <select
+            <FolderPicker
+              folders={folders}
               value={folderId}
-              onChange={(e) => setFolderId(e.target.value)}
-              className="w-full px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
-            >
-              <option value="">No folder</option>
-              {folders.map((folder) => (
-                <option key={folder.id} value={folder.id}>
-                  {folder.name}
-                </option>
-              ))}
-            </select>
+              onChange={setFolderId}
+              placeholder="No folder"
+            />
           </div>
           <div>
             <label className="block text-sm font-medium text-foreground mb-2">
@@ -409,12 +419,9 @@ function NewCaseModal({
           </div>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-foreground mb-2">
-            Gherkin Scenarios
-          </label>
-          <GherkinEditor value={gherkin} onChange={setGherkin} />
-        </div>
+        <p className="text-sm text-muted-foreground">
+          You can add scenarios after creating the test case.
+        </p>
 
         <div className="flex justify-end gap-3 pt-4 border-t border-border">
           <Button variant="outline" onClick={handleClose}>
@@ -448,17 +455,29 @@ function TestCasePanel({
   const [isEditing, setIsEditing] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [title, setTitle] = useState("");
-  const [gherkin, setGherkin] = useState("");
-  const [folderId, setFolderId] = useState<string>("");
+  const [folderId, setFolderId] = useState<number | null>(null);
   const [state, setState] = useState<string>("active");
+  const [scenarios, setScenarios] = useState<Scenario[]>([]);
+  const [loadingScenarios, setLoadingScenarios] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Fetch scenarios when panel opens
+  useEffect(() => {
+    if (testCase && isOpen) {
+      setLoadingScenarios(true);
+      getScenarios(testCase.id)
+        .then((data) => {
+          setScenarios(data);
+        })
+        .finally(() => setLoadingScenarios(false));
+    }
+  }, [testCase?.id, isOpen]);
 
   // Reset form when test case changes
   const resetForm = () => {
     if (testCase) {
       setTitle(testCase.title);
-      setGherkin(testCase.gherkin || "");
-      setFolderId(testCase.folderId?.toString() || "");
+      setFolderId(testCase.folderId ?? null);
       setState(testCase.state);
     }
     setIsEditing(false);
@@ -480,20 +499,27 @@ function TestCasePanel({
     setError(null);
     startTransition(async () => {
       try {
+        // Save test case metadata
         const result = await saveTestCase({
           id: testCase.id,
           title: title.trim(),
-          gherkin,
-          folderId: folderId ? Number(folderId) : null,
+          folderId: folderId,
           state: state as "active" | "draft" | "retired" | "rejected",
         });
 
         if (result.error) {
           setError(result.error);
-        } else {
-          setIsEditing(false);
-          onSaved();
+          return;
         }
+
+        // Save scenarios using the global function
+        const saveScenariosFn = (window as Window & { __saveScenarios?: () => Promise<boolean> }).__saveScenarios;
+        if (saveScenariosFn) {
+          await saveScenariosFn();
+        }
+
+        setIsEditing(false);
+        onSaved();
       } catch {
         setError("Failed to save test case");
       }
@@ -570,18 +596,12 @@ function TestCasePanel({
                   <label className="block text-sm font-medium text-foreground mb-2">
                     Folder
                   </label>
-                  <select
+                  <FolderPicker
+                    folders={folders}
                     value={folderId}
-                    onChange={(e) => setFolderId(e.target.value)}
-                    className="w-full px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
-                  >
-                    <option value="">No folder</option>
-                    {folders.map((folder) => (
-                      <option key={folder.id} value={folder.id}>
-                        {folder.name}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setFolderId}
+                    placeholder="No folder"
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
@@ -602,9 +622,18 @@ function TestCasePanel({
 
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">
-                  Gherkin Scenarios
+                  Scenarios
                 </label>
-                <GherkinEditor value={gherkin} onChange={setGherkin} />
+                {loadingScenarios ? (
+                  <div className="text-sm text-muted-foreground">Loading scenarios...</div>
+                ) : (
+                  <ScenarioAccordion
+                    testCaseId={testCase.id}
+                    scenarios={scenarios}
+                    isEditing={true}
+                    onChange={setScenarios}
+                  />
+                )}
               </div>
 
               <div className="flex justify-between pt-4 border-t border-border">
@@ -646,10 +675,10 @@ function TestCasePanel({
                   </Badge>
                 </div>
                 <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
-                  {testCase.folderName && (
+                  {testCase.folderId && (
                     <>
                       <FolderIcon className="w-4 h-4" />
-                      <span>{testCase.folderName}</span>
+                      <span>{formatBreadcrumb(buildFolderBreadcrumb(testCase.folderId, folders))}</span>
                       <span className="text-border">·</span>
                     </>
                   )}
@@ -666,12 +695,20 @@ function TestCasePanel({
                 </div>
               </div>
 
-              {/* Gherkin Scenarios */}
+              {/* Scenarios */}
               <div>
                 <h4 className="text-sm font-medium text-foreground mb-3">
-                  Scenarios
+                  Scenarios ({scenarios.length})
                 </h4>
-                <GherkinDisplay text={testCase.gherkin || ""} />
+                {loadingScenarios ? (
+                  <div className="text-sm text-muted-foreground">Loading scenarios...</div>
+                ) : (
+                  <ScenarioAccordion
+                    testCaseId={testCase.id}
+                    scenarios={scenarios}
+                    isEditing={false}
+                  />
+                )}
               </div>
 
               {/* Actions */}
