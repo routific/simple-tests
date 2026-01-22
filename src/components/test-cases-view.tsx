@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/modal";
 import { SlidePanel } from "@/components/ui/slide-panel";
@@ -68,6 +68,7 @@ export function TestCasesView({
   const [selectedCase, setSelectedCase] = useState<TestCase | null>(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [selectedCases, setSelectedCases] = useState<Set<number>>(new Set());
+  const lastSelectedIndexRef = useRef<number | null>(null);
 
   const handleCaseClick = (testCase: TestCase) => {
     setSelectedCase(testCase);
@@ -76,13 +77,28 @@ export function TestCasesView({
 
   const toggleCaseSelection = (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    const newSelected = new Set(selectedCases);
-    if (newSelected.has(id)) {
-      newSelected.delete(id);
+    const currentIndex = cases.findIndex((c) => c.id === id);
+
+    // Shift+click: select range from last selected to current
+    if (e.shiftKey && lastSelectedIndexRef.current !== null) {
+      const start = Math.min(lastSelectedIndexRef.current, currentIndex);
+      const end = Math.max(lastSelectedIndexRef.current, currentIndex);
+      const newSelected = new Set(selectedCases);
+      for (let i = start; i <= end; i++) {
+        newSelected.add(cases[i].id);
+      }
+      setSelectedCases(newSelected);
     } else {
-      newSelected.add(id);
+      // Regular click: toggle single item
+      const newSelected = new Set(selectedCases);
+      if (newSelected.has(id)) {
+        newSelected.delete(id);
+      } else {
+        newSelected.add(id);
+      }
+      setSelectedCases(newSelected);
+      lastSelectedIndexRef.current = currentIndex;
     }
-    setSelectedCases(newSelected);
   };
 
   const selectAllCases = () => {
@@ -522,14 +538,18 @@ function TestCaseListContent({
                 dragOverId === testCase.id && "border-t-2 border-brand-500"
               )}
             >
-              <div className="flex items-center gap-3 min-w-0 flex-1">
-                <input
-                  type="checkbox"
-                  checked={selectedCases.has(testCase.id)}
+              <div className="flex items-center gap-1 min-w-0 flex-1">
+                <div
+                  className="p-2 -m-2 cursor-pointer flex-shrink-0"
                   onClick={(e) => onToggleSelection(testCase.id, e)}
-                  onChange={() => {}} // Controlled by onClick
-                  className="rounded border-input text-brand-600 focus:ring-brand-500 flex-shrink-0"
-                />
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedCases.has(testCase.id)}
+                    onChange={() => {}} // Controlled by parent onClick
+                    className="rounded border-input text-brand-600 focus:ring-brand-500 pointer-events-none"
+                  />
+                </div>
                 {currentFolderId !== null && (
                   <DragHandleIcon className="w-4 h-4 text-muted-foreground/50 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
                 )}
