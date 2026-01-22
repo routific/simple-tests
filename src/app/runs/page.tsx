@@ -2,7 +2,9 @@ import { db } from "@/lib/db";
 import { testRuns, testRunResults } from "@/lib/db/schema";
 import { eq, sql, count } from "drizzle-orm";
 import Link from "next/link";
-import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export const dynamic = "force-dynamic";
 
@@ -35,101 +37,147 @@ export default async function RunsPage() {
   );
 
   return (
-    <div className="p-6 max-w-5xl">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold">Test Runs</h1>
-        <Link
-          href="/runs/new"
-          className="px-4 py-2 text-sm font-medium text-white bg-[hsl(var(--primary))] rounded-md hover:opacity-90"
-        >
-          New Run
+    <div className="p-8 max-w-6xl animate-fade-in">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-2xl font-semibold text-foreground tracking-tight">
+            Test Runs
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Track and manage your testing sessions
+          </p>
+        </div>
+        <Link href="/runs/new">
+          <Button>
+            <PlusIcon className="w-4 h-4" />
+            New Run
+          </Button>
         </Link>
       </div>
 
       {runs.length === 0 ? (
-        <div className="text-center py-12 border border-dashed rounded-lg">
-          <h3 className="text-lg font-medium mb-2">No test runs yet</h3>
-          <p className="text-[hsl(var(--muted-foreground))] mb-4">
-            Create a test run to start tracking your testing progress.
-          </p>
-          <Link
-            href="/runs/new"
-            className="inline-block px-4 py-2 text-sm font-medium text-white bg-[hsl(var(--primary))] rounded-md hover:opacity-90"
-          >
-            Create your first run
-          </Link>
-        </div>
+        <Card className="border-dashed">
+          <CardContent className="py-16 text-center">
+            <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
+              <RunIcon className="w-7 h-7 text-muted-foreground" />
+            </div>
+            <h3 className="text-lg font-medium text-foreground mb-2">
+              No test runs yet
+            </h3>
+            <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
+              Create a test run to start tracking your testing progress and results.
+            </p>
+            <Link href="/runs/new">
+              <Button>Create your first run</Button>
+            </Link>
+          </CardContent>
+        </Card>
       ) : (
-        <div className="border rounded-lg divide-y">
-          {runStats.map((run) => {
-            const passRate =
-              run.total > 0
-                ? Math.round(((run.stats.passed || 0) / run.total) * 100)
-                : 0;
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-medium">All Runs</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="divide-y divide-border">
+              {runStats.map((run) => {
+                const passRate =
+                  run.total > 0
+                    ? Math.round(((run.stats.passed || 0) / run.total) * 100)
+                    : 0;
 
-            return (
-              <Link
-                key={run.id}
-                href={`/runs/${run.id}`}
-                className="flex items-center justify-between p-4 hover:bg-[hsl(var(--muted))]"
-              >
-                <div>
-                  <div className="font-medium">{run.name}</div>
-                  <div className="text-sm text-[hsl(var(--muted-foreground))] flex items-center gap-3">
-                    <span>{run.createdAt?.toLocaleDateString()}</span>
-                    <span>{run.total} cases</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4">
-                  {run.total > 0 && (
-                    <div className="flex items-center gap-2">
-                      <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-green-500"
-                          style={{ width: `${passRate}%` }}
-                        />
-                      </div>
-                      <span className="text-sm text-[hsl(var(--muted-foreground))]">
-                        {passRate}%
-                      </span>
-                    </div>
-                  )}
-
-                  <div className="flex items-center gap-1.5">
-                    {run.stats.passed && (
-                      <span className="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-800 rounded">
-                        {run.stats.passed}
-                      </span>
-                    )}
-                    {run.stats.failed && (
-                      <span className="px-2 py-0.5 text-xs font-medium bg-red-100 text-red-800 rounded">
-                        {run.stats.failed}
-                      </span>
-                    )}
-                    {run.stats.pending && (
-                      <span className="px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-800 rounded">
-                        {run.stats.pending}
-                      </span>
-                    )}
-                  </div>
-
-                  <span
-                    className={cn(
-                      "px-2 py-0.5 text-xs font-medium rounded",
-                      run.status === "completed"
-                        ? "bg-blue-100 text-blue-800"
-                        : "bg-yellow-100 text-yellow-800"
-                    )}
+                return (
+                  <Link
+                    key={run.id}
+                    href={`/runs/${run.id}`}
+                    className="flex items-center justify-between p-4 hover:bg-muted/50 transition-colors group"
                   >
-                    {run.status}
-                  </span>
-                </div>
-              </Link>
-            );
-          })}
-        </div>
+                    <div className="min-w-0">
+                      <div className="font-medium text-foreground group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
+                        {run.name}
+                      </div>
+                      <div className="text-sm text-muted-foreground flex items-center gap-3 mt-0.5">
+                        <span>
+                          {run.createdAt?.toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                          })}
+                        </span>
+                        <span className="text-border">·</span>
+                        <span>{run.total} cases</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-5">
+                      {/* Progress Bar */}
+                      {run.total > 0 && (
+                        <div className="flex items-center gap-3">
+                          <div className="w-28 h-2 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-green-500 to-emerald-500 transition-all duration-500"
+                              style={{ width: `${passRate}%` }}
+                            />
+                          </div>
+                          <span className="text-sm font-medium text-muted-foreground w-10 tabular-nums">
+                            {passRate}%
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Status Badges */}
+                      <div className="flex items-center gap-1.5">
+                        {run.stats.passed && (
+                          <Badge variant="success">{run.stats.passed}</Badge>
+                        )}
+                        {run.stats.failed && (
+                          <Badge variant="destructive">{run.stats.failed}</Badge>
+                        )}
+                        {run.stats.pending && (
+                          <Badge variant="secondary">{run.stats.pending}</Badge>
+                        )}
+                      </div>
+
+                      {/* Run Status */}
+                      <Badge
+                        variant={run.status === "completed" ? "default" : "warning"}
+                      >
+                        {run.status}
+                      </Badge>
+
+                      <ChevronRightIcon className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
       )}
     </div>
+  );
+}
+
+function PlusIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+    </svg>
+  );
+}
+
+function RunIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
+    </svg>
+  );
+}
+
+function ChevronRightIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+    </svg>
   );
 }

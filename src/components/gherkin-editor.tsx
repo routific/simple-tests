@@ -21,7 +21,7 @@ Scenario: Successful login with valid credentials
   And clicks the login button
   Then the user should be redirected to the dashboard
   And a welcome message should be displayed`}
-        className="w-full h-96 px-4 py-3 font-mono text-sm border border-[hsl(var(--border))] rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none bg-slate-50"
+        className="w-full h-96 px-4 py-3 font-mono text-sm border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none bg-muted/30 dark:bg-muted/10 text-foreground placeholder:text-muted-foreground transition-colors"
         spellCheck={false}
       />
       {readOnly && (
@@ -79,7 +79,7 @@ function GherkinHighlighted({ text }: { text: string }) {
 export function GherkinDisplay({ text }: { text: string }) {
   if (!text) {
     return (
-      <div className="text-[hsl(var(--muted-foreground))] italic">
+      <div className="text-muted-foreground italic text-sm">
         No scenarios defined
       </div>
     );
@@ -88,10 +88,10 @@ export function GherkinDisplay({ text }: { text: string }) {
   const lines = text.split("\n");
 
   return (
-    <div className="font-mono text-sm bg-slate-50 rounded-md p-4 overflow-auto">
+    <div className="font-mono text-sm bg-muted/30 dark:bg-muted/10 rounded-lg p-4 overflow-auto border border-border">
       {lines.map((line, i) => {
         const trimmed = line.trim();
-        let className = "";
+        let className = "text-foreground";
 
         if (
           trimmed.startsWith("Feature:") ||
@@ -100,7 +100,7 @@ export function GherkinDisplay({ text }: { text: string }) {
           trimmed.startsWith("Background:") ||
           trimmed.startsWith("Examples:")
         ) {
-          className = "text-purple-600 font-semibold";
+          className = "text-brand-600 dark:text-brand-400 font-semibold";
         } else if (
           trimmed.startsWith("Given") ||
           trimmed.startsWith("When") ||
@@ -108,13 +108,13 @@ export function GherkinDisplay({ text }: { text: string }) {
           trimmed.startsWith("And") ||
           trimmed.startsWith("But")
         ) {
-          className = "text-blue-600";
+          className = "text-blue-600 dark:text-blue-400";
         } else if (trimmed.startsWith("@")) {
-          className = "text-cyan-600";
+          className = "text-cyan-600 dark:text-cyan-400";
         } else if (trimmed.startsWith("#")) {
-          className = "text-gray-400 italic";
+          className = "text-muted-foreground italic";
         } else if (trimmed.startsWith("|")) {
-          className = "text-green-600";
+          className = "text-emerald-600 dark:text-emerald-400";
         }
 
         return (

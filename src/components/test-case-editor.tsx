@@ -9,6 +9,9 @@ import {
   saveTestCase,
   deleteTestCase,
 } from "@/app/cases/actions";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 
 interface Props {
   testCase: TestCase | null;
@@ -81,71 +84,89 @@ export function TestCaseEditor({
 
   return (
     <>
-      <div className="p-4 border-b border-[hsl(var(--border))] flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      {/* Header */}
+      <div className="p-5 border-b border-border flex items-center justify-between bg-background">
+        <div className="flex items-center gap-4">
           <Link
             href={`/cases${currentFolder ? `?folder=${currentFolder.id}` : ""}`}
-            className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+            className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors"
           >
             <BackIcon className="w-5 h-5" />
           </Link>
           <div>
-            <h1 className="text-xl font-semibold">
+            <h1 className="text-xl font-semibold text-foreground">
               {isNew ? "New Test Case" : "Edit Test Case"}
             </h1>
             {testCase?.legacyId && (
-              <p className="text-sm text-[hsl(var(--muted-foreground))]">
-                Testmo ID: {testCase.legacyId}
-              </p>
+              <div className="flex items-center gap-2 mt-0.5">
+                <Badge variant="outline" className="text-xs">
+                  Testmo ID: {testCase.legacyId}
+                </Badge>
+              </div>
             )}
           </div>
         </div>
         <div className="flex items-center gap-2">
           {!isNew && (
-            <button
+            <Button
               onClick={handleDelete}
               disabled={isPending}
-              className="px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 rounded-md disabled:opacity-50"
+              variant="ghost"
+              className="text-destructive hover:text-destructive hover:bg-destructive/10"
             >
               Delete
-            </button>
+            </Button>
           )}
-          <button
+          <Button
             onClick={handleSave}
             disabled={isPending}
-            className="px-4 py-1.5 text-sm font-medium text-white bg-[hsl(var(--primary))] rounded-md hover:opacity-90 disabled:opacity-50"
           >
-            {isPending ? "Saving..." : "Save"}
-          </button>
+            {isPending ? (
+              <>
+                <LoadingIcon className="w-4 h-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              "Save"
+            )}
+          </Button>
         </div>
       </div>
 
+      {/* Error Banner */}
       {error && (
-        <div className="mx-4 mt-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-md text-sm">
+        <div className="mx-6 mt-4 p-4 bg-destructive/10 border border-destructive/20 text-destructive rounded-lg text-sm flex items-center gap-3">
+          <ErrorIcon className="w-5 h-5 shrink-0" />
           {error}
         </div>
       )}
 
-      <div className="flex-1 overflow-auto p-4">
-        <div className="max-w-4xl space-y-4">
+      {/* Form */}
+      <div className="flex-1 overflow-auto p-6">
+        <div className="max-w-4xl space-y-6">
+          {/* Title */}
           <div>
-            <label className="block text-sm font-medium mb-1">Title</label>
-            <input
+            <label className="block text-sm font-medium text-foreground mb-2">
+              Title
+            </label>
+            <Input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g., User login with valid credentials"
-              className="w-full px-3 py-2 border border-[hsl(var(--border))] rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
+          {/* Folder & State */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Folder</label>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Folder
+              </label>
               <select
                 value={folderId}
                 onChange={(e) => setFolderId(e.target.value)}
-                className="w-full px-3 py-2 border border-[hsl(var(--border))] rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
               >
                 <option value="">No folder</option>
                 {folders.map((folder) => (
@@ -156,11 +177,13 @@ export function TestCaseEditor({
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">State</label>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                State
+              </label>
               <select
                 value={state}
                 onChange={(e) => setState(e.target.value as "active" | "draft" | "retired" | "rejected")}
-                className="w-full px-3 py-2 border border-[hsl(var(--border))] rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
               >
                 <option value="active">Active</option>
                 <option value="draft">Draft</option>
@@ -170,8 +193,9 @@ export function TestCaseEditor({
             </div>
           </div>
 
+          {/* Gherkin Editor */}
           <div>
-            <label className="block text-sm font-medium mb-1">
+            <label className="block text-sm font-medium text-foreground mb-2">
               Gherkin Scenarios
             </label>
             <GherkinEditor value={gherkin} onChange={setGherkin} />
@@ -184,18 +208,25 @@ export function TestCaseEditor({
 
 function BackIcon({ className }: { className?: string }) {
   return (
-    <svg
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={2}
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M15 19l-7-7 7-7"
-      />
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+    </svg>
+  );
+}
+
+function LoadingIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+    </svg>
+  );
+}
+
+function ErrorIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
     </svg>
   );
 }

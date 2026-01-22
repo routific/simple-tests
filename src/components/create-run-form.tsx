@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { createTestRun } from "@/app/runs/actions";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
 
 interface Folder {
   id: number;
@@ -106,128 +109,160 @@ export function CreateRunForm({ folders, cases, caseCounts }: Props) {
 
   return (
     <>
-      <div className="p-4 border-b border-[hsl(var(--border))] flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      {/* Header */}
+      <div className="p-5 border-b border-border flex items-center justify-between bg-background">
+        <div className="flex items-center gap-4">
           <Link
             href="/runs"
-            className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+            className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors"
           >
             <BackIcon className="w-5 h-5" />
           </Link>
-          <h1 className="text-xl font-semibold">Create Test Run</h1>
+          <div>
+            <h1 className="text-xl font-semibold text-foreground">Create Test Run</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Select test cases to include in this run
+            </p>
+          </div>
         </div>
-        <button
-          onClick={handleCreate}
-          disabled={isPending}
-          className="px-4 py-1.5 text-sm font-medium text-white bg-[hsl(var(--primary))] rounded-md hover:opacity-90 disabled:opacity-50"
-        >
-          {isPending ? "Creating..." : "Create Run"}
-        </button>
+        <Button onClick={handleCreate} disabled={isPending}>
+          {isPending ? (
+            <>
+              <LoadingIcon className="w-4 h-4 animate-spin" />
+              Creating...
+            </>
+          ) : (
+            "Create Run"
+          )}
+        </Button>
       </div>
 
+      {/* Error Banner */}
       {error && (
-        <div className="mx-4 mt-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-md text-sm">
+        <div className="mx-6 mt-4 p-4 bg-destructive/10 border border-destructive/20 text-destructive rounded-lg text-sm flex items-center gap-3">
+          <ErrorIcon className="w-5 h-5 shrink-0" />
           {error}
         </div>
       )}
 
-      <div className="flex-1 overflow-auto p-4">
+      {/* Form */}
+      <div className="flex-1 overflow-auto p-6">
         <div className="max-w-4xl space-y-6">
+          {/* Run Details */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Run Name</label>
-              <input
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Run Name
+              </label>
+              <Input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g., Release 2.0 Regression"
-                className="w-full px-3 py-2 border border-[hsl(var(--border))] rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">
-                Description (optional)
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Description <span className="text-muted-foreground font-normal">(optional)</span>
               </label>
-              <input
+              <Input
                 type="text"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="e.g., Full regression for v2.0 release"
-                className="w-full px-3 py-2 border border-[hsl(var(--border))] rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
           </div>
 
+          {/* Test Case Selection */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <label className="text-sm font-medium">
-                Select Test Cases ({selectedCases.size} selected)
-              </label>
-              <div className="flex gap-2">
+              <div>
+                <label className="text-sm font-medium text-foreground">
+                  Select Test Cases
+                </label>
+                <p className="text-sm text-muted-foreground">
+                  {selectedCases.size} case{selectedCases.size !== 1 ? "s" : ""} selected
+                </p>
+              </div>
+              <div className="flex gap-3">
                 <button
                   onClick={selectAll}
-                  className="text-sm text-blue-600 hover:underline"
+                  className="text-sm text-brand-600 dark:text-brand-400 hover:underline font-medium"
                 >
                   Select all
                 </button>
-                <span className="text-gray-300">|</span>
+                <span className="text-border">|</span>
                 <button
                   onClick={clearAll}
-                  className="text-sm text-blue-600 hover:underline"
+                  className="text-sm text-muted-foreground hover:text-foreground"
                 >
                   Clear
                 </button>
               </div>
             </div>
 
-            <div className="border rounded-lg max-h-96 overflow-auto">
-              {folders.length === 0 ? (
-                <div className="p-4 text-center text-[hsl(var(--muted-foreground))]">
-                  No test cases available. Import test cases first.
-                </div>
-              ) : (
-                <div className="divide-y">
-                  {folders.map((folder) => (
-                    <FolderSection
-                      key={folder.id}
-                      folder={folder}
-                      cases={cases.filter((c) => c.folderId === folder.id)}
-                      selectedCases={selectedCases}
-                      selectedFolders={selectedFolders}
-                      toggleFolder={toggleFolder}
-                      toggleCase={toggleCase}
-                      caseCounts={caseCounts}
-                    />
-                  ))}
-                  {/* Cases without folder */}
-                  {cases.filter((c) => !c.folderId).length > 0 && (
-                    <div className="p-3">
-                      <div className="text-sm font-medium text-[hsl(var(--muted-foreground))] mb-2">
-                        Uncategorized
-                      </div>
-                      {cases
-                        .filter((c) => !c.folderId)
-                        .map((testCase) => (
-                          <label
-                            key={testCase.id}
-                            className="flex items-center gap-2 py-1 cursor-pointer"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={selectedCases.has(testCase.id)}
-                              onChange={() => toggleCase(testCase.id)}
-                              className="rounded"
-                            />
-                            <span className="text-sm truncate">
-                              {testCase.title}
-                            </span>
-                          </label>
-                        ))}
+            <Card>
+              <CardContent className="p-0 max-h-96 overflow-auto">
+                {folders.length === 0 ? (
+                  <div className="p-8 text-center">
+                    <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mx-auto mb-3">
+                      <FolderIcon className="w-6 h-6 text-muted-foreground" />
                     </div>
-                  )}
-                </div>
-              )}
-            </div>
+                    <p className="font-medium text-foreground mb-1">No test cases available</p>
+                    <p className="text-sm text-muted-foreground">
+                      <Link href="/import" className="text-brand-500 hover:underline">
+                        Import test cases
+                      </Link>{" "}
+                      first to create a run.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-border">
+                    {folders.map((folder) => (
+                      <FolderSection
+                        key={folder.id}
+                        folder={folder}
+                        cases={cases.filter((c) => c.folderId === folder.id)}
+                        selectedCases={selectedCases}
+                        selectedFolders={selectedFolders}
+                        toggleFolder={toggleFolder}
+                        toggleCase={toggleCase}
+                        caseCounts={caseCounts}
+                      />
+                    ))}
+                    {/* Cases without folder */}
+                    {cases.filter((c) => !c.folderId).length > 0 && (
+                      <div className="p-4">
+                        <div className="text-sm font-medium text-muted-foreground mb-3">
+                          Uncategorized
+                        </div>
+                        <div className="space-y-1">
+                          {cases
+                            .filter((c) => !c.folderId)
+                            .map((testCase) => (
+                              <label
+                                key={testCase.id}
+                                className="flex items-center gap-3 py-1.5 cursor-pointer hover:text-foreground transition-colors"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={selectedCases.has(testCase.id)}
+                                  onChange={() => toggleCase(testCase.id)}
+                                  className="rounded border-input text-brand-600 focus:ring-brand-500"
+                                />
+                                <span className="text-sm truncate text-muted-foreground">
+                                  {testCase.title}
+                                </span>
+                              </label>
+                            ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>
@@ -255,48 +290,57 @@ function FolderSection({
   const [isOpen, setIsOpen] = useState(false);
   const count = caseCounts[folder.id] || 0;
   const isSelected = selectedFolders.has(folder.id);
+  const selectedInFolder = cases.filter((c) => selectedCases.has(c.id)).length;
 
   if (count === 0) return null;
 
   return (
-    <div className="p-3">
-      <div className="flex items-center gap-2">
+    <div className="p-4">
+      <div className="flex items-center gap-3">
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="p-0.5 hover:bg-gray-100 rounded"
+          className="p-1 hover:bg-muted rounded transition-colors"
         >
           <ChevronIcon
-            className={cn("w-4 h-4 transition-transform", isOpen && "rotate-90")}
+            className={cn(
+              "w-4 h-4 text-muted-foreground transition-transform duration-200",
+              isOpen && "rotate-90"
+            )}
           />
         </button>
-        <label className="flex items-center gap-2 cursor-pointer flex-1">
+        <label className="flex items-center gap-3 cursor-pointer flex-1">
           <input
             type="checkbox"
             checked={isSelected}
             onChange={() => toggleFolder(folder.id)}
-            className="rounded"
+            className="rounded border-input text-brand-600 focus:ring-brand-500"
           />
-          <span className="font-medium">{folder.name}</span>
-          <span className="text-sm text-[hsl(var(--muted-foreground))]">
-            ({count})
+          <FolderIcon className="w-4 h-4 text-amber-500" />
+          <span className="font-medium text-foreground">{folder.name}</span>
+          <span className="text-sm text-muted-foreground">
+            {selectedInFolder > 0 && selectedInFolder < count
+              ? `${selectedInFolder}/${count}`
+              : `(${count})`}
           </span>
         </label>
       </div>
 
       {isOpen && (
-        <div className="ml-8 mt-2 space-y-1">
+        <div className="ml-10 mt-3 space-y-1 animate-fade-in">
           {cases.map((testCase) => (
             <label
               key={testCase.id}
-              className="flex items-center gap-2 py-1 cursor-pointer"
+              className="flex items-center gap-3 py-1.5 cursor-pointer group"
             >
               <input
                 type="checkbox"
                 checked={selectedCases.has(testCase.id)}
                 onChange={() => toggleCase(testCase.id)}
-                className="rounded"
+                className="rounded border-input text-brand-600 focus:ring-brand-500"
               />
-              <span className="text-sm truncate">{testCase.title}</span>
+              <span className="text-sm truncate text-muted-foreground group-hover:text-foreground transition-colors">
+                {testCase.title}
+              </span>
             </label>
           ))}
         </div>
@@ -307,13 +351,7 @@ function FolderSection({
 
 function BackIcon({ className }: { className?: string }) {
   return (
-    <svg
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={2}
-    >
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
     </svg>
   );
@@ -321,14 +359,33 @@ function BackIcon({ className }: { className?: string }) {
 
 function ChevronIcon({ className }: { className?: string }) {
   return (
-    <svg
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={2}
-    >
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+    </svg>
+  );
+}
+
+function FolderIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M10 4H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V8a2 2 0 00-2-2h-8l-2-2z" />
+    </svg>
+  );
+}
+
+function LoadingIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+    </svg>
+  );
+}
+
+function ErrorIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
     </svg>
   );
 }

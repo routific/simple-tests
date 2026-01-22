@@ -1,10 +1,9 @@
 import { db } from "@/lib/db";
 import { testCases, folders } from "@/lib/db/schema";
 import { eq, like, sql, and, count } from "drizzle-orm";
-import Link from "next/link";
-import { FolderTree } from "@/components/folder-tree";
+import { FolderPanel } from "@/components/folder-panel";
 import { buildFolderTree } from "@/lib/folders";
-import { TestCaseList } from "@/components/test-case-list";
+import { TestCasesView } from "@/components/test-cases-view";
 
 export const dynamic = "force-dynamic";
 
@@ -58,6 +57,8 @@ export default async function CasesPage({ searchParams }: Props) {
       title: testCases.title,
       state: testCases.state,
       template: testCases.template,
+      gherkin: testCases.gherkin,
+      folderId: testCases.folderId,
       updatedAt: testCases.updatedAt,
       folderName: folders.name,
     })
@@ -72,39 +73,21 @@ export default async function CasesPage({ searchParams }: Props) {
     : null;
 
   return (
-    <div className="flex h-full">
-      <div className="w-64 border-r border-[hsl(var(--border))] bg-[hsl(var(--muted))] overflow-auto">
-        <div className="p-3 border-b border-[hsl(var(--border))]">
-          <h2 className="font-medium text-sm">Folders</h2>
-        </div>
-        <FolderTree
-          folders={folderTree}
-          selectedFolderId={folderId}
-          caseCounts={caseCounts}
-        />
-      </div>
+    <div className="flex h-full animate-fade-in">
+      {/* Sidebar - Folder Tree (Resizable) */}
+      <FolderPanel
+        folders={folderTree}
+        selectedFolderId={folderId}
+        caseCounts={caseCounts}
+      />
 
-      <div className="flex-1 overflow-auto">
-        <div className="p-4 border-b border-[hsl(var(--border))] flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-semibold">
-              {currentFolder?.name || "All Test Cases"}
-            </h1>
-            <p className="text-sm text-[hsl(var(--muted-foreground))]">
-              {cases.length} test case{cases.length !== 1 ? "s" : ""}
-            </p>
-          </div>
-          <Link
-            href={`/cases/new${folderId ? `?folder=${folderId}` : ""}`}
-            className="px-3 py-1.5 text-sm font-medium text-white bg-[hsl(var(--primary))] rounded-md hover:opacity-90"
-          >
-            New Case
-          </Link>
-        </div>
-
-        <TestCaseList
+      {/* Main Content */}
+      <div className="flex-1 overflow-auto flex flex-col">
+        <TestCasesView
           cases={cases}
-          folderId={folderId}
+          folders={allFolders}
+          currentFolderId={folderId}
+          currentFolderName={currentFolder?.name || null}
           search={search}
           stateFilter={stateFilter}
         />
