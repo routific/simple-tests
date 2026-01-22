@@ -442,7 +442,7 @@ function TestCaseListContent({
               }}
               onClick={() => onCaseClick(testCase)}
               className={cn(
-                "w-full flex items-center justify-between p-4 hover:bg-muted/50 transition-colors group text-left cursor-grab active:cursor-grabbing",
+                "w-full flex items-center justify-between py-2.5 px-4 hover:bg-muted/50 transition-colors group text-left cursor-grab active:cursor-grabbing",
                 selectedCases.has(testCase.id) && "bg-brand-50 dark:bg-brand-950/50"
               )}
             >
@@ -455,31 +455,17 @@ function TestCaseListContent({
                   className="rounded border-input text-brand-600 focus:ring-brand-500 flex-shrink-0"
                 />
                 <DragHandleIcon className="w-4 h-4 text-muted-foreground/50 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
-                <div className="min-w-0 flex-1">
-                  <div className="font-medium text-foreground truncate group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
-                    {testCase.title}
-                  </div>
-                  <div className="text-sm text-muted-foreground flex items-center gap-2 mt-0.5">
-                    {testCase.folderId && (
-                      <>
-                        <FolderIcon className="w-3.5 h-3.5" />
-                        <span>{formatBreadcrumb(buildFolderBreadcrumb(testCase.folderId, folders))}</span>
-                        <span className="text-border">·</span>
-                      </>
-                    )}
-                    {testCase.updatedAt && (
-                      <span>
-                        Updated{" "}
-                        {testCase.updatedAt.toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                        })}
-                      </span>
-                    )}
-                  </div>
-                </div>
+                <span className="font-medium text-foreground truncate group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
+                  {testCase.title}
+                </span>
               </div>
-              <div className="flex items-center gap-3 ml-4">
+              <div className="flex items-center gap-3 ml-4 flex-shrink-0">
+                {testCase.folderId && (
+                  <span className="text-xs text-muted-foreground flex items-center gap-1.5 max-w-[200px] truncate">
+                    <FolderIcon className="w-3 h-3 flex-shrink-0" />
+                    <span className="truncate">{formatBreadcrumb(buildFolderBreadcrumb(testCase.folderId, folders))}</span>
+                  </span>
+                )}
                 <Badge variant={getStateBadgeVariant(testCase.state)}>
                   {testCase.state}
                 </Badge>
