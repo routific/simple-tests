@@ -4,7 +4,7 @@ import { useState, useTransition, useEffect, useCallback, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { GherkinEditor } from "@/components/gherkin-editor";
+import { GherkinEditor, GherkinDisplay } from "@/components/gherkin-editor";
 import {
   saveScenario,
   deleteScenario,
@@ -287,23 +287,6 @@ export function ScenarioAccordion({
         </Button>
       )}
     </div>
-  );
-}
-
-// Simple gherkin display for read-only view
-function GherkinDisplay({ text }: { text: string }) {
-  if (!text) {
-    return (
-      <div className="text-sm text-muted-foreground italic">
-        No steps defined
-      </div>
-    );
-  }
-
-  return (
-    <pre className="text-sm font-mono whitespace-pre-wrap text-foreground">
-      {text}
-    </pre>
   );
 }
 
