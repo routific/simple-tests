@@ -241,3 +241,190 @@ export async function getTestCaseAuditLog(testCaseId: number) {
 
   return logs;
 }
+
+// Bulk actions
+
+export async function bulkDeleteTestCases(ids: number[]) {
+  const session = await getSessionWithOrg();
+  if (!session) {
+    return { error: "Unauthorized" };
+  }
+
+  const { organizationId } = session.user;
+  const userId = session.user.id;
+
+  try {
+    for (const id of ids) {
+      const existing = await db
+        .select()
+        .from(testCases)
+        .where(
+          and(
+            eq(testCases.id, id),
+            eq(testCases.organizationId, organizationId)
+          )
+        )
+        .get();
+
+      if (existing) {
+        await db.insert(testCaseAuditLog).values({
+          testCaseId: id,
+          userId,
+          action: "deleted",
+          changes: JSON.stringify([]),
+          previousValues: JSON.stringify({
+            title: existing.title,
+            folderId: existing.folderId,
+            state: existing.state,
+          }),
+          newValues: null,
+        });
+
+        await db
+          .delete(testCases)
+          .where(
+            and(
+              eq(testCases.id, id),
+              eq(testCases.organizationId, organizationId)
+            )
+          );
+      }
+    }
+
+    revalidatePath("/cases");
+    return { success: true, count: ids.length };
+  } catch (error) {
+    console.error("Failed to delete test cases:", error);
+    return { error: "Failed to delete test cases" };
+  }
+}
+
+export async function bulkUpdateTestCaseState(
+  ids: number[],
+  state: "active" | "draft" | "retired" | "rejected"
+) {
+  const session = await getSessionWithOrg();
+  if (!session) {
+    return { error: "Unauthorized" };
+  }
+
+  const { organizationId } = session.user;
+  const userId = session.user.id;
+
+  try {
+    for (const id of ids) {
+      const existing = await db
+        .select()
+        .from(testCases)
+        .where(
+          and(
+            eq(testCases.id, id),
+            eq(testCases.organizationId, organizationId)
+          )
+        )
+        .get();
+
+      if (existing && existing.state !== state) {
+        const oldValues = { state: existing.state };
+        const newValues = { state };
+        const changes = computeDiff(oldValues, newValues);
+
+        await db
+          .update(testCases)
+          .set({
+            state,
+            updatedAt: new Date(),
+            updatedBy: userId,
+          })
+          .where(
+            and(
+              eq(testCases.id, id),
+              eq(testCases.organizationId, organizationId)
+            )
+          );
+
+        if (changes.length > 0) {
+          await db.insert(testCaseAuditLog).values({
+            testCaseId: id,
+            userId,
+            action: "updated",
+            changes: JSON.stringify(changes),
+            previousValues: JSON.stringify(oldValues),
+            newValues: JSON.stringify(newValues),
+          });
+        }
+      }
+    }
+
+    revalidatePath("/cases");
+    return { success: true, count: ids.length };
+  } catch (error) {
+    console.error("Failed to update test case states:", error);
+    return { error: "Failed to update test case states" };
+  }
+}
+
+export async function bulkMoveTestCasesToFolder(
+  ids: number[],
+  folderId: number | null
+) {
+  const session = await getSessionWithOrg();
+  if (!session) {
+    return { error: "Unauthorized" };
+  }
+
+  const { organizationId } = session.user;
+  const userId = session.user.id;
+
+  try {
+    for (const id of ids) {
+      const existing = await db
+        .select()
+        .from(testCases)
+        .where(
+          and(
+            eq(testCases.id, id),
+            eq(testCases.organizationId, organizationId)
+          )
+        )
+        .get();
+
+      if (existing && existing.folderId !== folderId) {
+        const oldValues = { folderId: existing.folderId };
+        const newValues = { folderId };
+        const changes = computeDiff(oldValues, newValues);
+
+        await db
+          .update(testCases)
+          .set({
+            folderId,
+            updatedAt: new Date(),
+            updatedBy: userId,
+          })
+          .where(
+            and(
+              eq(testCases.id, id),
+              eq(testCases.organizationId, organizationId)
+            )
+          );
+
+        if (changes.length > 0) {
+          await db.insert(testCaseAuditLog).values({
+            testCaseId: id,
+            userId,
+            action: "updated",
+            changes: JSON.stringify(changes),
+            previousValues: JSON.stringify(oldValues),
+            newValues: JSON.stringify(newValues),
+          });
+        }
+      }
+    }
+
+    revalidatePath("/cases");
+    return { success: true, count: ids.length };
+  } catch (error) {
+    console.error("Failed to move test cases:", error);
+    return { error: "Failed to move test cases" };
+  }
+}

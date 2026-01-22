@@ -8,7 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScenarioAccordion } from "@/components/scenario-accordion";
-import { saveTestCase, deleteTestCase } from "@/app/cases/actions";
+import {
+  saveTestCase,
+  deleteTestCase,
+  bulkDeleteTestCases,
+  bulkUpdateTestCaseState,
+  bulkMoveTestCasesToFolder,
+} from "@/app/cases/actions";
 import { getScenarios, saveScenario } from "@/app/cases/scenario-actions";
 import { cn } from "@/lib/utils";
 import { buildFolderBreadcrumb, formatBreadcrumb } from "@/lib/folders";
@@ -59,10 +65,30 @@ export function TestCasesView({
   const [isNewCaseModalOpen, setIsNewCaseModalOpen] = useState(false);
   const [selectedCase, setSelectedCase] = useState<TestCase | null>(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const [selectedCases, setSelectedCases] = useState<Set<number>>(new Set());
 
   const handleCaseClick = (testCase: TestCase) => {
     setSelectedCase(testCase);
     setIsPanelOpen(true);
+  };
+
+  const toggleCaseSelection = (id: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const newSelected = new Set(selectedCases);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedCases(newSelected);
+  };
+
+  const selectAllCases = () => {
+    setSelectedCases(new Set(cases.map((c) => c.id)));
+  };
+
+  const clearSelection = () => {
+    setSelectedCases(new Set());
   };
 
   const handleClosePanel = () => {
@@ -103,7 +129,15 @@ export function TestCasesView({
         folders={folders}
         search={search}
         stateFilter={stateFilter}
+        selectedCases={selectedCases}
         onCaseClick={handleCaseClick}
+        onToggleSelection={toggleCaseSelection}
+        onSelectAll={selectAllCases}
+        onClearSelection={clearSelection}
+        onSelectionAction={() => {
+          clearSelection();
+          router.refresh();
+        }}
         onSearchChange={(value) => {
           const params = new URLSearchParams(window.location.search);
           if (value) {
@@ -153,7 +187,12 @@ function TestCaseListContent({
   folders,
   search,
   stateFilter,
+  selectedCases,
   onCaseClick,
+  onToggleSelection,
+  onSelectAll,
+  onClearSelection,
+  onSelectionAction,
   onSearchChange,
   onStateFilterChange,
 }: {
@@ -161,10 +200,19 @@ function TestCaseListContent({
   folders: Folder[];
   search: string;
   stateFilter: string;
+  selectedCases: Set<number>;
   onCaseClick: (testCase: TestCase) => void;
+  onToggleSelection: (id: number, e: React.MouseEvent) => void;
+  onSelectAll: () => void;
+  onClearSelection: () => void;
+  onSelectionAction: () => void;
   onSearchChange: (value: string) => void;
   onStateFilterChange: (value: string) => void;
 }) {
+  const [isPending, startTransition] = useTransition();
+  const [showMoveModal, setShowMoveModal] = useState(false);
+  const [showStateModal, setShowStateModal] = useState(false);
+
   const getStateBadgeVariant = (state: string) => {
     switch (state) {
       case "active":
@@ -180,10 +228,102 @@ function TestCaseListContent({
     }
   };
 
+  const handleBulkDelete = () => {
+    if (!confirm(`Delete ${selectedCases.size} test case(s)? This cannot be undone.`)) {
+      return;
+    }
+
+    startTransition(async () => {
+      await bulkDeleteTestCases(Array.from(selectedCases));
+      onSelectionAction();
+    });
+  };
+
+  const handleBulkStateChange = (state: "active" | "draft" | "retired" | "rejected") => {
+    startTransition(async () => {
+      await bulkUpdateTestCaseState(Array.from(selectedCases), state);
+      setShowStateModal(false);
+      onSelectionAction();
+    });
+  };
+
+  const handleBulkMove = (folderId: number | null) => {
+    startTransition(async () => {
+      await bulkMoveTestCasesToFolder(Array.from(selectedCases), folderId);
+      setShowMoveModal(false);
+      onSelectionAction();
+    });
+  };
+
+  const allSelected = cases.length > 0 && selectedCases.size === cases.length;
+  const someSelected = selectedCases.size > 0 && selectedCases.size < cases.length;
+
   return (
     <div>
+      {/* Bulk Action Toolbar - appears when items selected */}
+      {selectedCases.size > 0 && (
+        <div className="p-3 border-b border-border bg-brand-50 dark:bg-brand-950 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium text-brand-700 dark:text-brand-300">
+              {selectedCases.size} selected
+            </span>
+            <button
+              onClick={onClearSelection}
+              className="text-sm text-muted-foreground hover:text-foreground"
+            >
+              Clear
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowStateModal(true)}
+              disabled={isPending}
+            >
+              Change State
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowMoveModal(true)}
+              disabled={isPending}
+            >
+              Move to Folder
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleBulkDelete}
+              disabled={isPending}
+              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+            >
+              {isPending ? "Deleting..." : "Delete"}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Search and Filter Bar */}
       <div className="p-4 border-b border-border flex gap-3 bg-muted/20">
+        <div className="flex items-center gap-3">
+          <input
+            type="checkbox"
+            checked={allSelected}
+            ref={(el) => {
+              if (el) el.indeterminate = someSelected;
+            }}
+            onChange={() => {
+              if (allSelected || someSelected) {
+                onClearSelection();
+              } else {
+                onSelectAll();
+              }
+            }}
+            className="rounded border-input text-brand-600 focus:ring-brand-500"
+            title={allSelected ? "Deselect all" : "Select all"}
+          />
+        </div>
         <div className="flex-1 relative">
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
@@ -211,6 +351,60 @@ function TestCaseListContent({
           <option value="rejected">Rejected</option>
         </select>
       </div>
+
+      {/* State Change Modal */}
+      {showStateModal && (
+        <Modal
+          isOpen={showStateModal}
+          onClose={() => setShowStateModal(false)}
+          title="Change State"
+          description={`Update state for ${selectedCases.size} test case(s)`}
+        >
+          <div className="p-6 space-y-2">
+            {(["active", "draft", "retired", "rejected"] as const).map((state) => (
+              <button
+                key={state}
+                onClick={() => handleBulkStateChange(state)}
+                disabled={isPending}
+                className="w-full p-3 text-left rounded-lg hover:bg-muted transition-colors flex items-center gap-3"
+              >
+                <Badge variant={getStateBadgeVariant(state)}>{state}</Badge>
+                <span className="text-sm text-muted-foreground capitalize">
+                  Set all to {state}
+                </span>
+              </button>
+            ))}
+          </div>
+        </Modal>
+      )}
+
+      {/* Move to Folder Modal */}
+      {showMoveModal && (
+        <Modal
+          isOpen={showMoveModal}
+          onClose={() => setShowMoveModal(false)}
+          title="Move to Folder"
+          description={`Move ${selectedCases.size} test case(s) to a folder`}
+        >
+          <div className="p-6">
+            <FolderPicker
+              folders={folders}
+              value={null}
+              onChange={(folderId) => handleBulkMove(folderId)}
+              placeholder="Select folder..."
+            />
+            <div className="mt-4 pt-4 border-t border-border">
+              <button
+                onClick={() => handleBulkMove(null)}
+                disabled={isPending}
+                className="w-full p-3 text-left rounded-lg hover:bg-muted transition-colors text-sm text-muted-foreground"
+              >
+                Remove from folder (move to root)
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* Results */}
       {cases.length === 0 ? (
@@ -247,9 +441,19 @@ function TestCaseListContent({
                 delete (window as unknown as { __draggedTestCase?: { id: number; name: string } }).__draggedTestCase;
               }}
               onClick={() => onCaseClick(testCase)}
-              className="w-full flex items-center justify-between p-4 hover:bg-muted/50 transition-colors group text-left cursor-grab active:cursor-grabbing"
+              className={cn(
+                "w-full flex items-center justify-between p-4 hover:bg-muted/50 transition-colors group text-left cursor-grab active:cursor-grabbing",
+                selectedCases.has(testCase.id) && "bg-brand-50 dark:bg-brand-950/50"
+              )}
             >
               <div className="flex items-center gap-3 min-w-0 flex-1">
+                <input
+                  type="checkbox"
+                  checked={selectedCases.has(testCase.id)}
+                  onClick={(e) => onToggleSelection(testCase.id, e)}
+                  onChange={() => {}} // Controlled by onClick
+                  className="rounded border-input text-brand-600 focus:ring-brand-500 flex-shrink-0"
+                />
                 <DragHandleIcon className="w-4 h-4 text-muted-foreground/50 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
                 <div className="min-w-0 flex-1">
                   <div className="font-medium text-foreground truncate group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
