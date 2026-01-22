@@ -428,3 +428,35 @@ export async function bulkMoveTestCasesToFolder(
     return { error: "Failed to move test cases" };
   }
 }
+
+export async function reorderTestCases(
+  folderId: number | null,
+  orderedIds: number[]
+) {
+  const session = await getSessionWithOrg();
+  if (!session) {
+    return { error: "Unauthorized" };
+  }
+
+  const { organizationId } = session.user;
+
+  try {
+    for (let i = 0; i < orderedIds.length; i++) {
+      await db
+        .update(testCases)
+        .set({ order: i })
+        .where(
+          and(
+            eq(testCases.id, orderedIds[i]),
+            eq(testCases.organizationId, organizationId)
+          )
+        );
+    }
+
+    revalidatePath("/cases");
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to reorder test cases:", error);
+    return { error: "Failed to reorder test cases" };
+  }
+}

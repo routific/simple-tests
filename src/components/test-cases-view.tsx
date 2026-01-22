@@ -14,6 +14,7 @@ import {
   bulkDeleteTestCases,
   bulkUpdateTestCaseState,
   bulkMoveTestCasesToFolder,
+  reorderTestCases,
 } from "@/app/cases/actions";
 import { getScenarios, saveScenario } from "@/app/cases/scenario-actions";
 import { cn } from "@/lib/utils";
@@ -33,6 +34,7 @@ interface TestCase {
   state: string;
   template: string;
   scenarioCount?: number;
+  order?: number;
   updatedAt: Date | null;
   folderName: string | null;
   folderId?: number | null;
@@ -127,6 +129,7 @@ export function TestCasesView({
       <TestCaseListContent
         cases={cases}
         folders={folders}
+        currentFolderId={currentFolderId}
         search={search}
         stateFilter={stateFilter}
         selectedCases={selectedCases}
@@ -185,6 +188,7 @@ export function TestCasesView({
 function TestCaseListContent({
   cases,
   folders,
+  currentFolderId,
   search,
   stateFilter,
   selectedCases,
@@ -198,6 +202,7 @@ function TestCaseListContent({
 }: {
   cases: TestCase[];
   folders: Folder[];
+  currentFolderId: number | null;
   search: string;
   stateFilter: string;
   selectedCases: Set<number>;
@@ -211,6 +216,8 @@ function TestCaseListContent({
 }) {
   const [isPending, startTransition] = useTransition();
   const [showMoveModal, setShowMoveModal] = useState(false);
+  const [draggedId, setDraggedId] = useState<number | null>(null);
+  const [dragOverId, setDragOverId] = useState<number | null>(null);
   const [showStateModal, setShowStateModal] = useState(false);
 
   const getStateBadgeVariant = (state: string) => {
@@ -253,6 +260,67 @@ function TestCaseListContent({
       setShowMoveModal(false);
       onSelectionAction();
     });
+  };
+
+  const handleDragStart = (id: number) => {
+    setDraggedId(id);
+  };
+
+  const handleDragOver = (e: React.DragEvent, id: number) => {
+    e.preventDefault();
+    if (draggedId !== null && draggedId !== id) {
+      setDragOverId(id);
+    }
+  };
+
+  const handleDragLeave = () => {
+    setDragOverId(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, targetId: number) => {
+    e.preventDefault();
+    if (draggedId === null || draggedId === targetId) {
+      setDraggedId(null);
+      setDragOverId(null);
+      return;
+    }
+
+    // Only allow reordering within a folder view
+    if (currentFolderId === null) {
+      setDraggedId(null);
+      setDragOverId(null);
+      return;
+    }
+
+    // Calculate new order
+    const currentIds = cases.map((c) => c.id);
+    const fromIndex = currentIds.indexOf(draggedId);
+    const toIndex = currentIds.indexOf(targetId);
+
+    if (fromIndex === -1 || toIndex === -1) {
+      setDraggedId(null);
+      setDragOverId(null);
+      return;
+    }
+
+    // Reorder the array
+    const newIds = [...currentIds];
+    newIds.splice(fromIndex, 1);
+    newIds.splice(toIndex, 0, draggedId);
+
+    // Persist the new order
+    startTransition(async () => {
+      await reorderTestCases(currentFolderId, newIds);
+      onSelectionAction();
+    });
+
+    setDraggedId(null);
+    setDragOverId(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedId(null);
+    setDragOverId(null);
   };
 
   const allSelected = cases.length > 0 && selectedCases.size === cases.length;
@@ -424,7 +492,7 @@ function TestCaseListContent({
           {cases.map((testCase) => (
             <div
               key={testCase.id}
-              draggable
+              draggable={currentFolderId !== null}
               onDragStart={(e) => {
                 e.dataTransfer.effectAllowed = "move";
                 e.dataTransfer.setData(
@@ -436,14 +504,22 @@ function TestCaseListContent({
                   id: testCase.id,
                   name: testCase.title,
                 };
+                handleDragStart(testCase.id);
               }}
               onDragEnd={() => {
                 delete (window as unknown as { __draggedTestCase?: { id: number; name: string } }).__draggedTestCase;
+                handleDragEnd();
               }}
+              onDragOver={(e) => handleDragOver(e, testCase.id)}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, testCase.id)}
               onClick={() => onCaseClick(testCase)}
               className={cn(
-                "w-full flex items-center justify-between py-2.5 px-4 hover:bg-muted/50 transition-colors group text-left cursor-grab active:cursor-grabbing",
-                selectedCases.has(testCase.id) && "bg-brand-50 dark:bg-brand-950/50"
+                "w-full flex items-center justify-between py-2.5 px-4 hover:bg-muted/50 transition-colors group text-left",
+                currentFolderId !== null && "cursor-grab active:cursor-grabbing",
+                selectedCases.has(testCase.id) && "bg-brand-50 dark:bg-brand-950/50",
+                draggedId === testCase.id && "opacity-50",
+                dragOverId === testCase.id && "border-t-2 border-brand-500"
               )}
             >
               <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -454,7 +530,9 @@ function TestCaseListContent({
                   onChange={() => {}} // Controlled by onClick
                   className="rounded border-input text-brand-600 focus:ring-brand-500 flex-shrink-0"
                 />
-                <DragHandleIcon className="w-4 h-4 text-muted-foreground/50 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                {currentFolderId !== null && (
+                  <DragHandleIcon className="w-4 h-4 text-muted-foreground/50 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                )}
                 <span className="font-medium text-foreground truncate group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
                   {testCase.title}
                 </span>

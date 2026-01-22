@@ -48,6 +48,7 @@ export const testCases = sqliteTable(
     legacyId: text("legacy_id"),
     title: text("title").notNull(),
     folderId: integer("folder_id").references(() => folders.id),
+    order: integer("order").notNull().default(0),
     template: text("template", { enum: ["bdd_feature", "steps", "text"] })
       .notNull()
       .default("bdd_feature"),

@@ -75,6 +75,7 @@ export default async function CasesPage({ searchParams }: Props) {
       state: testCases.state,
       template: testCases.template,
       folderId: testCases.folderId,
+      order: testCases.order,
       updatedAt: testCases.updatedAt,
       updatedBy: testCases.updatedBy,
       folderName: folders.name,
@@ -85,7 +86,7 @@ export default async function CasesPage({ searchParams }: Props) {
     .leftJoin(folders, eq(testCases.folderId, folders.id))
     .leftJoin(users, eq(testCases.updatedBy, users.id))
     .where(and(...conditions))
-    .orderBy(sql`${testCases.updatedAt} DESC`)
+    .orderBy(folderId ? testCases.order : sql`${testCases.updatedAt} DESC`)
     .limit(100);
 
   // Get scenario counts per test case
