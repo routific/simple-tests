@@ -191,7 +191,7 @@ export function FolderPicker({
       </button>
 
       {isOpen && (
-        <div className="absolute z-50 mt-1 w-full bg-popover border border-border rounded-lg shadow-lg max-h-64 overflow-auto">
+        <div className="absolute z-50 mt-1 w-full bg-background border border-border rounded-lg shadow-lg max-h-80 overflow-auto">
           {/* No folder option */}
           <div
             className={cn(
