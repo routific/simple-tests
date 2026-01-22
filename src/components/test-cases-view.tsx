@@ -693,66 +693,70 @@ function NewCaseModal({
           : "Create a new test case"
       }
     >
-      <div className="p-6 space-y-4 min-h-[400px]">
-        {error && (
-          <div className="p-3 bg-destructive/10 border border-destructive/20 text-destructive rounded-lg text-sm">
-            {error}
-          </div>
-        )}
+      <div className="p-6 flex flex-col min-h-[400px]">
+        <div className="space-y-4">
+          {error && (
+            <div className="p-3 bg-destructive/10 border border-destructive/20 text-destructive rounded-lg text-sm">
+              {error}
+            </div>
+          )}
 
-        <div>
-          <label className="block text-sm font-medium text-foreground mb-2">
-            Title
-          </label>
-          <Input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g., User login with valid credentials"
-            autoFocus
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-foreground mb-2">
-              Folder
+              Title
             </label>
-            <FolderPicker
-              folders={folders}
-              value={folderId}
-              onChange={setFolderId}
-              placeholder="No folder"
+            <Input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g., User login with valid credentials"
+              autoFocus
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-2">
-              State
-            </label>
-            <select
-              value={state}
-              onChange={(e) => setState(e.target.value)}
-              className="w-full px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
-            >
-              <option value="active">Active</option>
-              <option value="draft">Draft</option>
-              <option value="retired">Retired</option>
-              <option value="rejected">Rejected</option>
-            </select>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Folder
+              </label>
+              <FolderPicker
+                folders={folders}
+                value={folderId}
+                onChange={setFolderId}
+                placeholder="No folder"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                State
+              </label>
+              <select
+                value={state}
+                onChange={(e) => setState(e.target.value)}
+                className="w-full px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
+              >
+                <option value="active">Active</option>
+                <option value="draft">Draft</option>
+                <option value="retired">Retired</option>
+                <option value="rejected">Rejected</option>
+              </select>
+            </div>
           </div>
         </div>
 
-        <p className="text-sm text-muted-foreground">
-          You can add scenarios after creating the test case.
-        </p>
+        <div className="mt-auto pt-4">
+          <p className="text-sm text-muted-foreground mb-4">
+            You can add scenarios after creating the test case.
+          </p>
 
-        <div className="flex justify-end gap-3 pt-4 border-t border-border">
-          <Button variant="outline" onClick={handleClose}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave} disabled={isPending}>
-            {isPending ? "Creating..." : "Create Test Case"}
-          </Button>
+          <div className="flex justify-end gap-3 pt-4 border-t border-border">
+            <Button variant="outline" onClick={handleClose}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave} disabled={isPending}>
+              {isPending ? "Creating..." : "Create Test Case"}
+            </Button>
+          </div>
         </div>
       </div>
     </Modal>
