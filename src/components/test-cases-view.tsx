@@ -597,6 +597,17 @@ function TestCaseListContent({
           ))}
         </div>
       )}
+      {hasMore && (
+        <div className="p-4 border-t border-border">
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={onLoadMore}
+          >
+            Load More
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

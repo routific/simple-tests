@@ -9,8 +9,10 @@ import { getSessionWithOrg } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
+const PAGE_SIZE = 100;
+
 interface Props {
-  searchParams: Promise<{ folder?: string; q?: string; state?: string }>;
+  searchParams: Promise<{ folder?: string; q?: string; state?: string; offset?: string }>;
 }
 
 export default async function CasesPage({ searchParams }: Props) {
@@ -25,6 +27,7 @@ export default async function CasesPage({ searchParams }: Props) {
   const folderId = params.folder ? parseInt(params.folder) : null;
   const search = params.q || "";
   const stateFilter = params.state || "";
+  const offset = params.offset ? parseInt(params.offset) : 0;
 
   // Get all folders for this organization with case counts
   const allFolders = await db
@@ -67,7 +70,17 @@ export default async function CasesPage({ searchParams }: Props) {
     );
   }
 
-  // First get the test cases
+  // Get total count of matching test cases
+  const totalCountResult = await db
+    .select({ count: count() })
+    .from(testCases)
+    .where(and(...conditions));
+  const totalCount = totalCountResult[0]?.count || 0;
+
+  // Calculate how many items to load (all items from 0 to current offset + PAGE_SIZE)
+  const loadLimit = offset + PAGE_SIZE;
+
+  // Get the test cases
   const casesData = await db
     .select({
       id: testCases.id,
@@ -87,7 +100,7 @@ export default async function CasesPage({ searchParams }: Props) {
     .leftJoin(users, eq(testCases.updatedBy, users.id))
     .where(and(...conditions))
     .orderBy(folderId ? testCases.order : sql`${testCases.updatedAt} DESC`)
-    .limit(100);
+    .limit(loadLimit);
 
   // Get scenario counts per test case
   const scenarioCounts = await db
@@ -130,6 +143,9 @@ export default async function CasesPage({ searchParams }: Props) {
           currentFolderName={currentFolder?.name || null}
           search={search}
           stateFilter={stateFilter}
+          totalCount={totalCount}
+          hasMore={cases.length < totalCount}
+          currentOffset={offset}
         />
       </div>
     </div>
