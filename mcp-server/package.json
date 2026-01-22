@@ -1,0 +1,27 @@
+{
+  "name": "simple-tests-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for Simple Tests - test case repository",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "create-token": "tsx scripts/create-test-token.ts"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.14.0",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "drizzle-orm": "^0.38.3",
+    "express": "^4.21.0",
+    "nanoid": "^5.0.9"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.17.10",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

@@ -227,6 +227,32 @@ export const undoStack = sqliteTable(
   (table) => [index("undo_stack_org_idx").on(table.organizationId)]
 );
 
+// API tokens for MCP server authentication
+export const apiTokens = sqliteTable(
+  "api_tokens",
+  {
+    id: text("id").primaryKey(), // Token ID (st_xxx format)
+    name: text("name").notNull(), // User-friendly name for the token
+    tokenHash: text("token_hash").notNull(), // SHA-256 hash of the actual token
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id), // Who created this token
+    permissions: text("permissions", { enum: ["read", "write", "admin"] })
+      .notNull()
+      .default("read"),
+    expiresAt: integer("expires_at", { mode: "timestamp" }), // Optional expiration
+    lastUsedAt: integer("last_used_at", { mode: "timestamp" }), // Track usage
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    revokedAt: integer("revoked_at", { mode: "timestamp" }), // Soft delete
+  },
+  (table) => [index("api_tokens_org_idx").on(table.organizationId)]
+);
+
 export type Organization = typeof organizations.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type Folder = typeof folders.$inferSelect;
@@ -237,3 +263,4 @@ export type Release = typeof releases.$inferSelect;
 export type TestRun = typeof testRuns.$inferSelect;
 export type TestRunResult = typeof testRunResults.$inferSelect;
 export type UndoStackEntry = typeof undoStack.$inferSelect;
+export type ApiToken = typeof apiTokens.$inferSelect;
