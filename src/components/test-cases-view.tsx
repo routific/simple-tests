@@ -214,32 +214,51 @@ function TestCaseListContent({
       ) : (
         <div className="divide-y divide-border">
           {cases.map((testCase) => (
-            <button
+            <div
               key={testCase.id}
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.effectAllowed = "move";
+                e.dataTransfer.setData(
+                  "text/plain",
+                  JSON.stringify({ type: "testcase", id: testCase.id, name: testCase.title })
+                );
+                // Set custom drag data for folder tree to read
+                (window as unknown as { __draggedTestCase?: { id: number; name: string } }).__draggedTestCase = {
+                  id: testCase.id,
+                  name: testCase.title,
+                };
+              }}
+              onDragEnd={() => {
+                delete (window as unknown as { __draggedTestCase?: { id: number; name: string } }).__draggedTestCase;
+              }}
               onClick={() => onCaseClick(testCase)}
-              className="w-full flex items-center justify-between p-4 hover:bg-muted/50 transition-colors group text-left"
+              className="w-full flex items-center justify-between p-4 hover:bg-muted/50 transition-colors group text-left cursor-grab active:cursor-grabbing"
             >
-              <div className="min-w-0 flex-1">
-                <div className="font-medium text-foreground truncate group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
-                  {testCase.title}
-                </div>
-                <div className="text-sm text-muted-foreground flex items-center gap-2 mt-0.5">
-                  {testCase.folderName && (
-                    <>
-                      <FolderIcon className="w-3.5 h-3.5" />
-                      <span>{testCase.folderName}</span>
-                      <span className="text-border">·</span>
-                    </>
-                  )}
-                  {testCase.updatedAt && (
-                    <span>
-                      Updated{" "}
-                      {testCase.updatedAt.toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                      })}
-                    </span>
-                  )}
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <DragHandleIcon className="w-4 h-4 text-muted-foreground/50 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium text-foreground truncate group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
+                    {testCase.title}
+                  </div>
+                  <div className="text-sm text-muted-foreground flex items-center gap-2 mt-0.5">
+                    {testCase.folderName && (
+                      <>
+                        <FolderIcon className="w-3.5 h-3.5" />
+                        <span>{testCase.folderName}</span>
+                        <span className="text-border">·</span>
+                      </>
+                    )}
+                    {testCase.updatedAt && (
+                      <span>
+                        Updated{" "}
+                        {testCase.updatedAt.toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
               <div className="flex items-center gap-3 ml-4">
@@ -248,7 +267,7 @@ function TestCaseListContent({
                 </Badge>
                 <ChevronRightIcon className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
-            </button>
+            </div>
           ))}
         </div>
       )}
@@ -738,6 +757,24 @@ function ChevronRightIcon({ className }: { className?: string }) {
         strokeLinecap="round"
         strokeLinejoin="round"
         d="M8.25 4.5l7.5 7.5-7.5 7.5"
+      />
+    </svg>
+  );
+}
+
+function DragHandleIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"
       />
     </svg>
   );
