@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { testCases, folders } from "@/lib/db/schema";
+import { testCases, folders, scenarios } from "@/lib/db/schema";
 import { eq, count, and } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { CreateRunForm } from "@/components/create-run-form";
@@ -48,7 +48,7 @@ export default async function NewRunPage() {
   const folderTree = buildFolderTree(foldersWithCounts);
 
   // Get all active test cases for selection
-  const cases = await db
+  const casesData = await db
     .select({
       id: testCases.id,
       title: testCases.title,
@@ -64,6 +64,34 @@ export default async function NewRunPage() {
       )
     )
     .orderBy(testCases.title);
+
+  // Get all scenarios for these test cases
+  const caseIds = casesData.map((c) => c.id);
+  const allScenarios = caseIds.length > 0
+    ? await db
+        .select({
+          id: scenarios.id,
+          title: scenarios.title,
+          testCaseId: scenarios.testCaseId,
+        })
+        .from(scenarios)
+        .orderBy(scenarios.order)
+    : [];
+
+  // Group scenarios by test case
+  const scenariosByCase: Record<number, { id: number; title: string; testCaseId: number }[]> = {};
+  allScenarios.forEach((s) => {
+    if (!scenariosByCase[s.testCaseId]) {
+      scenariosByCase[s.testCaseId] = [];
+    }
+    scenariosByCase[s.testCaseId].push(s);
+  });
+
+  // Add scenarios to each case
+  const cases = casesData.map((c) => ({
+    ...c,
+    scenarios: scenariosByCase[c.id] || [],
+  }));
 
   return (
     <div className="h-full flex flex-col">

@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { testCases, folders, users } from "@/lib/db/schema";
+import { testCases, folders, users, scenarios } from "@/lib/db/schema";
 import { eq, like, sql, and, count } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { FolderPanel } from "@/components/folder-panel";
@@ -67,13 +67,13 @@ export default async function CasesPage({ searchParams }: Props) {
     );
   }
 
-  const cases = await db
+  // First get the test cases
+  const casesData = await db
     .select({
       id: testCases.id,
       title: testCases.title,
       state: testCases.state,
       template: testCases.template,
-      gherkin: testCases.gherkin,
       folderId: testCases.folderId,
       updatedAt: testCases.updatedAt,
       updatedBy: testCases.updatedBy,
@@ -87,6 +87,25 @@ export default async function CasesPage({ searchParams }: Props) {
     .where(and(...conditions))
     .orderBy(sql`${testCases.updatedAt} DESC`)
     .limit(100);
+
+  // Get scenario counts per test case
+  const scenarioCounts = await db
+    .select({
+      testCaseId: scenarios.testCaseId,
+      count: count(),
+    })
+    .from(scenarios)
+    .groupBy(scenarios.testCaseId);
+
+  const scenarioCountMap: Record<number, number> = {};
+  scenarioCounts.forEach((sc) => {
+    scenarioCountMap[sc.testCaseId] = sc.count;
+  });
+
+  const cases = casesData.map((c) => ({
+    ...c,
+    scenarioCount: scenarioCountMap[c.id] || 0,
+  }));
 
   const currentFolder = folderId
     ? allFolders.find((f) => f.id === folderId)

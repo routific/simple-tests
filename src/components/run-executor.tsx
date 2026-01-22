@@ -13,9 +13,11 @@ interface Result {
   status: string;
   notes: string | null;
   executedAt: Date | null;
+  scenarioId: number;
+  scenarioTitle: string;
+  scenarioGherkin: string;
   testCaseId: number;
   testCaseTitle: string;
-  testCaseGherkin: string;
   folderName: string | null;
 }
 
@@ -148,7 +150,7 @@ export function RunExecutor({ run, results }: Props) {
       </div>
 
       <div className="flex-1 flex overflow-hidden">
-        {/* Case list */}
+        {/* Scenario list */}
         <div className="w-80 border-r border-[hsl(var(--border))] overflow-auto">
           {results.map((result) => (
             <button
@@ -164,13 +166,12 @@ export function RunExecutor({ run, results }: Props) {
             >
               <div className="flex items-center gap-2">
                 <StatusIcon status={result.status} />
-                <span className="font-medium truncate flex-1">{result.testCaseTitle}</span>
+                <span className="font-medium truncate flex-1">{result.scenarioTitle}</span>
               </div>
-              {result.folderName && (
-                <div className="text-xs text-[hsl(var(--muted-foreground))] mt-1 ml-6">
-                  {result.folderName}
-                </div>
-              )}
+              <div className="text-xs text-[hsl(var(--muted-foreground))] mt-1 ml-6">
+                {result.testCaseTitle}
+                {result.folderName && ` • ${result.folderName}`}
+              </div>
             </button>
           ))}
         </div>
@@ -181,7 +182,10 @@ export function RunExecutor({ run, results }: Props) {
             <div className="max-w-3xl">
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <h2 className="text-lg font-medium">{selectedResult.testCaseTitle}</h2>
+                  <div className="text-sm text-[hsl(var(--muted-foreground))] mb-1">
+                    {selectedResult.testCaseTitle}
+                  </div>
+                  <h2 className="text-lg font-medium">{selectedResult.scenarioTitle}</h2>
                   {selectedResult.folderName && (
                     <div className="text-sm text-[hsl(var(--muted-foreground))]">
                       {selectedResult.folderName}
@@ -197,8 +201,8 @@ export function RunExecutor({ run, results }: Props) {
               </div>
 
               <div className="mb-6">
-                <h3 className="text-sm font-medium mb-2">Scenarios</h3>
-                <GherkinDisplay text={selectedResult.testCaseGherkin} />
+                <h3 className="text-sm font-medium mb-2">Steps</h3>
+                <GherkinDisplay text={selectedResult.scenarioGherkin} />
               </div>
 
               {run.status === "in_progress" && (

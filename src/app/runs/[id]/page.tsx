@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { testRuns, testRunResults, testCases, folders } from "@/lib/db/schema";
+import { testRuns, testRunResults, testCases, folders, scenarios } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { RunExecutor } from "@/components/run-executor";
@@ -26,16 +26,19 @@ export default async function RunDetailPage({ params }: Props) {
       status: testRunResults.status,
       notes: testRunResults.notes,
       executedAt: testRunResults.executedAt,
-      testCaseId: testRunResults.testCaseId,
+      scenarioId: testRunResults.scenarioId,
+      scenarioTitle: scenarios.title,
+      scenarioGherkin: scenarios.gherkin,
+      testCaseId: scenarios.testCaseId,
       testCaseTitle: testCases.title,
-      testCaseGherkin: testCases.gherkin,
       folderName: folders.name,
     })
     .from(testRunResults)
-    .innerJoin(testCases, eq(testRunResults.testCaseId, testCases.id))
+    .innerJoin(scenarios, eq(testRunResults.scenarioId, scenarios.id))
+    .innerJoin(testCases, eq(scenarios.testCaseId, testCases.id))
     .leftJoin(folders, eq(testCases.folderId, folders.id))
     .where(eq(testRunResults.testRunId, runId))
-    .orderBy(folders.name, testCases.title);
+    .orderBy(folders.name, testCases.title, scenarios.order);
 
   return (
     <div className="h-full flex flex-col">

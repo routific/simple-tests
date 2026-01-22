@@ -9,7 +9,6 @@ import { getSessionWithOrg } from "@/lib/auth";
 interface SaveTestCaseInput {
   id?: number;
   title: string;
-  gherkin: string;
   folderId: number | null;
   state: "active" | "draft" | "retired" | "rejected";
 }
@@ -68,14 +67,12 @@ export async function saveTestCase(input: SaveTestCaseInput) {
 
       const oldValues = {
         title: existing.title,
-        gherkin: existing.gherkin,
         folderId: existing.folderId,
         state: existing.state,
       };
 
       const newValues = {
         title: input.title,
-        gherkin: input.gherkin,
         folderId: input.folderId,
         state: input.state,
       };
@@ -87,7 +84,6 @@ export async function saveTestCase(input: SaveTestCaseInput) {
         .update(testCases)
         .set({
           title: input.title,
-          gherkin: input.gherkin,
           folderId: input.folderId,
           state: input.state,
           updatedAt: new Date(),
@@ -122,7 +118,6 @@ export async function saveTestCase(input: SaveTestCaseInput) {
         .insert(testCases)
         .values({
           title: input.title,
-          gherkin: input.gherkin,
           folderId: input.folderId,
           state: input.state,
           organizationId,
@@ -142,7 +137,6 @@ export async function saveTestCase(input: SaveTestCaseInput) {
         previousValues: null,
         newValues: JSON.stringify({
           title: input.title,
-          gherkin: input.gherkin,
           folderId: input.folderId,
           state: input.state,
         }),
@@ -192,7 +186,6 @@ export async function deleteTestCase(id: number) {
       changes: JSON.stringify([]),
       previousValues: JSON.stringify({
         title: existing.title,
-        gherkin: existing.gherkin,
         folderId: existing.folderId,
         state: existing.state,
       }),

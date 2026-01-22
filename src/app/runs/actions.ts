@@ -9,7 +9,7 @@ import { getSessionWithOrg } from "@/lib/auth";
 interface CreateRunInput {
   name: string;
   description: string | null;
-  caseIds: number[];
+  scenarioIds: number[];
   linearProjectId: string | null;
   linearProjectName: string | null;
   linearMilestoneId: string | null;
@@ -50,9 +50,9 @@ export async function createTestRun(input: CreateRunInput) {
     const runId = result[0].id;
 
     await db.insert(testRunResults).values(
-      input.caseIds.map((caseId) => ({
+      input.scenarioIds.map((scenarioId) => ({
         testRunId: runId,
-        testCaseId: caseId,
+        scenarioId,
         status: "pending" as const,
       }))
     );
