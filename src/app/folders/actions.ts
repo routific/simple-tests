@@ -2,22 +2,33 @@
 
 import { db } from "@/lib/db";
 import { folders, testCases } from "@/lib/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { getSessionWithOrg } from "@/lib/auth";
 
 export async function createFolder(input: {
   name: string;
   parentId: number | null;
 }) {
+  const session = await getSessionWithOrg();
+  if (!session) {
+    return { error: "Unauthorized" };
+  }
+
+  const { organizationId } = session.user;
+
   try {
     // Get max order for siblings
     const siblings = await db
       .select({ maxOrder: sql<number>`MAX(${folders.order})` })
       .from(folders)
       .where(
-        input.parentId
-          ? eq(folders.parentId, input.parentId)
-          : sql`${folders.parentId} IS NULL`
+        and(
+          eq(folders.organizationId, organizationId),
+          input.parentId
+            ? eq(folders.parentId, input.parentId)
+            : sql`${folders.parentId} IS NULL`
+        )
       );
 
     const newOrder = (siblings[0]?.maxOrder ?? -1) + 1;
@@ -28,6 +39,7 @@ export async function createFolder(input: {
         name: input.name,
         parentId: input.parentId,
         order: newOrder,
+        organizationId,
       })
       .returning({ id: folders.id });
 
@@ -40,8 +52,20 @@ export async function createFolder(input: {
 }
 
 export async function renameFolder(id: number, name: string) {
+  const session = await getSessionWithOrg();
+  if (!session) {
+    return { error: "Unauthorized" };
+  }
+
+  const { organizationId } = session.user;
+
   try {
-    await db.update(folders).set({ name }).where(eq(folders.id, id));
+    await db
+      .update(folders)
+      .set({ name })
+      .where(
+        and(eq(folders.id, id), eq(folders.organizationId, organizationId))
+      );
     revalidatePath("/cases");
     return { success: true };
   } catch (error) {
@@ -51,30 +75,53 @@ export async function renameFolder(id: number, name: string) {
 }
 
 export async function deleteFolder(id: number) {
+  const session = await getSessionWithOrg();
+  if (!session) {
+    return { error: "Unauthorized" };
+  }
+
+  const { organizationId } = session.user;
+
   try {
     // Check for child folders
     const children = await db
       .select({ id: folders.id })
       .from(folders)
-      .where(eq(folders.parentId, id))
+      .where(
+        and(eq(folders.parentId, id), eq(folders.organizationId, organizationId))
+      )
       .limit(1);
 
     if (children.length > 0) {
-      return { error: "Cannot delete folder with subfolders. Delete subfolders first." };
+      return {
+        error: "Cannot delete folder with subfolders. Delete subfolders first.",
+      };
     }
 
     // Check for test cases in this folder
     const cases = await db
       .select({ id: testCases.id })
       .from(testCases)
-      .where(eq(testCases.folderId, id))
+      .where(
+        and(
+          eq(testCases.folderId, id),
+          eq(testCases.organizationId, organizationId)
+        )
+      )
       .limit(1);
 
     if (cases.length > 0) {
-      return { error: "Cannot delete folder with test cases. Move or delete test cases first." };
+      return {
+        error:
+          "Cannot delete folder with test cases. Move or delete test cases first.",
+      };
     }
 
-    await db.delete(folders).where(eq(folders.id, id));
+    await db
+      .delete(folders)
+      .where(
+        and(eq(folders.id, id), eq(folders.organizationId, organizationId))
+      );
     revalidatePath("/cases");
     return { success: true };
   } catch (error) {
@@ -88,10 +135,17 @@ export async function moveFolder(
   newParentId: number | null,
   newOrder: number
 ) {
+  const session = await getSessionWithOrg();
+  if (!session) {
+    return { error: "Unauthorized" };
+  }
+
+  const { organizationId } = session.user;
+
   try {
     // Prevent circular references - can't move a folder into its own descendant
     if (newParentId !== null) {
-      const isDescendant = await checkIsDescendant(id, newParentId);
+      const isDescendant = await checkIsDescendant(id, newParentId, organizationId);
       if (isDescendant) {
         return { error: "Cannot move a folder into its own subfolder" };
       }
@@ -102,9 +156,12 @@ export async function moveFolder(
       .select({ id: folders.id, order: folders.order })
       .from(folders)
       .where(
-        newParentId
-          ? eq(folders.parentId, newParentId)
-          : sql`${folders.parentId} IS NULL`
+        and(
+          eq(folders.organizationId, organizationId),
+          newParentId
+            ? eq(folders.parentId, newParentId)
+            : sql`${folders.parentId} IS NULL`
+        )
       )
       .orderBy(folders.order);
 
@@ -125,7 +182,9 @@ export async function moveFolder(
     await db
       .update(folders)
       .set({ parentId: newParentId, order: newOrder })
-      .where(eq(folders.id, id));
+      .where(
+        and(eq(folders.id, id), eq(folders.organizationId, organizationId))
+      );
 
     revalidatePath("/cases");
     return { success: true };
@@ -137,9 +196,9 @@ export async function moveFolder(
 
 async function checkIsDescendant(
   folderId: number,
-  potentialDescendantId: number
+  potentialDescendantId: number,
+  organizationId: string
 ): Promise<boolean> {
-  // Check if potentialDescendantId is a descendant of folderId
   let currentId: number | null = potentialDescendantId;
 
   while (currentId !== null) {
@@ -148,7 +207,12 @@ async function checkIsDescendant(
     const parent = await db
       .select({ parentId: folders.parentId })
       .from(folders)
-      .where(eq(folders.id, currentId))
+      .where(
+        and(
+          eq(folders.id, currentId),
+          eq(folders.organizationId, organizationId)
+        )
+      )
       .limit(1);
 
     currentId = parent[0]?.parentId ?? null;
@@ -161,11 +225,23 @@ export async function moveTestCaseToFolder(
   testCaseId: number,
   folderId: number | null
 ) {
+  const session = await getSessionWithOrg();
+  if (!session) {
+    return { error: "Unauthorized" };
+  }
+
+  const { organizationId } = session.user;
+
   try {
     await db
       .update(testCases)
       .set({ folderId, updatedAt: new Date() })
-      .where(eq(testCases.id, testCaseId));
+      .where(
+        and(
+          eq(testCases.id, testCaseId),
+          eq(testCases.organizationId, organizationId)
+        )
+      );
 
     revalidatePath("/cases");
     return { success: true };
@@ -179,12 +255,24 @@ export async function reorderFolders(
   parentId: number | null,
   orderedIds: number[]
 ) {
+  const session = await getSessionWithOrg();
+  if (!session) {
+    return { error: "Unauthorized" };
+  }
+
+  const { organizationId } = session.user;
+
   try {
     for (let i = 0; i < orderedIds.length; i++) {
       await db
         .update(folders)
         .set({ order: i })
-        .where(eq(folders.id, orderedIds[i]));
+        .where(
+          and(
+            eq(folders.id, orderedIds[i]),
+            eq(folders.organizationId, organizationId)
+          )
+        );
     }
 
     revalidatePath("/cases");

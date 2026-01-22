@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -25,6 +25,25 @@ interface TestCase {
   folderName: string | null;
 }
 
+interface LinearProject {
+  id: string;
+  name: string;
+  state: string;
+}
+
+interface LinearMilestone {
+  id: string;
+  name: string;
+  targetDate?: string;
+}
+
+interface LinearIssue {
+  id: string;
+  identifier: string;
+  title: string;
+  state: { name: string; color: string };
+}
+
 interface Props {
   folders: Folder[];
   cases: TestCase[];
@@ -39,6 +58,83 @@ export function CreateRunForm({ folders, cases, caseCounts }: Props) {
   const [selectedCases, setSelectedCases] = useState<Set<number>>(new Set());
   const [selectedFolders, setSelectedFolders] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
+
+  // Linear integration state
+  const [projects, setProjects] = useState<LinearProject[]>([]);
+  const [milestones, setMilestones] = useState<LinearMilestone[]>([]);
+  const [issues, setIssues] = useState<LinearIssue[]>([]);
+  const [selectedProject, setSelectedProject] = useState<LinearProject | null>(null);
+  const [selectedMilestone, setSelectedMilestone] = useState<LinearMilestone | null>(null);
+  const [selectedIssue, setSelectedIssue] = useState<LinearIssue | null>(null);
+  const [issueSearch, setIssueSearch] = useState("");
+  const [loadingProjects, setLoadingProjects] = useState(true);
+  const [loadingMilestones, setLoadingMilestones] = useState(false);
+  const [loadingIssues, setLoadingIssues] = useState(false);
+
+  // Fetch Linear projects on mount
+  useEffect(() => {
+    async function fetchProjects() {
+      try {
+        const res = await fetch("/api/linear/projects");
+        if (res.ok) {
+          const data = await res.json();
+          setProjects(data);
+        }
+      } catch (e) {
+        console.error("Failed to fetch projects:", e);
+      } finally {
+        setLoadingProjects(false);
+      }
+    }
+    fetchProjects();
+  }, []);
+
+  // Fetch milestones when project changes
+  useEffect(() => {
+    async function fetchMilestones() {
+      if (!selectedProject) {
+        setMilestones([]);
+        return;
+      }
+
+      setLoadingMilestones(true);
+      try {
+        const res = await fetch(`/api/linear/milestones?projectId=${selectedProject.id}`);
+        if (res.ok) {
+          const data = await res.json();
+          setMilestones(data);
+        }
+      } catch (e) {
+        console.error("Failed to fetch milestones:", e);
+      } finally {
+        setLoadingMilestones(false);
+      }
+    }
+    fetchMilestones();
+  }, [selectedProject]);
+
+  // Debounced issue search
+  const searchIssues = useCallback(async (search: string) => {
+    setLoadingIssues(true);
+    try {
+      const res = await fetch(`/api/linear/issues?q=${encodeURIComponent(search)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setIssues(data);
+      }
+    } catch (e) {
+      console.error("Failed to fetch issues:", e);
+    } finally {
+      setLoadingIssues(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      searchIssues(issueSearch);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [issueSearch, searchIssues]);
 
   const toggleFolder = (folderId: number) => {
     const newSelectedFolders = new Set(selectedFolders);
@@ -94,6 +190,13 @@ export function CreateRunForm({ folders, cases, caseCounts }: Props) {
           name: name.trim(),
           description: description.trim() || null,
           caseIds: Array.from(selectedCases),
+          linearProjectId: selectedProject?.id || null,
+          linearProjectName: selectedProject?.name || null,
+          linearMilestoneId: selectedMilestone?.id || null,
+          linearMilestoneName: selectedMilestone?.name || null,
+          linearIssueId: selectedIssue?.id || null,
+          linearIssueIdentifier: selectedIssue?.identifier || null,
+          linearIssueTitle: selectedIssue?.title || null,
         });
 
         if (result.error) {
@@ -173,6 +276,124 @@ export function CreateRunForm({ folders, cases, caseCounts }: Props) {
               />
             </div>
           </div>
+
+          {/* Linear Integration */}
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-4">
+                <LinearIcon className="w-4 h-4 text-brand-600" />
+                <span className="text-sm font-medium text-foreground">Linear Integration</span>
+                <span className="text-xs text-muted-foreground">(optional)</span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                {/* Project Selector */}
+                <div>
+                  <label className="block text-sm text-muted-foreground mb-2">
+                    Project
+                  </label>
+                  <select
+                    value={selectedProject?.id || ""}
+                    onChange={(e) => {
+                      const project = projects.find((p) => p.id === e.target.value);
+                      setSelectedProject(project || null);
+                      setSelectedMilestone(null);
+                    }}
+                    disabled={loadingProjects}
+                    className="w-full px-3 py-2 text-sm border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors disabled:opacity-50"
+                  >
+                    <option value="">None</option>
+                    {projects.map((project) => (
+                      <option key={project.id} value={project.id}>
+                        {project.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Milestone Selector */}
+                <div>
+                  <label className="block text-sm text-muted-foreground mb-2">
+                    Milestone
+                  </label>
+                  <select
+                    value={selectedMilestone?.id || ""}
+                    onChange={(e) => {
+                      const milestone = milestones.find((m) => m.id === e.target.value);
+                      setSelectedMilestone(milestone || null);
+                    }}
+                    disabled={!selectedProject || loadingMilestones}
+                    className="w-full px-3 py-2 text-sm border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors disabled:opacity-50"
+                  >
+                    <option value="">None</option>
+                    {milestones.map((milestone) => (
+                      <option key={milestone.id} value={milestone.id}>
+                        {milestone.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Issue Selector with Search */}
+                <div>
+                  <label className="block text-sm text-muted-foreground mb-2">
+                    Link to Issue
+                  </label>
+                  <div className="relative">
+                    <Input
+                      type="text"
+                      value={selectedIssue ? `${selectedIssue.identifier}: ${selectedIssue.title}` : issueSearch}
+                      onChange={(e) => {
+                        if (selectedIssue) {
+                          setSelectedIssue(null);
+                        }
+                        setIssueSearch(e.target.value);
+                      }}
+                      placeholder="Search issues..."
+                      className="pr-8"
+                    />
+                    {selectedIssue && (
+                      <button
+                        onClick={() => setSelectedIssue(null)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      >
+                        <CloseIcon className="w-4 h-4" />
+                      </button>
+                    )}
+                    {loadingIssues && (
+                      <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                        <LoadingIcon className="w-4 h-4 animate-spin text-muted-foreground" />
+                      </div>
+                    )}
+                  </div>
+                  {/* Issue dropdown */}
+                  {!selectedIssue && issueSearch && issues.length > 0 && (
+                    <div className="absolute z-10 mt-1 w-full bg-background border border-border rounded-lg shadow-lg max-h-48 overflow-auto">
+                      {issues.map((issue) => (
+                        <button
+                          key={issue.id}
+                          onClick={() => {
+                            setSelectedIssue(issue);
+                            setIssueSearch("");
+                          }}
+                          className="w-full px-3 py-2 text-left hover:bg-muted transition-colors flex items-center gap-2"
+                        >
+                          <span
+                            className="w-2 h-2 rounded-full shrink-0"
+                            style={{ backgroundColor: issue.state.color }}
+                          />
+                          <span className="font-medium text-sm">{issue.identifier}</span>
+                          <span className="text-sm text-muted-foreground truncate">
+                            {issue.title}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Test Case Selection */}
           <div>
@@ -386,6 +607,22 @@ function ErrorIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+    </svg>
+  );
+}
+
+function LinearIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 100 100" fill="currentColor">
+      <path d="M1.22541 61.5228c-.2225-.9485.90748-1.5459 1.59638-.857L39.3342 97.1782c.6889.6889.0915 1.8189-.857 1.5765C17.7437 93.8542 4.10651 79.4589 1.22541 61.5228ZM.00189135 46.8891c-.01764375.2833.00333.5765.06289.8686.135.6547.39457 1.2773.76287 1.8359.30428.4629.66873.8855 1.05571 1.2634L52.3503 99.1795c.3879.3784.8213.7343 1.2928 1.0345 1.0157.6628 2.2042.9876 3.3784.8914C71.4499 100.167 83.9267 94.0717 93.2182 84.775c9.2874-9.2923 15.3823-21.7691 16.3172-36.2074.1022-1.5776-.3576-3.1011-1.2642-4.3177-2.7682-3.7138-5.9254-7.0862-9.4048-10.0739C83.2167 20.3171 63.1916 11.5273 41.1236 12.4818 18.9216 13.4426 2.47935 29.0281.00189135 46.8891Z" />
+    </svg>
+  );
+}
+
+function CloseIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
     </svg>
   );
 }
