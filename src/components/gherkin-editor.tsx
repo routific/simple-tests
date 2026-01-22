@@ -248,8 +248,8 @@ export function GherkinDisplay({ text }: { text: string }) {
   const lines = text.split("\n");
 
   return (
-    <div className="rounded-lg border border-border bg-[#1e1e2e] dark:bg-[#0d1117] overflow-auto font-mono text-sm p-3">
-      <div className="whitespace-pre">
+    <div className="rounded-lg border border-border bg-[#1e1e2e] dark:bg-[#0d1117] overflow-auto p-3">
+      <div className="whitespace-pre font-mono text-sm">
         {lines.map((line, i) => (
           <HighlightedLine key={i} line={line} lineNumber={i + 1} />
         ))}
