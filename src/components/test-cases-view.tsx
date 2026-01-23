@@ -17,7 +17,7 @@ import {
   reorderTestCases,
 } from "@/app/cases/actions";
 import { exportTestCases, importTestCases, ExportData } from "@/app/cases/export-actions";
-import { getScenarios, saveScenario } from "@/app/cases/scenario-actions";
+import { getScenarios } from "@/app/cases/scenario-actions";
 import { cn } from "@/lib/utils";
 import { buildFolderBreadcrumb, formatBreadcrumb } from "@/lib/folders";
 import { FolderPicker } from "@/components/folder-picker";
@@ -1069,14 +1069,6 @@ function NewCaseModal({
         if (result.error) {
           setError(result.error);
         } else if (result.id) {
-          // Create a default scenario for the new test case
-          await saveScenario({
-            testCaseId: result.id,
-            title: "Default Scenario",
-            gherkin: "",
-            order: 0,
-          });
-
           // Reset form and close
           setTitle("");
           setState("active");
