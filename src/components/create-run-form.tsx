@@ -93,7 +93,9 @@ export function CreateRunForm({ folders, cases, caseCounts }: Props) {
       if (stateFilter && c.state !== stateFilter) return false;
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
-        if (!c.title.toLowerCase().includes(query)) return false;
+        const matchesTitle = c.title.toLowerCase().includes(query);
+        const matchesFolder = c.folderName?.toLowerCase().includes(query);
+        if (!matchesTitle && !matchesFolder) return false;
       }
       return true;
     });
