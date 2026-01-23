@@ -493,7 +493,7 @@ function TestCaseListContent({
   const [isPending, startTransition] = useTransition();
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [draggedId, setDraggedId] = useState<number | null>(null);
-  const [dragOverId, setDragOverId] = useState<number | null>(null);
+  const [dropIndicator, setDropIndicator] = useState<{ id: number; position: "before" | "after" } | null>(null);
   const [showStateModal, setShowStateModal] = useState(false);
 
   const handleBulkDelete = () => {
@@ -529,32 +529,57 @@ function TestCaseListContent({
 
   const handleDragOver = (e: React.DragEvent, id: number) => {
     e.preventDefault();
-    if (draggedId !== null && draggedId !== id) {
-      setDragOverId(id);
+    if (draggedId === null || draggedId === id) return;
+
+    // Calculate if dropping before or after based on mouse position
+    const rect = e.currentTarget.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    const position = e.clientY < midY ? "before" : "after";
+
+    setDropIndicator({ id, position });
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    // Only clear if we're leaving the container, not entering a child
+    const relatedTarget = e.relatedTarget as Node | null;
+    if (!e.currentTarget.contains(relatedTarget)) {
+      setDropIndicator(null);
     }
   };
 
-  const handleDragLeave = () => {
-    setDragOverId(null);
-  };
-
-  const handleDrop = (e: React.DragEvent, targetId: number) => {
+  const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    if (draggedId === null || draggedId === targetId) {
+    if (draggedId === null || !dropIndicator) {
       setDraggedId(null);
-      setDragOverId(null);
+      setDropIndicator(null);
+      return;
+    }
+
+    const targetId = dropIndicator.id;
+    if (draggedId === targetId) {
+      setDraggedId(null);
+      setDropIndicator(null);
       return;
     }
 
     // Calculate new order
     const currentIds = cases.map((c) => c.id);
     const fromIndex = currentIds.indexOf(draggedId);
-    const toIndex = currentIds.indexOf(targetId);
+    let toIndex = currentIds.indexOf(targetId);
 
     if (fromIndex === -1 || toIndex === -1) {
       setDraggedId(null);
-      setDragOverId(null);
+      setDropIndicator(null);
       return;
+    }
+
+    // Adjust target index based on drop position
+    if (dropIndicator.position === "after") {
+      toIndex += 1;
+    }
+    // If dragging from before to after, adjust for the removal
+    if (fromIndex < toIndex) {
+      toIndex -= 1;
     }
 
     // Reorder the array
@@ -569,12 +594,12 @@ function TestCaseListContent({
     });
 
     setDraggedId(null);
-    setDragOverId(null);
+    setDropIndicator(null);
   };
 
   const handleDragEnd = () => {
     setDraggedId(null);
-    setDragOverId(null);
+    setDropIndicator(null);
   };
 
   const allSelected = cases.length > 0 && selectedCases.size === cases.length;
@@ -732,39 +757,44 @@ function TestCaseListContent({
         </div>
       ) : (
         <div className="divide-y divide-border">
-          {cases.map((testCase) => (
-            <div
-              key={testCase.id}
-              draggable
-              onDragStart={(e) => {
-                e.dataTransfer.effectAllowed = "move";
-                e.dataTransfer.setData(
-                  "text/plain",
-                  JSON.stringify({ type: "testcase", id: testCase.id, name: testCase.title })
-                );
-                // Set custom drag data for folder tree to read
-                (window as unknown as { __draggedTestCase?: { id: number; name: string } }).__draggedTestCase = {
-                  id: testCase.id,
-                  name: testCase.title,
-                };
-                handleDragStart(testCase.id);
-              }}
-              onDragEnd={() => {
-                delete (window as unknown as { __draggedTestCase?: { id: number; name: string } }).__draggedTestCase;
-                handleDragEnd();
-              }}
-              onDragOver={(e) => handleDragOver(e, testCase.id)}
-              onDragLeave={handleDragLeave}
-              onDrop={(e) => handleDrop(e, testCase.id)}
-              onClick={() => onCaseClick(testCase)}
-              className={cn(
-                "w-full flex items-center justify-between py-2.5 px-4 hover:bg-muted/50 transition-colors group text-left",
-                "cursor-grab active:cursor-grabbing",
-                selectedCases.has(testCase.id) && "bg-brand-50 dark:bg-brand-950/50",
-                draggedId === testCase.id && "opacity-50",
-                dragOverId === testCase.id && "border-t-2 border-brand-500"
+          {cases.map((testCase, index) => (
+            <div key={testCase.id} className="relative">
+              {/* Drop indicator line - before */}
+              {dropIndicator?.id === testCase.id && dropIndicator.position === "before" && (
+                <div className="absolute top-0 left-0 right-0 h-0.5 bg-brand-500 z-10">
+                  <div className="absolute -left-0.5 -top-1 w-2.5 h-2.5 rounded-full bg-brand-500" />
+                </div>
               )}
-            >
+              <div
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.effectAllowed = "move";
+                  e.dataTransfer.setData(
+                    "text/plain",
+                    JSON.stringify({ type: "testcase", id: testCase.id, name: testCase.title })
+                  );
+                  // Set custom drag data for folder tree to read
+                  (window as unknown as { __draggedTestCase?: { id: number; name: string } }).__draggedTestCase = {
+                    id: testCase.id,
+                    name: testCase.title,
+                  };
+                  handleDragStart(testCase.id);
+                }}
+                onDragEnd={() => {
+                  delete (window as unknown as { __draggedTestCase?: { id: number; name: string } }).__draggedTestCase;
+                  handleDragEnd();
+                }}
+                onDragOver={(e) => handleDragOver(e, testCase.id)}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                onClick={() => onCaseClick(testCase)}
+                className={cn(
+                  "w-full flex items-center justify-between py-2.5 px-4 hover:bg-muted/50 transition-colors group text-left",
+                  "cursor-grab active:cursor-grabbing",
+                  selectedCases.has(testCase.id) && "bg-brand-50 dark:bg-brand-950/50",
+                  draggedId === testCase.id && "opacity-50"
+                )}
+              >
               <div className="flex items-center gap-1 min-w-0 flex-1">
                 <div
                   className="p-2 -m-2 cursor-pointer flex-shrink-0"
@@ -796,6 +826,13 @@ function TestCaseListContent({
                 />
                 <ChevronRightIcon className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
+              </div>
+              {/* Drop indicator line - after (only show on last item or when this item is target) */}
+              {dropIndicator?.id === testCase.id && dropIndicator.position === "after" && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-500 z-10">
+                  <div className="absolute -left-0.5 -top-1 w-2.5 h-2.5 rounded-full bg-brand-500" />
+                </div>
+              )}
             </div>
           ))}
         </div>
