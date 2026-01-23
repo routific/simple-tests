@@ -35,13 +35,21 @@ export default async function CasesPage({ searchParams }: Props) {
     .from(folders)
     .where(eq(folders.organizationId, organizationId));
 
+  // Build folder count conditions (apply state filter globally)
+  const folderCountConditions = [eq(testCases.organizationId, organizationId)];
+  if (stateFilter) {
+    folderCountConditions.push(
+      eq(testCases.state, stateFilter as "active" | "draft" | "retired" | "rejected")
+    );
+  }
+
   const folderCaseCounts = await db
     .select({
       folderId: testCases.folderId,
       count: count(),
     })
     .from(testCases)
-    .where(eq(testCases.organizationId, organizationId))
+    .where(and(...folderCountConditions))
     .groupBy(testCases.folderId);
 
   const caseCounts: Record<number, number> = {};
@@ -132,6 +140,7 @@ export default async function CasesPage({ searchParams }: Props) {
         folders={folderTree}
         selectedFolderId={folderId}
         caseCounts={caseCounts}
+        stateFilter={stateFilter}
       />
 
       {/* Main Content */}

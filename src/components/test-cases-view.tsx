@@ -16,6 +16,7 @@ import {
   bulkMoveTestCasesToFolder,
   reorderTestCases,
 } from "@/app/cases/actions";
+import { exportTestCases, importTestCases, ExportData } from "@/app/cases/export-actions";
 import { getScenarios, saveScenario } from "@/app/cases/scenario-actions";
 import { cn } from "@/lib/utils";
 import { buildFolderBreadcrumb, formatBreadcrumb } from "@/lib/folders";
@@ -75,6 +76,83 @@ export function TestCasesView({
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [selectedCases, setSelectedCases] = useState<Set<number>>(new Set());
   const lastSelectedIndexRef = useRef<number | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const result = await exportTestCases();
+      if (result.error) {
+        alert(`Export failed: ${result.error}`);
+        return;
+      }
+      if (result.data) {
+        // Create and download the JSON file
+        const blob = new Blob([JSON.stringify(result.data, null, 2)], {
+          type: "application/json",
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        const date = new Date().toISOString().split("T")[0];
+        a.download = `test-cases-export-${date}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    } catch (error) {
+      alert("Export failed. Please try again.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsImporting(true);
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text) as ExportData;
+
+      if (
+        !confirm(
+          `This will replace all existing test cases with ${data.data.testCases.length} test cases from the import file. Continue?`
+        )
+      ) {
+        setIsImporting(false);
+        return;
+      }
+
+      const result = await importTestCases(data);
+      if (result.error) {
+        alert(`Import failed: ${result.error}`);
+        return;
+      }
+      if (result.stats) {
+        alert(
+          `Import successful!\n\nImported:\n- ${result.stats.folders} folders\n- ${result.stats.testCases} test cases\n- ${result.stats.scenarios} scenarios`
+        );
+        router.refresh();
+      }
+    } catch {
+      alert("Import failed. Please check the file format.");
+    } finally {
+      setIsImporting(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
 
   const handleCaseClick = (testCase: TestCase) => {
     setSelectedCase(testCase);
@@ -142,10 +220,45 @@ export function TestCasesView({
             {hasMore && ` (showing ${cases.length})`}
           </p>
         </div>
-        <Button size="sm" onClick={() => setIsNewCaseModalOpen(true)}>
-          <PlusIcon className="w-4 h-4" />
-          New Case
-        </Button>
+        <div className="flex items-center gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json"
+            onChange={handleImportFile}
+            className="hidden"
+          />
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleImportClick}
+            disabled={isImporting}
+          >
+            {isImporting ? (
+              <LoadingIcon className="w-4 h-4 animate-spin" />
+            ) : (
+              <ImportIcon className="w-4 h-4" />
+            )}
+            {isImporting ? "Importing..." : "Import"}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleExport}
+            disabled={isExporting}
+          >
+            {isExporting ? (
+              <LoadingIcon className="w-4 h-4 animate-spin" />
+            ) : (
+              <ExportIcon className="w-4 h-4" />
+            )}
+            {isExporting ? "Exporting..." : "Export"}
+          </Button>
+          <Button size="sm" onClick={() => setIsNewCaseModalOpen(true)}>
+            <PlusIcon className="w-4 h-4" />
+            New Case
+          </Button>
+        </div>
       </div>
 
       {/* Test Case List */}
@@ -154,7 +267,6 @@ export function TestCasesView({
         folders={folders}
         currentFolderId={currentFolderId}
         search={search}
-        stateFilter={stateFilter}
         selectedCases={selectedCases}
         hasMore={hasMore}
         currentOffset={currentOffset}
@@ -174,17 +286,6 @@ export function TestCasesView({
             params.delete("q");
           }
           // Reset offset when search changes
-          params.delete("offset");
-          router.push(`/cases?${params.toString()}`);
-        }}
-        onStateFilterChange={(value) => {
-          const params = new URLSearchParams(window.location.search);
-          if (value) {
-            params.set("state", value);
-          } else {
-            params.delete("state");
-          }
-          // Reset offset when filter changes
           params.delete("offset");
           router.push(`/cases?${params.toString()}`);
         }}
@@ -224,7 +325,6 @@ function TestCaseListContent({
   folders,
   currentFolderId,
   search,
-  stateFilter,
   selectedCases,
   hasMore,
   currentOffset,
@@ -234,14 +334,12 @@ function TestCaseListContent({
   onClearSelection,
   onSelectionAction,
   onSearchChange,
-  onStateFilterChange,
   onLoadMore,
 }: {
   cases: TestCase[];
   folders: Folder[];
   currentFolderId: number | null;
   search: string;
-  stateFilter: string;
   selectedCases: Set<number>;
   hasMore: boolean;
   currentOffset: number;
@@ -251,7 +349,6 @@ function TestCaseListContent({
   onClearSelection: () => void;
   onSelectionAction: () => void;
   onSearchChange: (value: string) => void;
-  onStateFilterChange: (value: string) => void;
   onLoadMore: () => void;
 }) {
   const [isPending, startTransition] = useTransition();
@@ -447,17 +544,6 @@ function TestCaseListContent({
             className="pl-9"
           />
         </div>
-        <select
-          value={stateFilter}
-          onChange={(e) => onStateFilterChange(e.target.value)}
-          className="px-3 py-2 text-sm border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
-        >
-          <option value="">All states</option>
-          <option value="active">Active</option>
-          <option value="draft">Draft</option>
-          <option value="retired">Retired</option>
-          <option value="rejected">Rejected</option>
-        </select>
       </div>
 
       {/* State Change Modal */}
@@ -1157,6 +1243,62 @@ function EditIcon({ className }: { className?: string }) {
         strokeLinecap="round"
         strokeLinejoin="round"
         d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10"
+      />
+    </svg>
+  );
+}
+
+function ExportIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={1.5}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M9 8.25H7.5a2.25 2.25 0 00-2.25 2.25v9a2.25 2.25 0 002.25 2.25h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25H15m0-3l-3-3m0 0l-3 3m3-3V15"
+      />
+    </svg>
+  );
+}
+
+function ImportIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={1.5}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M9 8.25H7.5a2.25 2.25 0 00-2.25 2.25v9a2.25 2.25 0 002.25 2.25h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25H15M9 12l3 3m0 0l3-3m-3 3V2.25"
+      />
+    </svg>
+  );
+}
+
+function LoadingIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24">
+      <circle
+        className="opacity-25"
+        cx="12"
+        cy="12"
+        r="10"
+        stroke="currentColor"
+        strokeWidth="4"
+      />
+      <path
+        className="opacity-75"
+        fill="currentColor"
+        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
       />
     </svg>
   );
