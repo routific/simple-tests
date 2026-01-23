@@ -109,11 +109,16 @@ export async function recordUndo(
 
   const { organizationId } = session.user;
 
+  // Clear redo stack when a new action is recorded
+  await db
+    .delete(undoStack)
+    .where(and(eq(undoStack.organizationId, organizationId), eq(undoStack.isRedo, true)));
+
   // Keep only the last 50 undo actions per organization
   const existingCount = await db
     .select({ id: undoStack.id })
     .from(undoStack)
-    .where(eq(undoStack.organizationId, organizationId))
+    .where(and(eq(undoStack.organizationId, organizationId), eq(undoStack.isRedo, false)))
     .orderBy(desc(undoStack.createdAt))
     .limit(100);
 
@@ -129,6 +134,7 @@ export async function recordUndo(
     actionType: actionType as typeof undoStack.$inferInsert.actionType,
     description,
     undoData: JSON.stringify(undoData),
+    isRedo: false,
     organizationId,
   });
 }
@@ -151,11 +157,36 @@ export async function getLastUndo(): Promise<{
       actionType: undoStack.actionType,
     })
     .from(undoStack)
-    .where(eq(undoStack.organizationId, organizationId))
+    .where(and(eq(undoStack.organizationId, organizationId), eq(undoStack.isRedo, false)))
     .orderBy(desc(undoStack.createdAt))
     .limit(1);
 
   return lastUndo[0] || null;
+}
+
+// Get the last redo action
+export async function getLastRedo(): Promise<{
+  id: number;
+  description: string;
+  actionType: string;
+} | null> {
+  const session = await getSessionWithOrg();
+  if (!session) return null;
+
+  const { organizationId } = session.user;
+
+  const lastRedo = await db
+    .select({
+      id: undoStack.id,
+      description: undoStack.description,
+      actionType: undoStack.actionType,
+    })
+    .from(undoStack)
+    .where(and(eq(undoStack.organizationId, organizationId), eq(undoStack.isRedo, true)))
+    .orderBy(desc(undoStack.createdAt))
+    .limit(1);
+
+  return lastRedo[0] || null;
 }
 
 // Execute undo

@@ -189,6 +189,7 @@ export const undoStack = sqliteTable(
     }).notNull(),
     description: text("description").notNull(),
     undoData: text("undo_data").notNull(), // JSON with data needed to reverse
+    isRedo: integer("is_redo", { mode: "boolean" }).notNull().default(false), // true = in redo stack
     organizationId: text("organization_id")
       .notNull()
       .references(() => organizations.id),
