@@ -812,15 +812,8 @@ function TestCaseListContent({
                   {testCase.title}
                 </span>
               </div>
-              {/* Right side: scenario count, folder, status, chevron */}
-              <div className="grid grid-cols-[40px_160px_70px_20px] gap-2 items-center ml-4 flex-shrink-0">
-                <span
-                  className="text-xs text-muted-foreground flex items-center gap-1 justify-end tabular-nums"
-                  title={`${testCase.scenarioCount || 0} scenario${testCase.scenarioCount !== 1 ? 's' : ''}`}
-                >
-                  <ScenarioIcon className="w-3 h-3" />
-                  {testCase.scenarioCount || 0}
-                </span>
+              {/* Right side: folder, status, scenario count, chevron */}
+              <div className="grid grid-cols-[160px_70px_40px_20px] gap-2 items-center ml-4 flex-shrink-0">
                 <div className="flex justify-end">
                   <InlineFolderPicker
                     testCaseId={testCase.id}
@@ -836,6 +829,13 @@ function TestCaseListContent({
                     onStateChange={onSelectionAction}
                   />
                 </div>
+                <span
+                  className="text-xs text-muted-foreground flex items-center gap-1 justify-end tabular-nums"
+                  title={`${testCase.scenarioCount || 0} scenario${testCase.scenarioCount !== 1 ? 's' : ''}`}
+                >
+                  <ScenarioIcon className="w-3 h-3" />
+                  {testCase.scenarioCount || 0}
+                </span>
                 <ChevronRightIcon className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
               </div>
