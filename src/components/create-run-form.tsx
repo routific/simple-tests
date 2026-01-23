@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect, useCallback, useMemo } from "react";
+import { useState, useTransition, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -8,22 +8,12 @@ import { createTestRun } from "@/app/runs/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { GherkinDisplay } from "@/components/gherkin-editor";
-
-interface Folder {
-  id: number;
-  name: string;
-  parentId: number | null;
-  order: number;
-  caseCount: number;
-  children: Folder[];
-}
+import { Badge } from "@/components/ui/badge";
 
 interface Scenario {
   id: number;
   title: string;
   testCaseId: number;
-  gherkin: string | null;
 }
 
 interface TestCase {
@@ -54,10 +44,34 @@ interface LinearIssue {
   state: { name: string; color: string };
 }
 
+interface Folder {
+  id: number;
+  name: string;
+  parentId: number | null;
+  order: number;
+  caseCount: number;
+  children: Folder[];
+}
+
 interface Props {
   folders: Folder[];
   cases: TestCase[];
   caseCounts: Record<number, number>;
+}
+
+function getStateBadgeVariant(state: string) {
+  switch (state) {
+    case "active":
+      return "success";
+    case "draft":
+      return "warning";
+    case "retired":
+      return "secondary";
+    case "rejected":
+      return "destructive";
+    default:
+      return "secondary";
+  }
 }
 
 export function CreateRunForm({ folders, cases, caseCounts }: Props) {
@@ -65,36 +79,32 @@ export function CreateRunForm({ folders, cases, caseCounts }: Props) {
   const [isPending, startTransition] = useTransition();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [selectedScenarios, setSelectedScenarios] = useState<Set<number>>(new Set());
   const [selectedCases, setSelectedCases] = useState<Set<number>>(new Set());
-  const [selectedFolders, setSelectedFolders] = useState<Set<number>>(new Set());
+  const lastSelectedIndexRef = useRef<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState("");
   const [stateFilter, setStateFilter] = useState<string>("active");
-  const [previewScenarioId, setPreviewScenarioId] = useState<number | null>(null);
 
   // Filter cases based on search and state
   const filteredCases = useMemo(() => {
     return cases.filter((c) => {
-      // State filter
       if (stateFilter && c.state !== stateFilter) return false;
-      // Search filter (case-insensitive, matches title or scenario titles)
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
-        const matchesTitle = c.title.toLowerCase().includes(query);
-        const matchesScenario = c.scenarios.some((s) =>
-          s.title.toLowerCase().includes(query)
-        );
-        if (!matchesTitle && !matchesScenario) return false;
+        if (!c.title.toLowerCase().includes(query)) return false;
       }
       return true;
     });
   }, [cases, searchQuery, stateFilter]);
 
-  // Total scenario count for display
-  const totalScenarios = filteredCases.reduce((sum, c) => sum + c.scenarios.length, 0);
+  // Count scenarios for selected cases
+  const selectedScenarioCount = useMemo(() => {
+    return cases
+      .filter((c) => selectedCases.has(c.id))
+      .reduce((sum, c) => sum + c.scenarios.length, 0);
+  }, [cases, selectedCases]);
 
   // Linear integration state
   const [projects, setProjects] = useState<LinearProject[]>([]);
@@ -173,106 +183,41 @@ export function CreateRunForm({ folders, cases, caseCounts }: Props) {
     return () => clearTimeout(timer);
   }, [issueSearch, searchIssues]);
 
-  const toggleFolder = (folderId: number) => {
-    const newSelectedFolders = new Set(selectedFolders);
-    const newSelectedCases = new Set(selectedCases);
-    const newSelectedScenarios = new Set(selectedScenarios);
-    const folderCases = cases.filter((c) => c.folderId === folderId);
+  const toggleCase = (id: number, e?: React.MouseEvent) => {
+    const currentIndex = filteredCases.findIndex((c) => c.id === id);
 
-    if (selectedFolders.has(folderId)) {
-      newSelectedFolders.delete(folderId);
-      folderCases.forEach((c) => {
-        newSelectedCases.delete(c.id);
-        c.scenarios.forEach((s) => newSelectedScenarios.delete(s.id));
-      });
-    } else {
-      newSelectedFolders.add(folderId);
-      folderCases.forEach((c) => {
-        newSelectedCases.add(c.id);
-        c.scenarios.forEach((s) => newSelectedScenarios.add(s.id));
-      });
-    }
-
-    setSelectedFolders(newSelectedFolders);
-    setSelectedCases(newSelectedCases);
-    setSelectedScenarios(newSelectedScenarios);
-  };
-
-  const toggleCase = (caseId: number) => {
-    const newSelectedCases = new Set(selectedCases);
-    const newSelectedScenarios = new Set(selectedScenarios);
-    const testCase = cases.find((c) => c.id === caseId);
-
-    if (newSelectedCases.has(caseId)) {
-      newSelectedCases.delete(caseId);
-      testCase?.scenarios.forEach((s) => newSelectedScenarios.delete(s.id));
-    } else {
-      newSelectedCases.add(caseId);
-      testCase?.scenarios.forEach((s) => newSelectedScenarios.add(s.id));
-    }
-
-    setSelectedCases(newSelectedCases);
-    setSelectedScenarios(newSelectedScenarios);
-  };
-
-  const toggleScenario = (scenarioId: number, testCaseId: number) => {
-    const newSelectedScenarios = new Set(selectedScenarios);
-    const newSelectedCases = new Set(selectedCases);
-
-    if (newSelectedScenarios.has(scenarioId)) {
-      newSelectedScenarios.delete(scenarioId);
-    } else {
-      newSelectedScenarios.add(scenarioId);
-    }
-
-    // Update case selection based on scenario selection
-    const testCase = cases.find((c) => c.id === testCaseId);
-    if (testCase) {
-      const allScenariosSelected = testCase.scenarios.every((s) =>
-        newSelectedScenarios.has(s.id)
-      );
-      const anyScenariosSelected = testCase.scenarios.some((s) =>
-        newSelectedScenarios.has(s.id)
-      );
-
-      if (allScenariosSelected) {
-        newSelectedCases.add(testCaseId);
-      } else if (!anyScenariosSelected) {
-        newSelectedCases.delete(testCaseId);
+    // Shift+click: select range from last selected to current
+    if (e?.shiftKey && lastSelectedIndexRef.current !== null) {
+      const start = Math.min(lastSelectedIndexRef.current, currentIndex);
+      const end = Math.max(lastSelectedIndexRef.current, currentIndex);
+      const newSelected = new Set(selectedCases);
+      for (let i = start; i <= end; i++) {
+        newSelected.add(filteredCases[i].id);
       }
+      setSelectedCases(newSelected);
+    } else {
+      // Regular click: toggle single item
+      const newSelected = new Set(selectedCases);
+      if (newSelected.has(id)) {
+        newSelected.delete(id);
+      } else {
+        newSelected.add(id);
+      }
+      setSelectedCases(newSelected);
+      lastSelectedIndexRef.current = currentIndex;
     }
-
-    setSelectedScenarios(newSelectedScenarios);
-    setSelectedCases(newSelectedCases);
   };
 
   const selectAll = () => {
-    // Select all filtered cases and their scenarios
-    setSelectedCases((prev) => {
-      const next = new Set(prev);
-      filteredCases.forEach((c) => next.add(c.id));
-      return next;
-    });
-    setSelectedScenarios((prev) => {
-      const next = new Set(prev);
-      filteredCases.flatMap((c) => c.scenarios.map((s) => s.id)).forEach((id) => next.add(id));
-      return next;
-    });
+    const newSelected = new Set(selectedCases);
+    filteredCases.forEach((c) => newSelected.add(c.id));
+    setSelectedCases(newSelected);
   };
 
   const clearAll = () => {
-    // Clear all filtered cases and their scenarios
-    setSelectedCases((prev) => {
-      const next = new Set(prev);
-      filteredCases.forEach((c) => next.delete(c.id));
-      return next;
-    });
-    setSelectedScenarios((prev) => {
-      const next = new Set(prev);
-      filteredCases.flatMap((c) => c.scenarios.map((s) => s.id)).forEach((id) => next.delete(id));
-      return next;
-    });
-    setSelectedFolders(new Set());
+    const newSelected = new Set(selectedCases);
+    filteredCases.forEach((c) => newSelected.delete(c.id));
+    setSelectedCases(newSelected);
   };
 
   const handleCreate = () => {
@@ -280,8 +225,18 @@ export function CreateRunForm({ folders, cases, caseCounts }: Props) {
       setError("Run name is required");
       return;
     }
-    if (selectedScenarios.size === 0) {
-      setError("Select at least one scenario");
+    if (selectedCases.size === 0) {
+      setError("Select at least one test case");
+      return;
+    }
+
+    // Gather all scenario IDs from selected test cases
+    const scenarioIds = cases
+      .filter((c) => selectedCases.has(c.id))
+      .flatMap((c) => c.scenarios.map((s) => s.id));
+
+    if (scenarioIds.length === 0) {
+      setError("Selected test cases have no scenarios");
       return;
     }
 
@@ -291,7 +246,7 @@ export function CreateRunForm({ folders, cases, caseCounts }: Props) {
         const result = await createTestRun({
           name: name.trim(),
           description: description.trim() || null,
-          scenarioIds: Array.from(selectedScenarios),
+          scenarioIds,
           linearProjectId: selectedProject?.id || null,
           linearProjectName: selectedProject?.name || null,
           linearMilestoneId: selectedMilestone?.id || null,
@@ -312,6 +267,9 @@ export function CreateRunForm({ folders, cases, caseCounts }: Props) {
     });
   };
 
+  const allSelected = filteredCases.length > 0 && filteredCases.every((c) => selectedCases.has(c.id));
+  const someSelected = filteredCases.some((c) => selectedCases.has(c.id)) && !allSelected;
+
   return (
     <>
       {/* Header */}
@@ -330,14 +288,14 @@ export function CreateRunForm({ folders, cases, caseCounts }: Props) {
             </p>
           </div>
         </div>
-        <Button onClick={handleCreate} disabled={isPending}>
+        <Button onClick={handleCreate} disabled={isPending || selectedCases.size === 0}>
           {isPending ? (
             <>
               <LoadingIcon className="w-4 h-4 animate-spin" />
               Creating...
             </>
           ) : (
-            "Create Run"
+            `Create Run (${selectedCases.size} cases, ${selectedScenarioCount} scenarios)`
           )}
         </Button>
       </div>
@@ -352,7 +310,7 @@ export function CreateRunForm({ folders, cases, caseCounts }: Props) {
 
       {/* Form */}
       <div className="flex-1 overflow-auto p-6">
-        <div className="max-w-4xl space-y-6">
+        <div className="max-w-6xl space-y-6">
           {/* Run Details */}
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -502,176 +460,126 @@ export function CreateRunForm({ folders, cases, caseCounts }: Props) {
             <div className="flex items-center justify-between mb-3">
               <div>
                 <label className="text-sm font-medium text-foreground">
-                  Select Scenarios
+                  Select Test Cases
                 </label>
                 <p className="text-sm text-muted-foreground">
-                  {selectedScenarios.size} scenario{selectedScenarios.size !== 1 ? "s" : ""} selected
-                  {totalScenarios > 0 && ` of ${totalScenarios} visible`}
+                  {selectedCases.size} test case{selectedCases.size !== 1 ? "s" : ""} selected
+                  ({selectedScenarioCount} scenario{selectedScenarioCount !== 1 ? "s" : ""})
                 </p>
               </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={selectAll}
-                  className="text-sm text-brand-600 dark:text-brand-400 hover:underline font-medium"
-                >
-                  Select all visible
-                </button>
-                <span className="text-border">|</span>
-                <button
-                  onClick={clearAll}
-                  className="text-sm text-muted-foreground hover:text-foreground"
-                >
-                  Clear visible
-                </button>
-              </div>
-            </div>
-
-            {/* Search and Filter Bar */}
-            <div className="flex gap-3 mb-3">
-              <div className="relative flex-1">
-                <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  type="text"
-                  placeholder="Search test cases..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-              <select
-                value={stateFilter}
-                onChange={(e) => setStateFilter(e.target.value)}
-                className="px-3 py-2 text-sm border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
-              >
-                <option value="">All states</option>
-                <option value="active">Active</option>
-                <option value="draft">Draft</option>
-                <option value="retired">Retired</option>
-                <option value="rejected">Rejected</option>
-              </select>
             </div>
 
             <Card>
               <CardContent className="p-0">
-                <div className="flex max-h-[60vh]">
-                  {/* Left: Selection List */}
-                  <div className="flex-1 overflow-auto border-r border-border">
-                    {filteredCases.length === 0 ? (
-                      <div className="p-8 text-center">
-                        <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mx-auto mb-3">
-                          <FolderIcon className="w-6 h-6 text-muted-foreground" />
-                        </div>
-                        {cases.length === 0 ? (
-                          <>
-                            <p className="font-medium text-foreground mb-1">No test cases available</p>
-                            <p className="text-sm text-muted-foreground">
-                              <Link href="/import" className="text-brand-500 hover:underline">
-                                Import test cases
-                              </Link>{" "}
-                              first to create a run.
-                            </p>
-                          </>
-                        ) : (
-                          <>
-                            <p className="font-medium text-foreground mb-1">No matching test cases</p>
-                            <p className="text-sm text-muted-foreground">
-                              Try adjusting your search or filter criteria.
-                            </p>
-                          </>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="divide-y divide-border">
-                        {folders.map((folder) => {
-                          const folderCases = filteredCases.filter((c) => c.folderId === folder.id);
-                          if (folderCases.length === 0) return null;
-                          return (
-                            <FolderSection
-                              key={folder.id}
-                              folder={folder}
-                              cases={folderCases}
-                              selectedCases={selectedCases}
-                              selectedFolders={selectedFolders}
-                              selectedScenarios={selectedScenarios}
-                              toggleFolder={toggleFolder}
-                              toggleCase={toggleCase}
-                              toggleScenario={toggleScenario}
-                              caseCounts={caseCounts}
-                              onPreviewScenario={setPreviewScenarioId}
-                            />
-                          );
-                        })}
-                        {/* Cases without folder */}
-                        {filteredCases.filter((c) => !c.folderId).length > 0 && (
-                          <div className="p-4">
-                            <div className="text-sm font-medium text-muted-foreground mb-3">
-                              Uncategorized
-                            </div>
-                            <div className="space-y-2">
-                              {filteredCases
-                                .filter((c) => !c.folderId)
-                                .map((testCase) => (
-                                  <TestCaseItem
-                                    key={testCase.id}
-                                    testCase={testCase}
-                                    selectedCases={selectedCases}
-                                    selectedScenarios={selectedScenarios}
-                                    toggleCase={toggleCase}
-                                    toggleScenario={toggleScenario}
-                                    onPreviewScenario={setPreviewScenarioId}
-                                  />
-                                ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
+                {/* Search and Filter Bar */}
+                <div className="p-4 border-b border-border flex gap-3 bg-muted/20">
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      ref={(el) => {
+                        if (el) el.indeterminate = someSelected;
+                      }}
+                      onChange={() => {
+                        if (allSelected || someSelected) {
+                          clearAll();
+                        } else {
+                          selectAll();
+                        }
+                      }}
+                      className="rounded border-input text-brand-600 focus:ring-brand-500 dark:border-muted-foreground/30 dark:bg-muted/50"
+                      title={allSelected ? "Deselect all" : "Select all"}
+                    />
                   </div>
+                  <div className="flex-1 relative">
+                    <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      type="text"
+                      placeholder="Search test cases..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-9"
+                    />
+                  </div>
+                  <select
+                    value={stateFilter}
+                    onChange={(e) => setStateFilter(e.target.value)}
+                    className="px-3 py-2 text-sm border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
+                  >
+                    <option value="">All states</option>
+                    <option value="active">Active</option>
+                    <option value="draft">Draft</option>
+                    <option value="retired">Retired</option>
+                    <option value="rejected">Rejected</option>
+                  </select>
+                </div>
 
-                  {/* Right: Selection Preview */}
-                  <div className="w-80 overflow-auto bg-muted/30">
-                    <div className="p-3 border-b border-border bg-muted/50 sticky top-0">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-foreground">
-                          Selected ({selectedScenarios.size})
-                        </span>
-                        {selectedScenarios.size > 0 && (
-                          <button
-                            onClick={() => {
-                              setSelectedCases(new Set());
-                              setSelectedFolders(new Set());
-                              setSelectedScenarios(new Set());
-                            }}
-                            className="text-xs text-muted-foreground hover:text-foreground"
-                          >
-                            Clear all
-                          </button>
-                        )}
+                {/* Results */}
+                <div className="max-h-[50vh] overflow-auto">
+                  {filteredCases.length === 0 ? (
+                    <div className="p-12 text-center">
+                      <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mx-auto mb-3">
+                        <SearchIcon className="w-6 h-6 text-muted-foreground" />
                       </div>
+                      <p className="font-medium text-foreground mb-1">No test cases found</p>
+                      <p className="text-sm text-muted-foreground">
+                        {cases.length === 0
+                          ? "Create test cases first to include them in a run."
+                          : "Try adjusting your search or filter."}
+                      </p>
                     </div>
-                    {selectedScenarios.size === 0 ? (
-                      <div className="p-6 text-center text-sm text-muted-foreground">
-                        <SelectIcon className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                        <p>No scenarios selected</p>
-                        <p className="text-xs mt-1">Select test cases from the left panel</p>
-                      </div>
-                    ) : (
-                      <div className="p-2 space-y-2">
-                        {cases
-                          .filter((c) => c.scenarios.some((s) => selectedScenarios.has(s.id)))
-                          .map((testCase) => (
-                            <SelectedCasePreview
-                              key={testCase.id}
-                              testCase={testCase}
-                              selectedScenarios={selectedScenarios}
-                              previewScenarioId={previewScenarioId}
-                              setPreviewScenarioId={setPreviewScenarioId}
-                              toggleScenario={toggleScenario}
-                            />
-                          ))}
-                      </div>
-                    )}
-                  </div>
+                  ) : (
+                    <div className="divide-y divide-border">
+                      {filteredCases.map((testCase) => (
+                        <div
+                          key={testCase.id}
+                          onClick={(e) => toggleCase(testCase.id, e)}
+                          className={cn(
+                            "w-full flex items-center justify-between py-2.5 px-4 hover:bg-muted/50 transition-colors cursor-pointer group",
+                            selectedCases.has(testCase.id) && "bg-brand-50 dark:bg-brand-950/50"
+                          )}
+                        >
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <div
+                              className="p-2 -m-2 cursor-pointer flex-shrink-0"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleCase(testCase.id, e);
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selectedCases.has(testCase.id)}
+                                onChange={() => {}}
+                                className="rounded border-input text-brand-600 focus:ring-brand-500 dark:border-muted-foreground/30 dark:bg-muted/50 pointer-events-none"
+                              />
+                            </div>
+                            <span className="font-medium text-foreground truncate group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
+                              {testCase.title}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3 ml-4 flex-shrink-0">
+                            <span
+                              className="text-xs text-muted-foreground flex items-center gap-1"
+                              title={`${testCase.scenarios.length} scenario${testCase.scenarios.length !== 1 ? 's' : ''}`}
+                            >
+                              <ScenarioIcon className="w-3 h-3" />
+                              {testCase.scenarios.length}
+                            </span>
+                            {testCase.folderName && (
+                              <span className="text-xs text-muted-foreground flex items-center gap-1 max-w-[150px] truncate">
+                                <FolderIcon className="w-3 h-3 flex-shrink-0" />
+                                {testCase.folderName}
+                              </span>
+                            )}
+                            <Badge variant={getStateBadgeVariant(testCase.state)}>
+                              {testCase.state}
+                            </Badge>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -682,278 +590,10 @@ export function CreateRunForm({ folders, cases, caseCounts }: Props) {
   );
 }
 
-function FolderSection({
-  folder,
-  cases,
-  selectedCases,
-  selectedFolders,
-  selectedScenarios,
-  toggleFolder,
-  toggleCase,
-  toggleScenario,
-  caseCounts,
-  onPreviewScenario,
-}: {
-  folder: Folder;
-  cases: TestCase[];
-  selectedCases: Set<number>;
-  selectedFolders: Set<number>;
-  selectedScenarios: Set<number>;
-  toggleFolder: (id: number) => void;
-  toggleCase: (id: number) => void;
-  toggleScenario: (scenarioId: number, testCaseId: number) => void;
-  caseCounts: Record<number, number>;
-  onPreviewScenario?: (id: number | null) => void;
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-  const count = caseCounts[folder.id] || 0;
-  const isSelected = selectedFolders.has(folder.id);
-  const totalScenarios = cases.reduce((sum, c) => sum + c.scenarios.length, 0);
-  const selectedScenarioCount = cases.reduce(
-    (sum, c) => sum + c.scenarios.filter((s) => selectedScenarios.has(s.id)).length,
-    0
-  );
-
-  if (count === 0) return null;
-
-  return (
-    <div className="p-4">
-      <div className="flex items-center gap-3">
-        <button
-          onClick={() => setIsOpen(!isOpen)}
-          className="p-1 hover:bg-muted rounded transition-colors"
-        >
-          <ChevronIcon
-            className={cn(
-              "w-4 h-4 text-muted-foreground transition-transform duration-200",
-              isOpen && "rotate-90"
-            )}
-          />
-        </button>
-        <label className="flex items-center gap-3 cursor-pointer flex-1">
-          <input
-            type="checkbox"
-            checked={isSelected}
-            onChange={() => toggleFolder(folder.id)}
-            className="rounded border-input text-brand-600 focus:ring-brand-500"
-          />
-          <FolderIcon className="w-4 h-4 text-amber-500" />
-          <span className="font-medium text-foreground">{folder.name}</span>
-          <span className="text-sm text-muted-foreground">
-            {selectedScenarioCount > 0 && selectedScenarioCount < totalScenarios
-              ? `${selectedScenarioCount}/${totalScenarios} scenarios`
-              : `(${totalScenarios} scenarios)`}
-          </span>
-        </label>
-      </div>
-
-      {isOpen && (
-        <div className="ml-10 mt-3 space-y-2 animate-fade-in">
-          {cases.map((testCase) => (
-            <TestCaseItem
-              key={testCase.id}
-              testCase={testCase}
-              selectedCases={selectedCases}
-              selectedScenarios={selectedScenarios}
-              toggleCase={toggleCase}
-              toggleScenario={toggleScenario}
-              onPreviewScenario={onPreviewScenario}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function TestCaseItem({
-  testCase,
-  selectedCases,
-  selectedScenarios,
-  toggleCase,
-  toggleScenario,
-  onPreviewScenario,
-}: {
-  testCase: TestCase;
-  selectedCases: Set<number>;
-  selectedScenarios: Set<number>;
-  toggleCase: (id: number) => void;
-  toggleScenario: (scenarioId: number, testCaseId: number) => void;
-  onPreviewScenario?: (id: number | null) => void;
-}) {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const selectedCount = testCase.scenarios.filter((s) =>
-    selectedScenarios.has(s.id)
-  ).length;
-  const hasScenarios = testCase.scenarios.length > 0;
-  const allSelected = selectedCount === testCase.scenarios.length && hasScenarios;
-  const someSelected = selectedCount > 0 && selectedCount < testCase.scenarios.length;
-
-  return (
-    <div className="border border-border rounded-lg overflow-hidden">
-      <div className="flex items-center gap-3 p-2">
-        {hasScenarios && (
-          <button
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="p-1 hover:bg-muted rounded transition-colors"
-          >
-            <ChevronIcon
-              className={cn(
-                "w-3 h-3 text-muted-foreground transition-transform duration-200",
-                isExpanded && "rotate-90"
-              )}
-            />
-          </button>
-        )}
-        <label className="flex items-center gap-3 cursor-pointer flex-1 min-w-0">
-          <input
-            type="checkbox"
-            checked={allSelected}
-            ref={(el) => {
-              if (el) el.indeterminate = someSelected;
-            }}
-            onChange={() => toggleCase(testCase.id)}
-            className="rounded border-input text-brand-600 focus:ring-brand-500"
-          />
-          <span className="text-sm truncate text-muted-foreground group-hover:text-foreground transition-colors">
-            {testCase.title}
-          </span>
-          {testCase.state !== "active" && (
-            <span className={cn(
-              "text-xs px-1.5 py-0.5 rounded shrink-0",
-              testCase.state === "draft" && "bg-yellow-100 text-yellow-700",
-              testCase.state === "retired" && "bg-gray-100 text-gray-600",
-              testCase.state === "rejected" && "bg-red-100 text-red-700"
-            )}>
-              {testCase.state}
-            </span>
-          )}
-          {hasScenarios && (
-            <span className="text-xs text-muted-foreground shrink-0">
-              ({selectedCount}/{testCase.scenarios.length})
-            </span>
-          )}
-        </label>
-      </div>
-
-      {isExpanded && hasScenarios && (
-        <div className="border-t border-border bg-muted/30 p-2 pl-10 space-y-1">
-          {testCase.scenarios.map((scenario) => (
-            <div
-              key={scenario.id}
-              className="flex items-center gap-3 py-1 group"
-            >
-              <label className="flex items-center gap-3 cursor-pointer flex-1 min-w-0">
-                <input
-                  type="checkbox"
-                  checked={selectedScenarios.has(scenario.id)}
-                  onChange={() => toggleScenario(scenario.id, testCase.id)}
-                  className="rounded border-input text-brand-600 focus:ring-brand-500"
-                />
-                <span className="text-sm truncate text-muted-foreground group-hover:text-foreground transition-colors">
-                  {scenario.title}
-                </span>
-              </label>
-              {scenario.gherkin && onPreviewScenario && (
-                <button
-                  onClick={() => onPreviewScenario(scenario.id)}
-                  className="text-xs text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                >
-                  Preview
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SelectedCasePreview({
-  testCase,
-  selectedScenarios,
-  previewScenarioId,
-  setPreviewScenarioId,
-  toggleScenario,
-}: {
-  testCase: TestCase;
-  selectedScenarios: Set<number>;
-  previewScenarioId: number | null;
-  setPreviewScenarioId: (id: number | null) => void;
-  toggleScenario: (scenarioId: number, testCaseId: number) => void;
-}) {
-  const selectedInCase = testCase.scenarios.filter((s) => selectedScenarios.has(s.id));
-
-  return (
-    <div className="border border-border rounded-lg bg-background overflow-hidden">
-      <div className="px-3 py-2 border-b border-border bg-muted/30">
-        <span className="text-sm font-medium text-foreground truncate block">
-          {testCase.title}
-        </span>
-        <span className="text-xs text-muted-foreground">
-          {selectedInCase.length} scenario{selectedInCase.length !== 1 ? "s" : ""}
-        </span>
-      </div>
-      <div className="divide-y divide-border">
-        {selectedInCase.map((scenario) => (
-          <div key={scenario.id} className="group">
-            <div className="flex items-center gap-2 px-3 py-2">
-              <button
-                onClick={() => setPreviewScenarioId(
-                  previewScenarioId === scenario.id ? null : scenario.id
-                )}
-                className="flex-1 text-left text-sm text-muted-foreground hover:text-foreground flex items-center gap-2 min-w-0"
-              >
-                <ChevronIcon
-                  className={cn(
-                    "w-3 h-3 shrink-0 transition-transform",
-                    previewScenarioId === scenario.id && "rotate-90"
-                  )}
-                />
-                <span className="truncate">{scenario.title}</span>
-              </button>
-              <button
-                onClick={() => toggleScenario(scenario.id, testCase.id)}
-                className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-              >
-                <CloseIcon className="w-3 h-3" />
-              </button>
-            </div>
-            {previewScenarioId === scenario.id && scenario.gherkin && (
-              <div className="px-3 pb-3 pt-0">
-                <div className="text-xs max-h-48 overflow-auto rounded border border-border bg-muted/30 p-2">
-                  <GherkinDisplay text={scenario.gherkin} />
-                </div>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function BackIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-    </svg>
-  );
-}
-
-function ChevronIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-    </svg>
-  );
-}
-
-function FolderIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-      <path d="M10 4H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V8a2 2 0 00-2-2h-8l-2-2z" />
     </svg>
   );
 }
@@ -999,10 +639,28 @@ function SearchIcon({ className }: { className?: string }) {
   );
 }
 
-function SelectIcon({ className }: { className?: string }) {
+function FolderIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M10 4H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V8a2 2 0 00-2-2h-8l-2-2z" />
+    </svg>
+  );
+}
+
+function ScenarioIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={1.5}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zM3.75 12h.007v.008H3.75V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm-.375 5.25h.007v.008H3.75v-.008zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"
+      />
     </svg>
   );
 }
