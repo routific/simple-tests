@@ -23,6 +23,8 @@ interface FolderPickerProps {
   onChange: (folderId: number | null) => void;
   placeholder?: string;
   className?: string;
+  /** "default" for form fields, "inline" for compact list row usage */
+  variant?: "default" | "inline";
 }
 
 function buildTree(folders: Folder[]): FolderNode[] {
@@ -65,6 +67,7 @@ export function FolderPicker({
   onChange,
   placeholder = "Select folder...",
   className,
+  variant = "default",
 }: FolderPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
@@ -177,21 +180,40 @@ export function FolderPicker({
     <div ref={containerRef} className={cn("relative", className)}>
       <button
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsOpen(!isOpen);
+        }}
         className={cn(
-          "w-full px-3 py-2 border border-input rounded-lg bg-background text-left text-sm",
-          "focus:outline-none focus:ring-2 focus:ring-primary/20",
-          "flex items-center justify-between gap-2"
+          variant === "default" && [
+            "w-full px-3 py-2 border border-input rounded-lg bg-background text-left text-sm",
+            "focus:outline-none focus:ring-2 focus:ring-primary/20",
+            "flex items-center justify-between gap-2",
+          ],
+          variant === "inline" && [
+            "text-xs text-muted-foreground flex items-center gap-1.5 max-w-[200px] truncate",
+            "rounded px-1.5 py-0.5 -mx-1.5 -my-0.5 transition-all",
+            "hover:bg-muted hover:text-foreground",
+          ]
         )}
       >
+        {variant === "inline" && (
+          <FolderIcon className="w-3 h-3 flex-shrink-0" />
+        )}
         <span className={cn("truncate", !displayValue && "text-muted-foreground")}>
           {displayValue || placeholder}
         </span>
-        <ChevronDownIcon className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+        {variant === "default" && (
+          <ChevronDownIcon className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+        )}
       </button>
 
       {isOpen && (
-        <div className="absolute z-50 mt-1 w-full bg-background border border-border rounded-lg shadow-lg max-h-80 overflow-auto">
+        <div className={cn(
+          "absolute z-50 mt-1 bg-background border border-border rounded-lg shadow-lg max-h-80 overflow-auto",
+          variant === "default" && "w-full",
+          variant === "inline" && "right-0 min-w-[200px]"
+        )}>
           {/* No folder option */}
           <div
             className={cn(

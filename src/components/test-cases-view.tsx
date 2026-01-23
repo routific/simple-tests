@@ -426,8 +426,8 @@ function StatusDropdown({
   );
 }
 
-// Folder Dropdown Component
-function FolderDropdown({
+// Inline folder picker wrapper that handles the move action
+function InlineFolderPicker({
   testCaseId,
   currentFolderId,
   folders,
@@ -438,100 +438,24 @@ function FolderDropdown({
   folders: Folder[];
   onFolderChange: () => void;
 }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [isPending, startTransition] = useTransition();
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [, startTransition] = useTransition();
 
-  const currentFolder = currentFolderId
-    ? folders.find((f) => f.id === currentFolderId)
-    : null;
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    }
-    if (isOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
-    }
-  }, [isOpen]);
-
-  const handleFolderSelect = (folderId: number | null) => {
-    if (folderId === currentFolderId) {
-      setIsOpen(false);
-      return;
-    }
+  const handleChange = (folderId: number | null) => {
+    if (folderId === currentFolderId) return;
     startTransition(async () => {
       await bulkMoveTestCasesToFolder([testCaseId], folderId);
-      setIsOpen(false);
       onFolderChange();
     });
   };
 
-  const displayName = currentFolder
-    ? formatBreadcrumb(buildFolderBreadcrumb(currentFolderId!, folders))
-    : "No folder";
-
   return (
-    <div ref={dropdownRef} className="relative">
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          setIsOpen(!isOpen);
-        }}
-        disabled={isPending}
-        className={cn(
-          "text-xs text-muted-foreground flex items-center gap-1.5 max-w-[200px] truncate rounded px-1.5 py-0.5 -mx-1.5 -my-0.5 transition-all",
-          isPending && "opacity-50",
-          !isPending && "hover:bg-muted hover:text-foreground"
-        )}
-      >
-        <FolderIcon className="w-3 h-3 flex-shrink-0" />
-        <span className="truncate">{isPending ? "..." : displayName}</span>
-      </button>
-      {isOpen && (
-        <div className="absolute right-0 top-full mt-1 z-50 bg-background border border-border rounded-lg shadow-lg py-1 min-w-[200px] max-h-[300px] overflow-auto">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleFolderSelect(null);
-            }}
-            className={cn(
-              "w-full px-3 py-1.5 text-left text-sm flex items-center gap-2 hover:bg-muted transition-colors",
-              currentFolderId === null && "bg-muted/50"
-            )}
-          >
-            <span className="text-muted-foreground">No folder</span>
-            {currentFolderId === null && (
-              <CheckIcon className="w-3 h-3 text-muted-foreground ml-auto" />
-            )}
-          </button>
-          <div className="border-t border-border my-1" />
-          {folders.map((folder) => (
-            <button
-              key={folder.id}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleFolderSelect(folder.id);
-              }}
-              className={cn(
-                "w-full px-3 py-1.5 text-left text-sm flex items-center gap-2 hover:bg-muted transition-colors",
-                folder.id === currentFolderId && "bg-muted/50"
-              )}
-            >
-              <FolderIcon className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-              <span className="truncate">{folder.name}</span>
-              {folder.id === currentFolderId && (
-                <CheckIcon className="w-3 h-3 text-muted-foreground ml-auto flex-shrink-0" />
-              )}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <FolderPicker
+      folders={folders}
+      value={currentFolderId}
+      onChange={handleChange}
+      placeholder="No folder"
+      variant="inline"
+    />
   );
 }
 
@@ -859,7 +783,7 @@ function TestCaseListContent({
                 </span>
               </div>
               <div className="flex items-center gap-3 ml-4 flex-shrink-0">
-                <FolderDropdown
+                <InlineFolderPicker
                   testCaseId={testCase.id}
                   currentFolderId={testCase.folderId ?? null}
                   folders={folders}
