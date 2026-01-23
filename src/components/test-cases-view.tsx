@@ -667,7 +667,7 @@ function TestCaseListContent({
                 onSelectAll();
               }
             }}
-            className="rounded border-input text-brand-600 focus:ring-brand-500"
+            className="rounded border-input text-brand-600 focus:ring-brand-500 dark:border-muted-foreground/30 dark:bg-muted/50"
             title={allSelected ? "Deselect all" : "Select all"}
           />
         </div>
@@ -804,7 +804,7 @@ function TestCaseListContent({
                     type="checkbox"
                     checked={selectedCases.has(testCase.id)}
                     onChange={() => {}} // Controlled by parent onClick
-                    className="rounded border-input text-brand-600 focus:ring-brand-500 pointer-events-none"
+                    className="rounded border-input text-brand-600 focus:ring-brand-500 dark:border-muted-foreground/30 dark:bg-muted/50 pointer-events-none"
                   />
                 </div>
                 <DragHandleIcon className="w-4 h-4 text-muted-foreground/50 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -813,16 +813,21 @@ function TestCaseListContent({
                 </span>
               </div>
               <div className="flex items-center gap-3 ml-4 flex-shrink-0">
-                <span className="text-xs text-muted-foreground flex items-center gap-1" title={`${testCase.scenarioCount || 0} scenario${testCase.scenarioCount !== 1 ? 's' : ''}`}>
+                <span
+                  className="text-xs text-muted-foreground flex items-center gap-1 w-8 justify-end"
+                  title={`${testCase.scenarioCount || 0} scenario${testCase.scenarioCount !== 1 ? 's' : ''}`}
+                >
                   <ScenarioIcon className="w-3 h-3" />
                   {testCase.scenarioCount || 0}
                 </span>
-                <InlineFolderPicker
-                  testCaseId={testCase.id}
-                  currentFolderId={testCase.folderId ?? null}
-                  folders={folders}
-                  onFolderChange={onSelectionAction}
-                />
+                <div className="w-[140px]">
+                  <InlineFolderPicker
+                    testCaseId={testCase.id}
+                    currentFolderId={testCase.folderId ?? null}
+                    folders={folders}
+                    onFolderChange={onSelectionAction}
+                  />
+                </div>
                 <StatusDropdown
                   testCaseId={testCase.id}
                   currentState={testCase.state}
