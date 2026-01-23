@@ -1020,14 +1020,31 @@ function GroupedTestCaseList({
                       {testCase.title}
                     </span>
                   </div>
-                  <div className="grid grid-cols-[160px_70px_40px_20px] gap-2 items-center ml-4 flex-shrink-0">
+                  <div className="grid grid-cols-[24px_70px_40px_20px] lg:grid-cols-[160px_70px_40px_20px] gap-2 items-center ml-4 flex-shrink-0">
+                    {/* Folder: icon only on small screens, full picker on lg+ */}
                     <div className="flex justify-end">
-                      <InlineFolderPicker
-                        testCaseId={testCase.id}
-                        currentFolderId={testCase.folderId ?? null}
-                        folders={folders}
-                        onFolderChange={onSelectionAction}
-                      />
+                      <div className="lg:hidden">
+                        {testCase.folderId ? (
+                          <span
+                            title={folders.find(f => f.id === testCase.folderId)?.name || "Folder"}
+                            className="text-muted-foreground"
+                          >
+                            <FolderIcon className="w-4 h-4" />
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground/30">
+                            <FolderIcon className="w-4 h-4" />
+                          </span>
+                        )}
+                      </div>
+                      <div className="hidden lg:block">
+                        <InlineFolderPicker
+                          testCaseId={testCase.id}
+                          currentFolderId={testCase.folderId ?? null}
+                          folders={folders}
+                          onFolderChange={onSelectionAction}
+                        />
+                      </div>
                     </div>
                     <div className="flex justify-end">
                       <StatusDropdown
