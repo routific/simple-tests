@@ -3,13 +3,29 @@
 import { useState, useTransition, useEffect, useCallback, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { GherkinEditor, GherkinDisplay } from "@/components/gherkin-editor";
 import {
   saveScenario,
   deleteScenario,
   reorderScenarios,
 } from "@/app/cases/scenario-actions";
+
+/**
+ * Extracts the scenario title from the first line of gherkin text.
+ * Matches patterns like "Scenario: User logs in" or "Scenario Outline: ..."
+ */
+function extractScenarioTitle(gherkin: string): string {
+  if (!gherkin) return "Untitled Scenario";
+
+  const firstLine = gherkin.trim().split("\n")[0];
+  const match = firstLine.match(/^(?:Scenario(?: Outline)?|Scenario Template):\s*(.+)$/i);
+
+  if (match && match[1]) {
+    return match[1].trim();
+  }
+
+  return "Untitled Scenario";
+}
 
 interface Scenario {
   id: number;
@@ -37,8 +53,7 @@ export function ScenarioAccordion({
   );
   const [isPending, startTransition] = useTransition();
   const [draggedId, setDraggedId] = useState<number | null>(null);
-  const [editingScenarioId, setEditingScenarioId] = useState<number | null>(null);
-  const pendingChangesRef = useRef<Map<number, { title: string; gherkin: string }>>(new Map());
+  const pendingChangesRef = useRef<Map<number, { gherkin: string }>>(new Map());
 
   useEffect(() => {
     setScenarios(initialScenarios);
@@ -60,14 +75,13 @@ export function ScenarioAccordion({
     const tempId = -Date.now();
     const newScenario: Scenario = {
       id: tempId,
-      title: "New Scenario",
-      gherkin: "",
+      title: "",
+      gherkin: "Scenario: New Scenario\n",
       order: scenarios.length,
     };
     const newScenarios = [...scenarios, newScenario];
     setScenarios(newScenarios);
     setExpandedIds((prev) => new Set([...Array.from(prev), tempId]));
-    setEditingScenarioId(tempId);
     onChange?.(newScenarios);
   };
 
@@ -80,16 +94,11 @@ export function ScenarioAccordion({
       return newScenarios;
     });
 
-    // Track pending changes
-    const existing = pendingChangesRef.current.get(id) || { title: "", gherkin: "" };
-    const scenario = scenarios.find((s) => s.id === id);
-    if (scenario) {
-      pendingChangesRef.current.set(id, {
-        title: updates.title ?? (existing.title || scenario.title),
-        gherkin: updates.gherkin ?? (existing.gherkin || scenario.gherkin),
-      });
+    // Track pending gherkin changes
+    if (updates.gherkin !== undefined) {
+      pendingChangesRef.current.set(id, { gherkin: updates.gherkin });
     }
-  }, [scenarios, onChange]);
+  }, [onChange]);
 
   const handleDeleteScenario = (id: number) => {
     if (id < 0) {
@@ -147,12 +156,12 @@ export function ScenarioAccordion({
     setDraggedId(null);
   };
 
-  // Save a single scenario
+  // Save a single scenario - derive title from gherkin
   const saveScenarioItem = async (scenario: Scenario) => {
     const result = await saveScenario({
       id: scenario.id > 0 ? scenario.id : undefined,
       testCaseId,
-      title: scenario.title,
+      title: extractScenarioTitle(scenario.gherkin),
       gherkin: scenario.gherkin,
       order: scenario.order,
     });
@@ -229,24 +238,9 @@ export function ScenarioAccordion({
                   expandedIds.has(scenario.id) && "rotate-90"
                 )}
               />
-              {isEditing && editingScenarioId === scenario.id ? (
-                <Input
-                  type="text"
-                  value={scenario.title}
-                  onChange={(e) => handleUpdateScenario(scenario.id, { title: e.target.value })}
-                  onBlur={() => setEditingScenarioId(null)}
-                  onClick={(e) => e.stopPropagation()}
-                  className="h-7 text-sm font-medium"
-                  autoFocus
-                />
-              ) : (
-                <span
-                  className="font-medium text-sm text-foreground"
-                  onDoubleClick={() => isEditing && setEditingScenarioId(scenario.id)}
-                >
-                  {scenario.title}
-                </span>
-              )}
+              <span className="font-medium text-sm text-foreground">
+                {extractScenarioTitle(scenario.gherkin)}
+              </span>
             </button>
             {isEditing && (
               <button
