@@ -814,10 +814,10 @@ function TestCaseListContent({
               </div>
               <div className="flex items-center gap-3 ml-4 flex-shrink-0">
                 <span
-                  className="text-xs text-muted-foreground flex items-center gap-1 w-6 justify-end tabular-nums"
+                  className="text-xs text-muted-foreground flex items-center gap-1 w-10 justify-end tabular-nums flex-shrink-0"
                   title={`${testCase.scenarioCount || 0} scenario${testCase.scenarioCount !== 1 ? 's' : ''}`}
                 >
-                  <ScenarioIcon className="w-3 h-3" />
+                  <ScenarioIcon className="w-3 h-3 flex-shrink-0" />
                   {testCase.scenarioCount || 0}
                 </span>
                 <div className="w-[150px] flex justify-end">
