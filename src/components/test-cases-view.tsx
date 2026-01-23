@@ -813,6 +813,10 @@ function TestCaseListContent({
                 </span>
               </div>
               <div className="flex items-center gap-3 ml-4 flex-shrink-0">
+                <span className="text-xs text-muted-foreground flex items-center gap-1" title={`${testCase.scenarioCount || 0} scenario${testCase.scenarioCount !== 1 ? 's' : ''}`}>
+                  <ScenarioIcon className="w-3 h-3" />
+                  {testCase.scenarioCount || 0}
+                </span>
                 <InlineFolderPicker
                   testCaseId={testCase.id}
                   currentFolderId={testCase.folderId ?? null}
@@ -1478,6 +1482,24 @@ function CheckIcon({ className }: { className?: string }) {
         strokeLinecap="round"
         strokeLinejoin="round"
         d="M4.5 12.75l6 6 9-13.5"
+      />
+    </svg>
+  );
+}
+
+function ScenarioIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={1.5}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zM3.75 12h.007v.008H3.75V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm-.375 5.25h.007v.008H3.75v-.008zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"
       />
     </svg>
   );
