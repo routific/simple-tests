@@ -731,57 +731,53 @@ function TestCaseListContent({
 
   return (
     <div>
-      {/* Bulk Action Toolbar - fixed at bottom when items selected */}
+      {/* Bulk Action Toolbar - floating pill at bottom when items selected */}
       {selectedCases.size > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 p-3 border-t border-border bg-brand-50 dark:bg-brand-950 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] flex items-center justify-center gap-4">
-          <div className="flex items-center gap-3">
-            <span className="text-sm font-medium text-brand-700 dark:text-brand-300">
-              {selectedCases.size} selected
-            </span>
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-foreground dark:bg-gray-800 text-background rounded-full shadow-lg flex items-center gap-3">
+          <span className="text-sm font-medium">
+            {selectedCases.size} selected
+          </span>
+          <div className="w-px h-4 bg-background/20" />
+          <div className="flex items-center gap-1">
             <button
-              onClick={onClearSelection}
-              className="text-sm text-muted-foreground hover:text-foreground"
-            >
-              Clear
-            </button>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
               onClick={() => {
                 const ids = Array.from(selectedCases).join(",");
                 window.location.href = `/runs/new?cases=${ids}`;
               }}
+              className="px-3 py-1 text-sm font-medium bg-brand-500 text-white rounded-full hover:bg-brand-600 transition-colors"
             >
-              <PlayIcon className="w-4 h-4" />
               Create Run
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
+            </button>
+            <button
               onClick={() => setShowStateModal(true)}
               disabled={isPending}
+              className="px-3 py-1 text-sm text-background/80 hover:text-background transition-colors disabled:opacity-50"
             >
-              Change State
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
+              State
+            </button>
+            <button
               onClick={() => setShowMoveModal(true)}
               disabled={isPending}
+              className="px-3 py-1 text-sm text-background/80 hover:text-background transition-colors disabled:opacity-50"
             >
-              Move to Folder
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
+              Move
+            </button>
+            <button
               onClick={handleBulkDelete}
               disabled={isPending}
-              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+              className="px-3 py-1 text-sm text-red-400 hover:text-red-300 transition-colors disabled:opacity-50"
             >
-              {isPending ? "Deleting..." : "Delete"}
-            </Button>
+              Delete
+            </button>
           </div>
+          <div className="w-px h-4 bg-background/20" />
+          <button
+            onClick={onClearSelection}
+            className="text-background/60 hover:text-background transition-colors"
+            title="Clear selection"
+          >
+            <CloseIcon className="w-4 h-4" />
+          </button>
         </div>
       )}
 
@@ -1798,6 +1794,24 @@ function RedoIcon({ className }: { className?: string }) {
         strokeLinecap="round"
         strokeLinejoin="round"
         d="M15 15l6-6m0 0l-6-6m6 6H9a6 6 0 000 12h3"
+      />
+    </svg>
+  );
+}
+
+function CloseIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M6 18L18 6M6 6l12 12"
       />
     </svg>
   );
