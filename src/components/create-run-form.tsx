@@ -85,16 +85,18 @@ export function CreateRunForm({ folders, cases, caseCounts }: Props) {
 
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState("");
-  const [stateFilter, setStateFilter] = useState<string>("active");
+  const [stateFilter, setStateFilter] = useState<string>("");
 
   // Filter cases based on search and state
   const filteredCases = useMemo(() => {
     return cases.filter((c) => {
+      // State filter - empty string means "all states"
       if (stateFilter && c.state !== stateFilter) return false;
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase();
+      // Search filter
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase().trim();
         const matchesTitle = c.title.toLowerCase().includes(query);
-        const matchesFolder = c.folderName?.toLowerCase().includes(query);
+        const matchesFolder = c.folderName?.toLowerCase().includes(query) ?? false;
         if (!matchesTitle && !matchesFolder) return false;
       }
       return true;
@@ -185,30 +187,37 @@ export function CreateRunForm({ folders, cases, caseCounts }: Props) {
     return () => clearTimeout(timer);
   }, [issueSearch, searchIssues]);
 
-  const toggleCase = (id: number, e?: React.MouseEvent) => {
+  const toggleCase = useCallback((id: number, shiftKey: boolean = false) => {
     const currentIndex = filteredCases.findIndex((c) => c.id === id);
+    if (currentIndex === -1) return;
 
     // Shift+click: select range from last selected to current
-    if (e?.shiftKey && lastSelectedIndexRef.current !== null) {
+    if (shiftKey && lastSelectedIndexRef.current !== null && lastSelectedIndexRef.current !== currentIndex) {
       const start = Math.min(lastSelectedIndexRef.current, currentIndex);
       const end = Math.max(lastSelectedIndexRef.current, currentIndex);
-      const newSelected = new Set(selectedCases);
-      for (let i = start; i <= end; i++) {
-        newSelected.add(filteredCases[i].id);
-      }
-      setSelectedCases(newSelected);
+      setSelectedCases((prev) => {
+        const next = new Set(prev);
+        for (let i = start; i <= end; i++) {
+          if (filteredCases[i]) {
+            next.add(filteredCases[i].id);
+          }
+        }
+        return next;
+      });
     } else {
       // Regular click: toggle single item
-      const newSelected = new Set(selectedCases);
-      if (newSelected.has(id)) {
-        newSelected.delete(id);
-      } else {
-        newSelected.add(id);
-      }
-      setSelectedCases(newSelected);
+      setSelectedCases((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) {
+          next.delete(id);
+        } else {
+          next.add(id);
+        }
+        return next;
+      });
       lastSelectedIndexRef.current = currentIndex;
     }
-  };
+  }, [filteredCases]);
 
   const selectAll = () => {
     const newSelected = new Set(selectedCases);
@@ -538,7 +547,7 @@ export function CreateRunForm({ folders, cases, caseCounts }: Props) {
                           {filteredCases.map((testCase) => (
                             <div
                               key={testCase.id}
-                              onClick={(e) => toggleCase(testCase.id, e)}
+                              onClick={(e) => toggleCase(testCase.id, e.shiftKey)}
                               className={cn(
                                 "w-full flex items-center justify-between py-2.5 px-4 hover:bg-muted/50 transition-colors cursor-pointer group",
                                 selectedCases.has(testCase.id) && "bg-brand-50 dark:bg-brand-950/50"
@@ -549,13 +558,13 @@ export function CreateRunForm({ folders, cases, caseCounts }: Props) {
                                   className="p-2 -m-2 cursor-pointer flex-shrink-0"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    toggleCase(testCase.id, e);
+                                    toggleCase(testCase.id, e.shiftKey);
                                   }}
                                 >
                                   <input
                                     type="checkbox"
                                     checked={selectedCases.has(testCase.id)}
-                                    onChange={() => {}}
+                                    readOnly
                                     className="rounded border-input text-brand-600 focus:ring-brand-500 dark:border-muted-foreground/30 dark:bg-muted/50 pointer-events-none"
                                   />
                                 </div>
