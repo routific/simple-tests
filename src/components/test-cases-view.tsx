@@ -814,13 +814,13 @@ function TestCaseListContent({
               </div>
               <div className="flex items-center gap-3 ml-4 flex-shrink-0">
                 <span
-                  className="text-xs text-muted-foreground flex items-center gap-1 w-8 justify-end"
+                  className="text-xs text-muted-foreground flex items-center gap-1 w-6 justify-end tabular-nums"
                   title={`${testCase.scenarioCount || 0} scenario${testCase.scenarioCount !== 1 ? 's' : ''}`}
                 >
                   <ScenarioIcon className="w-3 h-3" />
                   {testCase.scenarioCount || 0}
                 </span>
-                <div className="w-[140px]">
+                <div className="w-[150px] flex justify-end">
                   <InlineFolderPicker
                     testCaseId={testCase.id}
                     currentFolderId={testCase.folderId ?? null}
@@ -828,11 +828,13 @@ function TestCaseListContent({
                     onFolderChange={onSelectionAction}
                   />
                 </div>
-                <StatusDropdown
-                  testCaseId={testCase.id}
-                  currentState={testCase.state}
-                  onStateChange={onSelectionAction}
-                />
+                <div className="w-[70px] flex justify-end">
+                  <StatusDropdown
+                    testCaseId={testCase.id}
+                    currentState={testCase.state}
+                    onStateChange={onSelectionAction}
+                  />
+                </div>
                 <ChevronRightIcon className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
               </div>
