@@ -18,7 +18,7 @@ import {
 } from "@/app/cases/actions";
 import { exportTestCases, importTestCases, ExportData } from "@/app/cases/export-actions";
 import { getScenarios, saveScenario } from "@/app/cases/scenario-actions";
-import { getLastUndo, executeUndo } from "@/app/cases/undo-actions";
+import { getLastUndo, getLastRedo, executeUndo, executeRedo } from "@/app/cases/undo-actions";
 import { cn } from "@/lib/utils";
 import { buildFolderBreadcrumb, formatBreadcrumb } from "@/lib/folders";
 import { FolderPicker } from "@/components/folder-picker";
@@ -83,20 +83,24 @@ export function TestCasesView({
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isUndoing, setIsUndoing] = useState(false);
+  const [isRedoing, setIsRedoing] = useState(false);
   const [lastUndoAction, setLastUndoAction] = useState<{ id: number; description: string } | null>(null);
+  const [lastRedoAction, setLastRedoAction] = useState<{ id: number; description: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch last undo action on mount and after changes
-  const refreshUndo = async () => {
-    const lastUndo = await getLastUndo();
+  // Fetch last undo/redo actions on mount and after changes
+  const refreshUndoRedo = async () => {
+    const [lastUndo, lastRedo] = await Promise.all([getLastUndo(), getLastRedo()]);
     setLastUndoAction(lastUndo);
+    setLastRedoAction(lastRedo);
   };
 
   useEffect(() => {
-    refreshUndo();
+    refreshUndoRedo();
   }, [cases]); // Refresh when cases change
 
   const handleUndo = async () => {
+    if (isUndoing || !lastUndoAction) return;
     setIsUndoing(true);
     try {
       const result = await executeUndo();
@@ -105,7 +109,7 @@ export function TestCasesView({
       } else if (result.description) {
         // Refresh to show changes
         router.refresh();
-        refreshUndo();
+        refreshUndoRedo();
       }
     } catch {
       alert("Undo failed. Please try again.");
@@ -113,6 +117,55 @@ export function TestCasesView({
       setIsUndoing(false);
     }
   };
+
+  const handleRedo = async () => {
+    if (isRedoing || !lastRedoAction) return;
+    setIsRedoing(true);
+    try {
+      const result = await executeRedo();
+      if (result.error) {
+        alert(`Redo failed: ${result.error}`);
+      } else if (result.description) {
+        // Refresh to show changes
+        router.refresh();
+        refreshUndoRedo();
+      }
+    } catch {
+      alert("Redo failed. Please try again.");
+    } finally {
+      setIsRedoing(false);
+    }
+  };
+
+  // Keyboard shortcuts for undo/redo
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Check if we're in an input/textarea (don't intercept typing)
+      const target = e.target as HTMLElement;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
+        return;
+      }
+
+      // CMD+Z (Mac) or Ctrl+Z (Windows) for undo
+      if ((e.metaKey || e.ctrlKey) && e.key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        handleUndo();
+      }
+      // CMD+Shift+Z (Mac) or Ctrl+Shift+Z (Windows) for redo
+      else if ((e.metaKey || e.ctrlKey) && e.key === "z" && e.shiftKey) {
+        e.preventDefault();
+        handleRedo();
+      }
+      // CMD+Y (Windows-style redo)
+      else if ((e.metaKey || e.ctrlKey) && e.key === "y") {
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [lastUndoAction, lastRedoAction, isUndoing, isRedoing]);
 
   const handleExport = async () => {
     setIsExporting(true);
@@ -262,7 +315,7 @@ export function TestCasesView({
               onClick={handleUndo}
               disabled={isUndoing}
               className="text-muted-foreground hover:text-foreground"
-              title={`Undo: ${lastUndoAction.description}`}
+              title={`Undo: ${lastUndoAction.description} (${navigator.platform.includes("Mac") ? "⌘" : "Ctrl"}+Z)`}
             >
               {isUndoing ? (
                 <LoadingIcon className="w-4 h-4 animate-spin" />
@@ -270,6 +323,23 @@ export function TestCasesView({
                 <UndoIcon className="w-4 h-4" />
               )}
               Undo
+            </Button>
+          )}
+          {lastRedoAction && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={handleRedo}
+              disabled={isRedoing}
+              className="text-muted-foreground hover:text-foreground"
+              title={`Redo: ${lastRedoAction.description} (${navigator.platform.includes("Mac") ? "⌘" : "Ctrl"}+Shift+Z)`}
+            >
+              {isRedoing ? (
+                <LoadingIcon className="w-4 h-4 animate-spin" />
+              ) : (
+                <RedoIcon className="w-4 h-4" />
+              )}
+              Redo
             </Button>
           )}
           <input
@@ -1710,6 +1780,24 @@ function UndoIcon({ className }: { className?: string }) {
         strokeLinecap="round"
         strokeLinejoin="round"
         d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3"
+      />
+    </svg>
+  );
+}
+
+function RedoIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={1.5}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M15 15l6-6m0 0l-6-6m6 6H9a6 6 0 000 12h3"
       />
     </svg>
   );

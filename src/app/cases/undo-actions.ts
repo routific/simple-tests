@@ -189,6 +189,15 @@ export async function getLastRedo(): Promise<{
   return lastRedo[0] || null;
 }
 
+// Helper to get reverse action type
+function getReverseActionType(actionType: string): string {
+  // For create, the reverse is delete; for delete, the reverse is create
+  // For update, it stays update (just different values)
+  if (actionType.includes("create")) return actionType.replace("create", "delete");
+  if (actionType.includes("delete")) return actionType.replace("delete", "create");
+  return actionType;
+}
+
 // Execute undo
 export async function executeUndo(): Promise<{ success?: boolean; error?: string; description?: string }> {
   const session = await getSessionWithOrg();
@@ -203,7 +212,7 @@ export async function executeUndo(): Promise<{ success?: boolean; error?: string
     const lastUndo = await db
       .select()
       .from(undoStack)
-      .where(eq(undoStack.organizationId, organizationId))
+      .where(and(eq(undoStack.organizationId, organizationId), eq(undoStack.isRedo, false)))
       .orderBy(desc(undoStack.createdAt))
       .limit(1);
 
@@ -213,20 +222,67 @@ export async function executeUndo(): Promise<{ success?: boolean; error?: string
 
     const undoEntry = lastUndo[0];
     const undoData = JSON.parse(undoEntry.undoData);
+    let redoData: UndoData | null = null;
 
     // Execute the undo based on action type
     switch (undoEntry.actionType) {
       case "create_test_case": {
-        // Undo create = delete
+        // Undo create = delete, redo will need the test case data
         const data = undoData as UndoTestCaseCreate;
+
+        // Get test case and scenarios for redo
+        const testCase = await db.select().from(testCases).where(eq(testCases.id, data.testCaseId)).get();
+        const testCaseScenarios = await db.select().from(scenarios).where(eq(scenarios.testCaseId, data.testCaseId));
+
+        if (testCase) {
+          redoData = {
+            testCase: {
+              id: testCase.id,
+              legacyId: testCase.legacyId,
+              title: testCase.title,
+              folderId: testCase.folderId,
+              order: testCase.order,
+              template: testCase.template,
+              state: testCase.state,
+              priority: testCase.priority,
+              createdAt: testCase.createdAt.getTime(),
+              updatedAt: testCase.updatedAt.getTime(),
+            },
+            scenarios: testCaseScenarios.map(s => ({
+              id: s.id,
+              title: s.title,
+              gherkin: s.gherkin,
+              order: s.order,
+              createdAt: s.createdAt.getTime(),
+              updatedAt: s.updatedAt.getTime(),
+            })),
+          } as UndoTestCaseDelete;
+        }
+
         await db.delete(scenarios).where(eq(scenarios.testCaseId, data.testCaseId));
         await db.delete(testCases).where(eq(testCases.id, data.testCaseId));
         break;
       }
 
       case "update_test_case": {
-        // Undo update = restore previous values
+        // Undo update = restore previous values, redo will need current values
         const data = undoData as UndoTestCaseUpdate;
+
+        // Get current values for redo
+        const current = await db.select().from(testCases).where(eq(testCases.id, data.testCaseId)).get();
+        if (current) {
+          redoData = {
+            testCaseId: data.testCaseId,
+            previousValues: {
+              title: current.title,
+              folderId: current.folderId,
+              state: current.state,
+              priority: current.priority,
+              order: current.order,
+            },
+          } as UndoTestCaseUpdate;
+        }
+
         await db
           .update(testCases)
           .set({
@@ -241,8 +297,9 @@ export async function executeUndo(): Promise<{ success?: boolean; error?: string
       }
 
       case "delete_test_case": {
-        // Undo delete = recreate test case and scenarios
+        // Undo delete = recreate, redo will just need the ID
         const data = undoData as UndoTestCaseDelete;
+        redoData = { testCaseId: data.testCase.id } as UndoTestCaseCreate;
 
         // Recreate test case
         await db.insert(testCases).values({
@@ -277,6 +334,23 @@ export async function executeUndo(): Promise<{ success?: boolean; error?: string
       case "create_scenario": {
         // Undo create = delete
         const data = undoData as UndoScenarioCreate;
+
+        // Get scenario data for redo
+        const scenario = await db.select().from(scenarios).where(eq(scenarios.id, data.scenarioId)).get();
+        if (scenario) {
+          redoData = {
+            testCaseId: data.testCaseId,
+            scenario: {
+              id: scenario.id,
+              title: scenario.title,
+              gherkin: scenario.gherkin,
+              order: scenario.order,
+              createdAt: scenario.createdAt.getTime(),
+              updatedAt: scenario.updatedAt.getTime(),
+            },
+          } as UndoScenarioDelete;
+        }
+
         await db.delete(scenarios).where(eq(scenarios.id, data.scenarioId));
         break;
       }
@@ -284,6 +358,21 @@ export async function executeUndo(): Promise<{ success?: boolean; error?: string
       case "update_scenario": {
         // Undo update = restore previous values
         const data = undoData as UndoScenarioUpdate;
+
+        // Get current values for redo
+        const current = await db.select().from(scenarios).where(eq(scenarios.id, data.scenarioId)).get();
+        if (current) {
+          redoData = {
+            scenarioId: data.scenarioId,
+            testCaseId: data.testCaseId,
+            previousValues: {
+              title: current.title,
+              gherkin: current.gherkin,
+              order: current.order,
+            },
+          } as UndoScenarioUpdate;
+        }
+
         await db
           .update(scenarios)
           .set({
@@ -298,6 +387,8 @@ export async function executeUndo(): Promise<{ success?: boolean; error?: string
       case "delete_scenario": {
         // Undo delete = recreate scenario
         const data = undoData as UndoScenarioDelete;
+        redoData = { scenarioId: data.scenario.id, testCaseId: data.testCaseId } as UndoScenarioCreate;
+
         await db.insert(scenarios).values({
           id: data.scenario.id,
           testCaseId: data.testCaseId,
@@ -311,9 +402,13 @@ export async function executeUndo(): Promise<{ success?: boolean; error?: string
       }
 
       case "bulk_delete_test_cases": {
-        // Undo bulk delete = recreate all test cases and scenarios
+        // Undo bulk delete = recreate all
         const data = undoData as UndoBulkDelete;
+        const redoIds: number[] = [];
+
         for (const item of data.testCases) {
+          redoIds.push(item.testCase.id);
+
           await db.insert(testCases).values({
             id: item.testCase.id,
             legacyId: item.testCase.legacyId,
@@ -340,35 +435,73 @@ export async function executeUndo(): Promise<{ success?: boolean; error?: string
             });
           }
         }
+
+        // For redo, we'll store the full data to delete again
+        redoData = data;
         break;
       }
 
       case "bulk_update_test_cases": {
         // Undo bulk update = restore previous values
         const data = undoData as UndoBulkUpdate;
+        const redoUpdates: Array<{ testCaseId: number; previousValues: Record<string, unknown> }> = [];
+
         for (const update of data.updates) {
+          // Get current values for redo
+          const current = await db.select().from(testCases).where(eq(testCases.id, update.testCaseId)).get();
+          if (current) {
+            const currentValues: Record<string, unknown> = {};
+            for (const key of Object.keys(update.previousValues)) {
+              currentValues[key] = (current as Record<string, unknown>)[key];
+            }
+            redoUpdates.push({ testCaseId: update.testCaseId, previousValues: currentValues });
+          }
+
           await db
             .update(testCases)
             .set(update.previousValues as Record<string, unknown>)
             .where(eq(testCases.id, update.testCaseId));
         }
+
+        redoData = { updates: redoUpdates } as UndoBulkUpdate;
         break;
       }
 
       case "reorder_test_cases": {
         // Undo reorder = restore previous order
         const data = undoData as UndoReorder;
+        const currentOrder: Array<{ id: number; order: number }> = [];
+
         for (const item of data.previousOrder) {
+          // Get current order for redo
+          const current = await db.select({ id: testCases.id, order: testCases.order }).from(testCases).where(eq(testCases.id, item.id)).get();
+          if (current) {
+            currentOrder.push({ id: current.id, order: current.order });
+          }
+
           await db
             .update(testCases)
             .set({ order: item.order })
             .where(eq(testCases.id, item.id));
         }
+
+        redoData = { previousOrder: currentOrder } as UndoReorder;
         break;
       }
 
       default:
         return { error: `Unknown action type: ${undoEntry.actionType}` };
+    }
+
+    // Move the undo entry to redo stack
+    if (redoData) {
+      await db.insert(undoStack).values({
+        actionType: getReverseActionType(undoEntry.actionType) as typeof undoStack.$inferInsert.actionType,
+        description: undoEntry.description,
+        undoData: JSON.stringify(redoData),
+        isRedo: true,
+        organizationId,
+      });
     }
 
     // Delete the undo entry
@@ -381,6 +514,248 @@ export async function executeUndo(): Promise<{ success?: boolean; error?: string
   } catch (error) {
     console.error("Failed to execute undo:", error);
     return { error: "Failed to undo action" };
+  }
+}
+
+// Execute redo
+export async function executeRedo(): Promise<{ success?: boolean; error?: string; description?: string }> {
+  const session = await getSessionWithOrg();
+  if (!session) {
+    return { error: "Unauthorized" };
+  }
+
+  const { organizationId } = session.user;
+
+  try {
+    // Get the last redo action
+    const lastRedo = await db
+      .select()
+      .from(undoStack)
+      .where(and(eq(undoStack.organizationId, organizationId), eq(undoStack.isRedo, true)))
+      .orderBy(desc(undoStack.createdAt))
+      .limit(1);
+
+    if (lastRedo.length === 0) {
+      return { error: "Nothing to redo" };
+    }
+
+    const redoEntry = lastRedo[0];
+    const redoData = JSON.parse(redoEntry.undoData);
+    let undoData: UndoData | null = null;
+
+    // Execute the redo based on action type (redo is essentially the same as the original action)
+    switch (redoEntry.actionType) {
+      case "delete_test_case": {
+        // Redo delete = delete again
+        const data = redoData as UndoTestCaseDelete;
+        undoData = data; // Store for undo
+
+        await db.delete(scenarios).where(eq(scenarios.testCaseId, data.testCase.id));
+        await db.delete(testCases).where(eq(testCases.id, data.testCase.id));
+        break;
+      }
+
+      case "update_test_case": {
+        // Redo update = apply the values again
+        const data = redoData as UndoTestCaseUpdate;
+
+        // Get current values for undo
+        const current = await db.select().from(testCases).where(eq(testCases.id, data.testCaseId)).get();
+        if (current) {
+          undoData = {
+            testCaseId: data.testCaseId,
+            previousValues: {
+              title: current.title,
+              folderId: current.folderId,
+              state: current.state,
+              priority: current.priority,
+              order: current.order,
+            },
+          } as UndoTestCaseUpdate;
+        }
+
+        await db
+          .update(testCases)
+          .set({
+            title: data.previousValues.title,
+            folderId: data.previousValues.folderId,
+            state: data.previousValues.state as "active" | "draft" | "retired" | "rejected",
+            priority: data.previousValues.priority as "normal" | "high" | "critical",
+            order: data.previousValues.order,
+          })
+          .where(eq(testCases.id, data.testCaseId));
+        break;
+      }
+
+      case "create_test_case": {
+        // Redo create = recreate
+        const data = redoData as UndoTestCaseDelete;
+        undoData = { testCaseId: data.testCase.id } as UndoTestCaseCreate;
+
+        await db.insert(testCases).values({
+          id: data.testCase.id,
+          legacyId: data.testCase.legacyId,
+          title: data.testCase.title,
+          folderId: data.testCase.folderId,
+          order: data.testCase.order,
+          template: data.testCase.template as "bdd_feature" | "steps" | "text",
+          state: data.testCase.state as "active" | "draft" | "retired" | "rejected",
+          priority: data.testCase.priority as "normal" | "high" | "critical",
+          organizationId,
+          createdAt: new Date(data.testCase.createdAt),
+          updatedAt: new Date(data.testCase.updatedAt),
+        });
+
+        for (const scenario of data.scenarios) {
+          await db.insert(scenarios).values({
+            id: scenario.id,
+            testCaseId: data.testCase.id,
+            title: scenario.title,
+            gherkin: scenario.gherkin,
+            order: scenario.order,
+            createdAt: new Date(scenario.createdAt),
+            updatedAt: new Date(scenario.updatedAt),
+          });
+        }
+        break;
+      }
+
+      case "delete_scenario": {
+        // Redo delete = delete again
+        const data = redoData as UndoScenarioDelete;
+        undoData = data;
+        await db.delete(scenarios).where(eq(scenarios.id, data.scenario.id));
+        break;
+      }
+
+      case "update_scenario": {
+        // Redo update = apply values
+        const data = redoData as UndoScenarioUpdate;
+
+        const current = await db.select().from(scenarios).where(eq(scenarios.id, data.scenarioId)).get();
+        if (current) {
+          undoData = {
+            scenarioId: data.scenarioId,
+            testCaseId: data.testCaseId,
+            previousValues: {
+              title: current.title,
+              gherkin: current.gherkin,
+              order: current.order,
+            },
+          } as UndoScenarioUpdate;
+        }
+
+        await db
+          .update(scenarios)
+          .set({
+            title: data.previousValues.title,
+            gherkin: data.previousValues.gherkin,
+            order: data.previousValues.order,
+          })
+          .where(eq(scenarios.id, data.scenarioId));
+        break;
+      }
+
+      case "create_scenario": {
+        // Redo create = recreate
+        const data = redoData as UndoScenarioDelete;
+        undoData = { scenarioId: data.scenario.id, testCaseId: data.testCaseId } as UndoScenarioCreate;
+
+        await db.insert(scenarios).values({
+          id: data.scenario.id,
+          testCaseId: data.testCaseId,
+          title: data.scenario.title,
+          gherkin: data.scenario.gherkin,
+          order: data.scenario.order,
+          createdAt: new Date(data.scenario.createdAt),
+          updatedAt: new Date(data.scenario.updatedAt),
+        });
+        break;
+      }
+
+      case "bulk_delete_test_cases": {
+        // Redo bulk delete
+        const data = redoData as UndoBulkDelete;
+        undoData = data;
+
+        for (const item of data.testCases) {
+          await db.delete(scenarios).where(eq(scenarios.testCaseId, item.testCase.id));
+          await db.delete(testCases).where(eq(testCases.id, item.testCase.id));
+        }
+        break;
+      }
+
+      case "bulk_update_test_cases": {
+        // Redo bulk update
+        const data = redoData as UndoBulkUpdate;
+        const undoUpdates: Array<{ testCaseId: number; previousValues: Record<string, unknown> }> = [];
+
+        for (const update of data.updates) {
+          const current = await db.select().from(testCases).where(eq(testCases.id, update.testCaseId)).get();
+          if (current) {
+            const currentValues: Record<string, unknown> = {};
+            for (const key of Object.keys(update.previousValues)) {
+              currentValues[key] = (current as Record<string, unknown>)[key];
+            }
+            undoUpdates.push({ testCaseId: update.testCaseId, previousValues: currentValues });
+          }
+
+          await db
+            .update(testCases)
+            .set(update.previousValues as Record<string, unknown>)
+            .where(eq(testCases.id, update.testCaseId));
+        }
+
+        undoData = { updates: undoUpdates } as UndoBulkUpdate;
+        break;
+      }
+
+      case "reorder_test_cases": {
+        // Redo reorder
+        const data = redoData as UndoReorder;
+        const currentOrder: Array<{ id: number; order: number }> = [];
+
+        for (const item of data.previousOrder) {
+          const current = await db.select({ id: testCases.id, order: testCases.order }).from(testCases).where(eq(testCases.id, item.id)).get();
+          if (current) {
+            currentOrder.push({ id: current.id, order: current.order });
+          }
+
+          await db
+            .update(testCases)
+            .set({ order: item.order })
+            .where(eq(testCases.id, item.id));
+        }
+
+        undoData = { previousOrder: currentOrder } as UndoReorder;
+        break;
+      }
+
+      default:
+        return { error: `Unknown action type: ${redoEntry.actionType}` };
+    }
+
+    // Move back to undo stack
+    if (undoData) {
+      await db.insert(undoStack).values({
+        actionType: getReverseActionType(redoEntry.actionType) as typeof undoStack.$inferInsert.actionType,
+        description: redoEntry.description,
+        undoData: JSON.stringify(undoData),
+        isRedo: false,
+        organizationId,
+      });
+    }
+
+    // Delete the redo entry
+    await db.delete(undoStack).where(eq(undoStack.id, redoEntry.id));
+
+    revalidatePath("/cases");
+    revalidatePath("/");
+
+    return { success: true, description: redoEntry.description };
+  } catch (error) {
+    console.error("Failed to execute redo:", error);
+    return { error: "Failed to redo action" };
   }
 }
 
