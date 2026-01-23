@@ -8,7 +8,17 @@ import { getSessionWithOrg } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-export default async function NewRunPage() {
+interface Props {
+  searchParams: Promise<{ cases?: string }>;
+}
+
+export default async function NewRunPage({ searchParams }: Props) {
+  const params = await searchParams;
+
+  // Parse pre-selected case IDs from URL (e.g., ?cases=1,2,3)
+  const initialSelectedCaseIds = params.cases
+    ? params.cases.split(",").map((id) => parseInt(id, 10)).filter((id) => !isNaN(id))
+    : [];
   const session = await getSessionWithOrg();
   if (!session) {
     redirect("/api/auth/signin");
@@ -88,7 +98,12 @@ export default async function NewRunPage() {
 
   return (
     <div className="h-full flex flex-col">
-      <CreateRunForm folders={folderTree} cases={cases} caseCounts={caseCounts} />
+      <CreateRunForm
+        folders={folderTree}
+        cases={cases}
+        caseCounts={caseCounts}
+        initialSelectedCaseIds={initialSelectedCaseIds}
+      />
     </div>
   );
 }

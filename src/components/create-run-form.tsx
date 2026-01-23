@@ -57,6 +57,7 @@ interface Props {
   folders: Folder[];
   cases: TestCase[];
   caseCounts: Record<number, number>;
+  initialSelectedCaseIds?: number[];
 }
 
 function getStateBadgeVariant(state: string) {
@@ -74,12 +75,14 @@ function getStateBadgeVariant(state: string) {
   }
 }
 
-export function CreateRunForm({ folders, cases, caseCounts }: Props) {
+export function CreateRunForm({ folders, cases, caseCounts, initialSelectedCaseIds = [] }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [selectedCases, setSelectedCases] = useState<Set<number>>(new Set());
+  const [selectedCases, setSelectedCases] = useState<Set<number>>(
+    () => new Set(initialSelectedCaseIds)
+  );
   const lastSelectedIndexRef = useRef<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
