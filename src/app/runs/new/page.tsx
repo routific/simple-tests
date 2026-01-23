@@ -21,18 +21,14 @@ export default async function NewRunPage() {
     .from(folders)
     .where(eq(folders.organizationId, organizationId));
 
+  // Count all test cases (not filtered by state) for folder counts
   const folderCaseCounts = await db
     .select({
       folderId: testCases.folderId,
       count: count(),
     })
     .from(testCases)
-    .where(
-      and(
-        eq(testCases.state, "active"),
-        eq(testCases.organizationId, organizationId)
-      )
-    )
+    .where(eq(testCases.organizationId, organizationId))
     .groupBy(testCases.folderId);
 
   const caseCounts: Record<number, number> = {};
@@ -47,25 +43,21 @@ export default async function NewRunPage() {
 
   const folderTree = buildFolderTree(foldersWithCounts);
 
-  // Get all active test cases for selection
+  // Get all test cases for selection (include state for filtering)
   const casesData = await db
     .select({
       id: testCases.id,
       title: testCases.title,
       folderId: testCases.folderId,
       folderName: folders.name,
+      state: testCases.state,
     })
     .from(testCases)
     .leftJoin(folders, eq(testCases.folderId, folders.id))
-    .where(
-      and(
-        eq(testCases.state, "active"),
-        eq(testCases.organizationId, organizationId)
-      )
-    )
+    .where(eq(testCases.organizationId, organizationId))
     .orderBy(testCases.title);
 
-  // Get all scenarios for these test cases
+  // Get all scenarios for these test cases (include gherkin for preview)
   const caseIds = casesData.map((c) => c.id);
   const allScenarios = caseIds.length > 0
     ? await db
@@ -73,13 +65,14 @@ export default async function NewRunPage() {
           id: scenarios.id,
           title: scenarios.title,
           testCaseId: scenarios.testCaseId,
+          gherkin: scenarios.gherkin,
         })
         .from(scenarios)
         .orderBy(scenarios.order)
     : [];
 
   // Group scenarios by test case
-  const scenariosByCase: Record<number, { id: number; title: string; testCaseId: number }[]> = {};
+  const scenariosByCase: Record<number, { id: number; title: string; testCaseId: number; gherkin: string | null }[]> = {};
   allScenarios.forEach((s) => {
     if (!scenariosByCase[s.testCaseId]) {
       scenariosByCase[s.testCaseId] = [];

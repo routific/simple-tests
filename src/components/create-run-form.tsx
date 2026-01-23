@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect, useCallback } from "react";
+import { useState, useTransition, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -8,6 +8,7 @@ import { createTestRun } from "@/app/runs/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
+import { GherkinDisplay } from "@/components/gherkin-editor";
 
 interface Folder {
   id: number;
@@ -22,6 +23,7 @@ interface Scenario {
   id: number;
   title: string;
   testCaseId: number;
+  gherkin: string | null;
 }
 
 interface TestCase {
@@ -29,6 +31,7 @@ interface TestCase {
   title: string;
   folderId: number | null;
   folderName: string | null;
+  state: string;
   scenarios: Scenario[];
 }
 
@@ -67,8 +70,31 @@ export function CreateRunForm({ folders, cases, caseCounts }: Props) {
   const [selectedFolders, setSelectedFolders] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
+  // Search and filter state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [stateFilter, setStateFilter] = useState<string>("active");
+  const [previewScenarioId, setPreviewScenarioId] = useState<number | null>(null);
+
+  // Filter cases based on search and state
+  const filteredCases = useMemo(() => {
+    return cases.filter((c) => {
+      // State filter
+      if (stateFilter && c.state !== stateFilter) return false;
+      // Search filter (case-insensitive, matches title or scenario titles)
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        const matchesTitle = c.title.toLowerCase().includes(query);
+        const matchesScenario = c.scenarios.some((s) =>
+          s.title.toLowerCase().includes(query)
+        );
+        if (!matchesTitle && !matchesScenario) return false;
+      }
+      return true;
+    });
+  }, [cases, searchQuery, stateFilter]);
+
   // Total scenario count for display
-  const totalScenarios = cases.reduce((sum, c) => sum + c.scenarios.length, 0);
+  const totalScenarios = filteredCases.reduce((sum, c) => sum + c.scenarios.length, 0);
 
   // Linear integration state
   const [projects, setProjects] = useState<LinearProject[]>([]);
@@ -221,15 +247,32 @@ export function CreateRunForm({ folders, cases, caseCounts }: Props) {
   };
 
   const selectAll = () => {
-    setSelectedCases(new Set(cases.map((c) => c.id)));
-    setSelectedFolders(new Set(folders.map((f) => f.id)));
-    setSelectedScenarios(new Set(cases.flatMap((c) => c.scenarios.map((s) => s.id))));
+    // Select all filtered cases and their scenarios
+    setSelectedCases((prev) => {
+      const next = new Set(prev);
+      filteredCases.forEach((c) => next.add(c.id));
+      return next;
+    });
+    setSelectedScenarios((prev) => {
+      const next = new Set(prev);
+      filteredCases.flatMap((c) => c.scenarios.map((s) => s.id)).forEach((id) => next.add(id));
+      return next;
+    });
   };
 
   const clearAll = () => {
-    setSelectedCases(new Set());
+    // Clear all filtered cases and their scenarios
+    setSelectedCases((prev) => {
+      const next = new Set(prev);
+      filteredCases.forEach((c) => next.delete(c.id));
+      return next;
+    });
+    setSelectedScenarios((prev) => {
+      const next = new Set(prev);
+      filteredCases.flatMap((c) => c.scenarios.map((s) => s.id)).forEach((id) => next.delete(id));
+      return next;
+    });
     setSelectedFolders(new Set());
-    setSelectedScenarios(new Set());
   };
 
   const handleCreate = () => {
@@ -463,7 +506,7 @@ export function CreateRunForm({ folders, cases, caseCounts }: Props) {
                 </label>
                 <p className="text-sm text-muted-foreground">
                   {selectedScenarios.size} scenario{selectedScenarios.size !== 1 ? "s" : ""} selected
-                  {totalScenarios > 0 && ` of ${totalScenarios}`}
+                  {totalScenarios > 0 && ` of ${totalScenarios} visible`}
                 </p>
               </div>
               <div className="flex gap-3">
@@ -471,73 +514,165 @@ export function CreateRunForm({ folders, cases, caseCounts }: Props) {
                   onClick={selectAll}
                   className="text-sm text-brand-600 dark:text-brand-400 hover:underline font-medium"
                 >
-                  Select all
+                  Select all visible
                 </button>
                 <span className="text-border">|</span>
                 <button
                   onClick={clearAll}
                   className="text-sm text-muted-foreground hover:text-foreground"
                 >
-                  Clear
+                  Clear visible
                 </button>
               </div>
             </div>
 
+            {/* Search and Filter Bar */}
+            <div className="flex gap-3 mb-3">
+              <div className="relative flex-1">
+                <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  type="text"
+                  placeholder="Search test cases..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+              <select
+                value={stateFilter}
+                onChange={(e) => setStateFilter(e.target.value)}
+                className="px-3 py-2 text-sm border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
+              >
+                <option value="">All states</option>
+                <option value="active">Active</option>
+                <option value="draft">Draft</option>
+                <option value="retired">Retired</option>
+                <option value="rejected">Rejected</option>
+              </select>
+            </div>
+
             <Card>
-              <CardContent className="p-0 max-h-96 overflow-auto">
-                {folders.length === 0 ? (
-                  <div className="p-8 text-center">
-                    <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mx-auto mb-3">
-                      <FolderIcon className="w-6 h-6 text-muted-foreground" />
-                    </div>
-                    <p className="font-medium text-foreground mb-1">No test cases available</p>
-                    <p className="text-sm text-muted-foreground">
-                      <Link href="/import" className="text-brand-500 hover:underline">
-                        Import test cases
-                      </Link>{" "}
-                      first to create a run.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="divide-y divide-border">
-                    {folders.map((folder) => (
-                      <FolderSection
-                        key={folder.id}
-                        folder={folder}
-                        cases={cases.filter((c) => c.folderId === folder.id)}
-                        selectedCases={selectedCases}
-                        selectedFolders={selectedFolders}
-                        selectedScenarios={selectedScenarios}
-                        toggleFolder={toggleFolder}
-                        toggleCase={toggleCase}
-                        toggleScenario={toggleScenario}
-                        caseCounts={caseCounts}
-                      />
-                    ))}
-                    {/* Cases without folder */}
-                    {cases.filter((c) => !c.folderId).length > 0 && (
-                      <div className="p-4">
-                        <div className="text-sm font-medium text-muted-foreground mb-3">
-                          Uncategorized
+              <CardContent className="p-0">
+                <div className="flex max-h-[60vh]">
+                  {/* Left: Selection List */}
+                  <div className="flex-1 overflow-auto border-r border-border">
+                    {filteredCases.length === 0 ? (
+                      <div className="p-8 text-center">
+                        <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mx-auto mb-3">
+                          <FolderIcon className="w-6 h-6 text-muted-foreground" />
                         </div>
-                        <div className="space-y-2">
-                          {cases
-                            .filter((c) => !c.folderId)
-                            .map((testCase) => (
-                              <TestCaseItem
-                                key={testCase.id}
-                                testCase={testCase}
-                                selectedCases={selectedCases}
-                                selectedScenarios={selectedScenarios}
-                                toggleCase={toggleCase}
-                                toggleScenario={toggleScenario}
-                              />
-                            ))}
-                        </div>
+                        {cases.length === 0 ? (
+                          <>
+                            <p className="font-medium text-foreground mb-1">No test cases available</p>
+                            <p className="text-sm text-muted-foreground">
+                              <Link href="/import" className="text-brand-500 hover:underline">
+                                Import test cases
+                              </Link>{" "}
+                              first to create a run.
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="font-medium text-foreground mb-1">No matching test cases</p>
+                            <p className="text-sm text-muted-foreground">
+                              Try adjusting your search or filter criteria.
+                            </p>
+                          </>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-border">
+                        {folders.map((folder) => {
+                          const folderCases = filteredCases.filter((c) => c.folderId === folder.id);
+                          if (folderCases.length === 0) return null;
+                          return (
+                            <FolderSection
+                              key={folder.id}
+                              folder={folder}
+                              cases={folderCases}
+                              selectedCases={selectedCases}
+                              selectedFolders={selectedFolders}
+                              selectedScenarios={selectedScenarios}
+                              toggleFolder={toggleFolder}
+                              toggleCase={toggleCase}
+                              toggleScenario={toggleScenario}
+                              caseCounts={caseCounts}
+                              onPreviewScenario={setPreviewScenarioId}
+                            />
+                          );
+                        })}
+                        {/* Cases without folder */}
+                        {filteredCases.filter((c) => !c.folderId).length > 0 && (
+                          <div className="p-4">
+                            <div className="text-sm font-medium text-muted-foreground mb-3">
+                              Uncategorized
+                            </div>
+                            <div className="space-y-2">
+                              {filteredCases
+                                .filter((c) => !c.folderId)
+                                .map((testCase) => (
+                                  <TestCaseItem
+                                    key={testCase.id}
+                                    testCase={testCase}
+                                    selectedCases={selectedCases}
+                                    selectedScenarios={selectedScenarios}
+                                    toggleCase={toggleCase}
+                                    toggleScenario={toggleScenario}
+                                    onPreviewScenario={setPreviewScenarioId}
+                                  />
+                                ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
-                )}
+
+                  {/* Right: Selection Preview */}
+                  <div className="w-80 overflow-auto bg-muted/30">
+                    <div className="p-3 border-b border-border bg-muted/50 sticky top-0">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-foreground">
+                          Selected ({selectedScenarios.size})
+                        </span>
+                        {selectedScenarios.size > 0 && (
+                          <button
+                            onClick={() => {
+                              setSelectedCases(new Set());
+                              setSelectedFolders(new Set());
+                              setSelectedScenarios(new Set());
+                            }}
+                            className="text-xs text-muted-foreground hover:text-foreground"
+                          >
+                            Clear all
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    {selectedScenarios.size === 0 ? (
+                      <div className="p-6 text-center text-sm text-muted-foreground">
+                        <SelectIcon className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                        <p>No scenarios selected</p>
+                        <p className="text-xs mt-1">Select test cases from the left panel</p>
+                      </div>
+                    ) : (
+                      <div className="p-2 space-y-2">
+                        {cases
+                          .filter((c) => c.scenarios.some((s) => selectedScenarios.has(s.id)))
+                          .map((testCase) => (
+                            <SelectedCasePreview
+                              key={testCase.id}
+                              testCase={testCase}
+                              selectedScenarios={selectedScenarios}
+                              previewScenarioId={previewScenarioId}
+                              setPreviewScenarioId={setPreviewScenarioId}
+                              toggleScenario={toggleScenario}
+                            />
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -557,6 +692,7 @@ function FolderSection({
   toggleCase,
   toggleScenario,
   caseCounts,
+  onPreviewScenario,
 }: {
   folder: Folder;
   cases: TestCase[];
@@ -567,6 +703,7 @@ function FolderSection({
   toggleCase: (id: number) => void;
   toggleScenario: (scenarioId: number, testCaseId: number) => void;
   caseCounts: Record<number, number>;
+  onPreviewScenario?: (id: number | null) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const count = caseCounts[folder.id] || 0;
@@ -620,6 +757,7 @@ function FolderSection({
               selectedScenarios={selectedScenarios}
               toggleCase={toggleCase}
               toggleScenario={toggleScenario}
+              onPreviewScenario={onPreviewScenario}
             />
           ))}
         </div>
@@ -634,12 +772,14 @@ function TestCaseItem({
   selectedScenarios,
   toggleCase,
   toggleScenario,
+  onPreviewScenario,
 }: {
   testCase: TestCase;
   selectedCases: Set<number>;
   selectedScenarios: Set<number>;
   toggleCase: (id: number) => void;
   toggleScenario: (scenarioId: number, testCaseId: number) => void;
+  onPreviewScenario?: (id: number | null) => void;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const selectedCount = testCase.scenarios.filter((s) =>
@@ -678,6 +818,16 @@ function TestCaseItem({
           <span className="text-sm truncate text-muted-foreground group-hover:text-foreground transition-colors">
             {testCase.title}
           </span>
+          {testCase.state !== "active" && (
+            <span className={cn(
+              "text-xs px-1.5 py-0.5 rounded shrink-0",
+              testCase.state === "draft" && "bg-yellow-100 text-yellow-700",
+              testCase.state === "retired" && "bg-gray-100 text-gray-600",
+              testCase.state === "rejected" && "bg-red-100 text-red-700"
+            )}>
+              {testCase.state}
+            </span>
+          )}
           {hasScenarios && (
             <span className="text-xs text-muted-foreground shrink-0">
               ({selectedCount}/{testCase.scenarios.length})
@@ -689,23 +839,97 @@ function TestCaseItem({
       {isExpanded && hasScenarios && (
         <div className="border-t border-border bg-muted/30 p-2 pl-10 space-y-1">
           {testCase.scenarios.map((scenario) => (
-            <label
+            <div
               key={scenario.id}
-              className="flex items-center gap-3 py-1 cursor-pointer group"
+              className="flex items-center gap-3 py-1 group"
             >
-              <input
-                type="checkbox"
-                checked={selectedScenarios.has(scenario.id)}
-                onChange={() => toggleScenario(scenario.id, testCase.id)}
-                className="rounded border-input text-brand-600 focus:ring-brand-500"
-              />
-              <span className="text-sm truncate text-muted-foreground group-hover:text-foreground transition-colors">
-                {scenario.title}
-              </span>
-            </label>
+              <label className="flex items-center gap-3 cursor-pointer flex-1 min-w-0">
+                <input
+                  type="checkbox"
+                  checked={selectedScenarios.has(scenario.id)}
+                  onChange={() => toggleScenario(scenario.id, testCase.id)}
+                  className="rounded border-input text-brand-600 focus:ring-brand-500"
+                />
+                <span className="text-sm truncate text-muted-foreground group-hover:text-foreground transition-colors">
+                  {scenario.title}
+                </span>
+              </label>
+              {scenario.gherkin && onPreviewScenario && (
+                <button
+                  onClick={() => onPreviewScenario(scenario.id)}
+                  className="text-xs text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                >
+                  Preview
+                </button>
+              )}
+            </div>
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function SelectedCasePreview({
+  testCase,
+  selectedScenarios,
+  previewScenarioId,
+  setPreviewScenarioId,
+  toggleScenario,
+}: {
+  testCase: TestCase;
+  selectedScenarios: Set<number>;
+  previewScenarioId: number | null;
+  setPreviewScenarioId: (id: number | null) => void;
+  toggleScenario: (scenarioId: number, testCaseId: number) => void;
+}) {
+  const selectedInCase = testCase.scenarios.filter((s) => selectedScenarios.has(s.id));
+
+  return (
+    <div className="border border-border rounded-lg bg-background overflow-hidden">
+      <div className="px-3 py-2 border-b border-border bg-muted/30">
+        <span className="text-sm font-medium text-foreground truncate block">
+          {testCase.title}
+        </span>
+        <span className="text-xs text-muted-foreground">
+          {selectedInCase.length} scenario{selectedInCase.length !== 1 ? "s" : ""}
+        </span>
+      </div>
+      <div className="divide-y divide-border">
+        {selectedInCase.map((scenario) => (
+          <div key={scenario.id} className="group">
+            <div className="flex items-center gap-2 px-3 py-2">
+              <button
+                onClick={() => setPreviewScenarioId(
+                  previewScenarioId === scenario.id ? null : scenario.id
+                )}
+                className="flex-1 text-left text-sm text-muted-foreground hover:text-foreground flex items-center gap-2 min-w-0"
+              >
+                <ChevronIcon
+                  className={cn(
+                    "w-3 h-3 shrink-0 transition-transform",
+                    previewScenarioId === scenario.id && "rotate-90"
+                  )}
+                />
+                <span className="truncate">{scenario.title}</span>
+              </button>
+              <button
+                onClick={() => toggleScenario(scenario.id, testCase.id)}
+                className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+              >
+                <CloseIcon className="w-3 h-3" />
+              </button>
+            </div>
+            {previewScenarioId === scenario.id && scenario.gherkin && (
+              <div className="px-3 pb-3 pt-0">
+                <div className="text-xs max-h-48 overflow-auto rounded border border-border bg-muted/30 p-2">
+                  <GherkinDisplay text={scenario.gherkin} />
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -763,6 +987,22 @@ function CloseIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+    </svg>
+  );
+}
+
+function SearchIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+    </svg>
+  );
+}
+
+function SelectIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
   );
 }
