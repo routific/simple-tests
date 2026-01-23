@@ -813,6 +813,13 @@ function NewCaseModal({
   const [state, setState] = useState<string>("active");
   const [error, setError] = useState<string | null>(null);
 
+  // Sync folderId when modal opens or currentFolderId changes
+  useEffect(() => {
+    if (isOpen) {
+      setFolderId(currentFolderId);
+    }
+  }, [isOpen, currentFolderId]);
+
   const handleSave = () => {
     if (!title.trim()) {
       setError("Title is required");
