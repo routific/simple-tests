@@ -130,7 +130,7 @@ export function Sidebar() {
       >
         {collapsed ? (
           <div className="flex justify-center">
-            <ThemeToggle className="scale-75" />
+            <ThemeToggle compact />
           </div>
         ) : (
           <div className="flex items-center justify-between">

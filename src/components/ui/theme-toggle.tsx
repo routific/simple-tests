@@ -3,7 +3,12 @@
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
-export function ThemeToggle({ className }: { className?: string }) {
+interface ThemeToggleProps {
+  className?: string;
+  compact?: boolean;
+}
+
+export function ThemeToggle({ className, compact = false }: ThemeToggleProps) {
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [mounted, setMounted] = useState(false);
 
@@ -27,12 +32,16 @@ export function ThemeToggle({ className }: { className?: string }) {
     return (
       <button
         className={cn(
-          "relative w-14 h-7 rounded-full bg-muted transition-colors",
+          "relative rounded-full bg-muted transition-colors",
+          compact ? "w-10 h-5" : "w-14 h-7",
           className
         )}
         aria-label="Toggle theme"
       >
-        <span className="absolute left-1 top-1 w-5 h-5 rounded-full bg-background shadow-soft transition-transform" />
+        <span className={cn(
+          "absolute rounded-full bg-background shadow-soft transition-transform",
+          compact ? "left-0.5 top-0.5 w-4 h-4" : "left-1 top-1 w-5 h-5"
+        )} />
       </button>
     );
   }
@@ -41,7 +50,8 @@ export function ThemeToggle({ className }: { className?: string }) {
     <button
       onClick={toggleTheme}
       className={cn(
-        "relative w-14 h-7 rounded-full transition-colors duration-200",
+        "relative rounded-full transition-colors duration-200",
+        compact ? "w-10 h-5" : "w-14 h-7",
         theme === "dark" ? "bg-brand-600" : "bg-muted",
         className
       )}
@@ -49,14 +59,16 @@ export function ThemeToggle({ className }: { className?: string }) {
     >
       <span
         className={cn(
-          "absolute top-1 w-5 h-5 rounded-full bg-background shadow-soft transition-all duration-200 flex items-center justify-center",
-          theme === "dark" ? "left-8" : "left-1"
+          "absolute rounded-full bg-background shadow-soft transition-all duration-200 flex items-center justify-center",
+          compact
+            ? cn("top-0.5 w-4 h-4", theme === "dark" ? "left-[22px]" : "left-0.5")
+            : cn("top-1 w-5 h-5", theme === "dark" ? "left-8" : "left-1")
         )}
       >
         {theme === "dark" ? (
-          <MoonIcon className="w-3 h-3 text-brand-600" />
+          <MoonIcon className={cn(compact ? "w-2.5 h-2.5" : "w-3 h-3", "text-brand-600")} />
         ) : (
-          <SunIcon className="w-3 h-3 text-amber-500" />
+          <SunIcon className={cn(compact ? "w-2.5 h-2.5" : "w-3 h-3", "text-amber-500")} />
         )}
       </span>
     </button>

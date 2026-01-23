@@ -321,43 +321,44 @@ export function CreateRunForm({ folders, cases, caseCounts }: Props) {
 
       {/* Form */}
       <div className="flex-1 overflow-auto p-6">
-        <div className="max-w-6xl space-y-6">
-          {/* Run Details */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Run Name
-              </label>
-              <Input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g., Release 2.0 Regression"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Description <span className="text-muted-foreground font-normal">(optional)</span>
-              </label>
-              <Input
-                type="text"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="e.g., Full regression for v2.0 release"
-              />
-            </div>
-          </div>
-
-          {/* Linear Integration */}
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 mb-4">
-                <LinearIcon className="w-4 h-4 text-brand-600" />
-                <span className="text-sm font-medium text-foreground">Linear Integration</span>
-                <span className="text-xs text-muted-foreground">(optional)</span>
+        <div className="space-y-6">
+          {/* Run Details - Narrower width */}
+          <div className="max-w-2xl">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Run Name
+                </label>
+                <Input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g., Release 2.0 Regression"
+                />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Description <span className="text-muted-foreground font-normal">(optional)</span>
+                </label>
+                <Input
+                  type="text"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="e.g., Full regression for v2.0 release"
+                />
+              </div>
+            </div>
 
-              <div className="grid grid-cols-3 gap-4">
+            {/* Linear Integration */}
+            <Card className="mt-4">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-4">
+                  <LinearIcon className="w-4 h-4 text-brand-600" />
+                  <span className="text-sm font-medium text-foreground">Linear Integration</span>
+                  <span className="text-xs text-muted-foreground">(optional)</span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
                 {/* Project Selector */}
                 <div>
                   <label className="block text-sm text-muted-foreground mb-2">
@@ -465,8 +466,9 @@ export function CreateRunForm({ folders, cases, caseCounts }: Props) {
               </div>
             </CardContent>
           </Card>
+          </div>
 
-          {/* Test Case Selection */}
+          {/* Test Case Selection - Full width */}
           <div>
             <div className="flex items-center justify-between mb-3">
               <div>
@@ -518,7 +520,7 @@ export function CreateRunForm({ folders, cases, caseCounts }: Props) {
                       <select
                         value={stateFilter}
                         onChange={(e) => setStateFilter(e.target.value)}
-                        className="px-3 py-2 text-sm border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
+                        className="pl-3 pr-8 py-2 text-sm border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%236b7280%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1.25rem_1.25rem] bg-[right_0.5rem_center] bg-no-repeat"
                       >
                         <option value="">All states</option>
                         <option value="active">Active</option>
