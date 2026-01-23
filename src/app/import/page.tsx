@@ -304,32 +304,6 @@ export default function ImportPage() {
             </Button>
           </Link>
         </div>
-
-        {/* CLI Import Section */}
-        <div className="border-t border-border pt-6">
-          <h2 className="text-lg font-semibold text-foreground mb-4">
-            Import from Testmo (Legacy)
-          </h2>
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <TerminalIcon className="w-5 h-5 text-brand-500" />
-                CLI Import Command
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="bg-gray-900 dark:bg-gray-950 text-gray-100 p-4 rounded-lg font-mono text-sm overflow-x-auto">
-                <span className="text-gray-500">$</span>{" "}
-                <span className="text-emerald-400">npm run</span>{" "}
-                <span className="text-amber-400">import</span>{" "}
-                <span className="text-gray-400">./testmo-export.csv</span>
-              </div>
-              <p className="text-sm text-muted-foreground mt-3">
-                Use this command to import CSV exports from Testmo.
-              </p>
-            </CardContent>
-          </Card>
-        </div>
       </div>
     </div>
   );
@@ -425,10 +399,3 @@ function ImportIcon({ className }: { className?: string }) {
   );
 }
 
-function TerminalIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z" />
-    </svg>
-  );
-}

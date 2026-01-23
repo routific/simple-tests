@@ -399,7 +399,7 @@ function StatusDropdown({
         </Badge>
       </button>
       {isOpen && (
-        <div className="absolute right-0 top-full mt-1 z-50 bg-popover border border-border rounded-lg shadow-lg py-1 min-w-[120px]">
+        <div className="absolute right-0 top-full mt-1 z-50 bg-background border border-border rounded-lg shadow-lg py-1 min-w-[120px]">
           {STATE_OPTIONS.map((state) => (
             <button
               key={state}

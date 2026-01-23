@@ -185,9 +185,9 @@ export default async function Dashboard() {
                 <ImportIcon className="w-5 h-5 text-brand-500" />
               </div>
               <div>
-                <h3 className="font-medium text-foreground mb-1">Import from Testmo</h3>
+                <h3 className="font-medium text-foreground mb-1">Import / Export</h3>
                 <p className="text-sm text-muted-foreground">
-                  Upload CSV export to import test cases
+                  Backup or restore test case data
                 </p>
               </div>
             </CardContent>
