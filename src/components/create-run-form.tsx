@@ -473,115 +473,131 @@ export function CreateRunForm({ folders, cases, caseCounts }: Props) {
 
             <Card>
               <CardContent className="p-0">
-                {/* Search and Filter Bar */}
-                <div className="p-4 border-b border-border flex gap-3 bg-muted/20">
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      checked={allSelected}
-                      ref={(el) => {
-                        if (el) el.indeterminate = someSelected;
-                      }}
-                      onChange={() => {
-                        if (allSelected || someSelected) {
-                          clearAll();
-                        } else {
-                          selectAll();
-                        }
-                      }}
-                      className="rounded border-input text-brand-600 focus:ring-brand-500 dark:border-muted-foreground/30 dark:bg-muted/50"
-                      title={allSelected ? "Deselect all" : "Select all"}
-                    />
-                  </div>
-                  <div className="flex-1 relative">
-                    <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      type="text"
-                      placeholder="Search test cases..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-9"
-                    />
-                  </div>
-                  <select
-                    value={stateFilter}
-                    onChange={(e) => setStateFilter(e.target.value)}
-                    className="px-3 py-2 text-sm border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
-                  >
-                    <option value="">All states</option>
-                    <option value="active">Active</option>
-                    <option value="draft">Draft</option>
-                    <option value="retired">Retired</option>
-                    <option value="rejected">Rejected</option>
-                  </select>
-                </div>
-
-                {/* Results */}
-                <div className="max-h-[50vh] overflow-auto">
-                  {filteredCases.length === 0 ? (
-                    <div className="p-12 text-center">
-                      <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mx-auto mb-3">
-                        <SearchIcon className="w-6 h-6 text-muted-foreground" />
+                <div className="flex">
+                  {/* Left: Selection List */}
+                  <div className="flex-1 border-r border-border">
+                    {/* Search and Filter Bar */}
+                    <div className="p-4 border-b border-border flex gap-3 bg-muted/20">
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={allSelected}
+                          ref={(el) => {
+                            if (el) el.indeterminate = someSelected;
+                          }}
+                          onChange={() => {
+                            if (allSelected || someSelected) {
+                              clearAll();
+                            } else {
+                              selectAll();
+                            }
+                          }}
+                          className="rounded border-input text-brand-600 focus:ring-brand-500 dark:border-muted-foreground/30 dark:bg-muted/50"
+                          title={allSelected ? "Deselect all" : "Select all"}
+                        />
                       </div>
-                      <p className="font-medium text-foreground mb-1">No test cases found</p>
-                      <p className="text-sm text-muted-foreground">
-                        {cases.length === 0
-                          ? "Create test cases first to include them in a run."
-                          : "Try adjusting your search or filter."}
-                      </p>
+                      <div className="flex-1 relative">
+                        <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        <Input
+                          type="text"
+                          placeholder="Search test cases..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          className="pl-9"
+                        />
+                      </div>
+                      <select
+                        value={stateFilter}
+                        onChange={(e) => setStateFilter(e.target.value)}
+                        className="px-3 py-2 text-sm border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
+                      >
+                        <option value="">All states</option>
+                        <option value="active">Active</option>
+                        <option value="draft">Draft</option>
+                        <option value="retired">Retired</option>
+                        <option value="rejected">Rejected</option>
+                      </select>
                     </div>
-                  ) : (
-                    <div className="divide-y divide-border">
-                      {filteredCases.map((testCase) => (
-                        <div
-                          key={testCase.id}
-                          onClick={(e) => toggleCase(testCase.id, e)}
-                          className={cn(
-                            "w-full flex items-center justify-between py-2.5 px-4 hover:bg-muted/50 transition-colors cursor-pointer group",
-                            selectedCases.has(testCase.id) && "bg-brand-50 dark:bg-brand-950/50"
-                          )}
-                        >
-                          <div className="flex items-center gap-3 min-w-0 flex-1">
-                            <div
-                              className="p-2 -m-2 cursor-pointer flex-shrink-0"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleCase(testCase.id, e);
-                              }}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={selectedCases.has(testCase.id)}
-                                onChange={() => {}}
-                                className="rounded border-input text-brand-600 focus:ring-brand-500 dark:border-muted-foreground/30 dark:bg-muted/50 pointer-events-none"
-                              />
-                            </div>
-                            <span className="font-medium text-foreground truncate group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
-                              {testCase.title}
-                            </span>
+
+                    {/* Results */}
+                    <div className="max-h-[50vh] overflow-auto">
+                      {filteredCases.length === 0 ? (
+                        <div className="p-12 text-center">
+                          <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mx-auto mb-3">
+                            <SearchIcon className="w-6 h-6 text-muted-foreground" />
                           </div>
-                          <div className="flex items-center gap-3 ml-4 flex-shrink-0">
-                            <span
-                              className="text-xs text-muted-foreground flex items-center gap-1"
-                              title={`${testCase.scenarios.length} scenario${testCase.scenarios.length !== 1 ? 's' : ''}`}
-                            >
-                              <ScenarioIcon className="w-3 h-3" />
-                              {testCase.scenarios.length}
-                            </span>
-                            {testCase.folderName && (
-                              <span className="text-xs text-muted-foreground flex items-center gap-1 max-w-[150px] truncate">
-                                <FolderIcon className="w-3 h-3 flex-shrink-0" />
-                                {testCase.folderName}
-                              </span>
-                            )}
-                            <Badge variant={getStateBadgeVariant(testCase.state)}>
-                              {testCase.state}
-                            </Badge>
-                          </div>
+                          <p className="font-medium text-foreground mb-1">No test cases found</p>
+                          <p className="text-sm text-muted-foreground">
+                            {cases.length === 0
+                              ? "Create test cases first to include them in a run."
+                              : "Try adjusting your search or filter."}
+                          </p>
                         </div>
-                      ))}
+                      ) : (
+                        <div className="divide-y divide-border">
+                          {filteredCases.map((testCase) => (
+                            <div
+                              key={testCase.id}
+                              onClick={(e) => toggleCase(testCase.id, e)}
+                              className={cn(
+                                "w-full flex items-center justify-between py-2.5 px-4 hover:bg-muted/50 transition-colors cursor-pointer group",
+                                selectedCases.has(testCase.id) && "bg-brand-50 dark:bg-brand-950/50"
+                              )}
+                            >
+                              <div className="flex items-center gap-3 min-w-0 flex-1">
+                                <div
+                                  className="p-2 -m-2 cursor-pointer flex-shrink-0"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleCase(testCase.id, e);
+                                  }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedCases.has(testCase.id)}
+                                    onChange={() => {}}
+                                    className="rounded border-input text-brand-600 focus:ring-brand-500 dark:border-muted-foreground/30 dark:bg-muted/50 pointer-events-none"
+                                  />
+                                </div>
+                                <span className="font-medium text-foreground truncate group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
+                                  {testCase.title}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-3 ml-4 flex-shrink-0">
+                                <span
+                                  className="text-xs text-muted-foreground flex items-center gap-1"
+                                  title={`${testCase.scenarios.length} scenario${testCase.scenarios.length !== 1 ? 's' : ''}`}
+                                >
+                                  <ScenarioIcon className="w-3 h-3" />
+                                  {testCase.scenarios.length}
+                                </span>
+                                {testCase.folderName && (
+                                  <span className="text-xs text-muted-foreground flex items-center gap-1 max-w-[150px] truncate">
+                                    <FolderIcon className="w-3 h-3 flex-shrink-0" />
+                                    {testCase.folderName}
+                                  </span>
+                                )}
+                                <Badge variant={getStateBadgeVariant(testCase.state)}>
+                                  {testCase.state}
+                                </Badge>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  )}
+                  </div>
+
+                  {/* Right: Selection Preview */}
+                  <SelectionPreview
+                    cases={cases}
+                    selectedCases={selectedCases}
+                    onRemove={(id) => {
+                      const newSelected = new Set(selectedCases);
+                      newSelected.delete(id);
+                      setSelectedCases(newSelected);
+                    }}
+                  />
                 </div>
               </CardContent>
             </Card>
@@ -589,6 +605,102 @@ export function CreateRunForm({ folders, cases, caseCounts }: Props) {
         </div>
       </div>
     </>
+  );
+}
+
+function SelectionPreview({
+  cases,
+  selectedCases,
+  onRemove,
+}: {
+  cases: TestCase[];
+  selectedCases: Set<number>;
+  onRemove: (id: number) => void;
+}) {
+  const [expandedCases, setExpandedCases] = useState<Set<number>>(new Set());
+
+  const selectedTestCases = cases.filter((c) => selectedCases.has(c.id));
+
+  const toggleExpanded = (id: number) => {
+    setExpandedCases((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  return (
+    <div className="w-80 bg-muted/30 flex flex-col max-h-[calc(50vh+57px)]">
+      <div className="p-3 border-b border-border bg-muted/50">
+        <span className="text-sm font-medium text-foreground">
+          Selected ({selectedCases.size})
+        </span>
+      </div>
+      {selectedCases.size === 0 ? (
+        <div className="flex-1 flex items-center justify-center p-6 text-center">
+          <div>
+            <CheckCircleIcon className="w-8 h-8 mx-auto mb-2 text-muted-foreground/50" />
+            <p className="text-sm text-muted-foreground">No test cases selected</p>
+            <p className="text-xs text-muted-foreground mt-1">Select from the list on the left</p>
+          </div>
+        </div>
+      ) : (
+        <div className="flex-1 overflow-auto">
+          <div className="divide-y divide-border">
+            {selectedTestCases.map((testCase) => (
+              <div key={testCase.id} className="bg-background">
+                <div className="flex items-center gap-2 p-3 group">
+                  {testCase.scenarios.length > 0 ? (
+                    <button
+                      onClick={() => toggleExpanded(testCase.id)}
+                      className="p-0.5 hover:bg-muted rounded transition-colors"
+                    >
+                      <ChevronIcon
+                        className={cn(
+                          "w-4 h-4 text-muted-foreground transition-transform",
+                          expandedCases.has(testCase.id) && "rotate-90"
+                        )}
+                      />
+                    </button>
+                  ) : (
+                    <div className="w-5" />
+                  )}
+                  <span className="flex-1 text-sm font-medium text-foreground truncate">
+                    {testCase.title}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {testCase.scenarios.length}
+                  </span>
+                  <button
+                    onClick={() => onRemove(testCase.id)}
+                    className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                  >
+                    <CloseIcon className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                {expandedCases.has(testCase.id) && testCase.scenarios.length > 0 && (
+                  <div className="pb-2 px-3 pl-9 space-y-1">
+                    {testCase.scenarios.map((scenario) => (
+                      <div
+                        key={scenario.id}
+                        className="text-xs text-muted-foreground py-1 flex items-center gap-2"
+                      >
+                        <span className="w-1 h-1 rounded-full bg-muted-foreground/50" />
+                        <span className="truncate">{scenario.title}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -663,6 +775,22 @@ function ScenarioIcon({ className }: { className?: string }) {
         strokeLinejoin="round"
         d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zM3.75 12h.007v.008H3.75V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm-.375 5.25h.007v.008H3.75v-.008zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"
       />
+    </svg>
+  );
+}
+
+function ChevronIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+    </svg>
+  );
+}
+
+function CheckCircleIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
   );
 }
