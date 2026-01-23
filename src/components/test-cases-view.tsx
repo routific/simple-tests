@@ -1023,14 +1023,18 @@ function GroupedTestCaseList({
                   <div className="grid grid-cols-[24px_70px_40px_20px] lg:grid-cols-[160px_70px_40px_20px] gap-2 items-center ml-4 flex-shrink-0">
                     {/* Folder: icon only on small screens, full picker on lg+ */}
                     <div className="flex justify-end">
-                      <div className="lg:hidden">
+                      <div className="lg:hidden relative group/folder">
                         {testCase.folderId ? (
-                          <span
-                            title={folders.find(f => f.id === testCase.folderId)?.name || "Folder"}
-                            className="text-muted-foreground"
-                          >
-                            <FolderIcon className="w-4 h-4" />
-                          </span>
+                          <>
+                            <span className="text-muted-foreground hover:text-foreground transition-colors cursor-default">
+                              <FolderIcon className="w-4 h-4" />
+                            </span>
+                            <div className="absolute right-0 top-full mt-1 z-50 hidden group-hover/folder:block">
+                              <div className="bg-popover text-popover-foreground text-xs px-2 py-1 rounded shadow-md border border-border whitespace-nowrap">
+                                {folders.find(f => f.id === testCase.folderId)?.name || "Folder"}
+                              </div>
+                            </div>
+                          </>
                         ) : (
                           <span className="text-muted-foreground/30">
                             <FolderIcon className="w-4 h-4" />
