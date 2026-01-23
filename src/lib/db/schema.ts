@@ -168,6 +168,37 @@ export const testRunResults = sqliteTable(
   (table) => [index("test_run_results_run_idx").on(table.testRunId)]
 );
 
+// Undo stack for global undo functionality
+export const undoStack = sqliteTable(
+  "undo_stack",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    actionType: text("action_type", {
+      enum: [
+        "create_test_case",
+        "update_test_case",
+        "delete_test_case",
+        "create_scenario",
+        "update_scenario",
+        "delete_scenario",
+        "bulk_delete_test_cases",
+        "bulk_update_test_cases",
+        "bulk_move_test_cases",
+        "reorder_test_cases",
+      ],
+    }).notNull(),
+    description: text("description").notNull(),
+    undoData: text("undo_data").notNull(), // JSON with data needed to reverse
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [index("undo_stack_org_idx").on(table.organizationId)]
+);
+
 export type Organization = typeof organizations.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type Folder = typeof folders.$inferSelect;
@@ -176,3 +207,4 @@ export type Scenario = typeof scenarios.$inferSelect;
 export type TestCaseAuditLog = typeof testCaseAuditLog.$inferSelect;
 export type TestRun = typeof testRuns.$inferSelect;
 export type TestRunResult = typeof testRunResults.$inferSelect;
+export type UndoStackEntry = typeof undoStack.$inferSelect;

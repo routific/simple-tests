@@ -18,6 +18,7 @@ import {
 } from "@/app/cases/actions";
 import { exportTestCases, importTestCases, ExportData } from "@/app/cases/export-actions";
 import { getScenarios, saveScenario } from "@/app/cases/scenario-actions";
+import { getLastUndo, executeUndo } from "@/app/cases/undo-actions";
 import { cn } from "@/lib/utils";
 import { buildFolderBreadcrumb, formatBreadcrumb } from "@/lib/folders";
 import { FolderPicker } from "@/components/folder-picker";
@@ -81,7 +82,37 @@ export function TestCasesView({
   const lastSelectedIndexRef = useRef<number | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isUndoing, setIsUndoing] = useState(false);
+  const [lastUndoAction, setLastUndoAction] = useState<{ id: number; description: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch last undo action on mount and after changes
+  const refreshUndo = async () => {
+    const lastUndo = await getLastUndo();
+    setLastUndoAction(lastUndo);
+  };
+
+  useEffect(() => {
+    refreshUndo();
+  }, [cases]); // Refresh when cases change
+
+  const handleUndo = async () => {
+    setIsUndoing(true);
+    try {
+      const result = await executeUndo();
+      if (result.error) {
+        alert(`Undo failed: ${result.error}`);
+      } else if (result.description) {
+        // Refresh to show changes
+        router.refresh();
+        refreshUndo();
+      }
+    } catch {
+      alert("Undo failed. Please try again.");
+    } finally {
+      setIsUndoing(false);
+    }
+  };
 
   const handleExport = async () => {
     setIsExporting(true);
@@ -224,6 +255,23 @@ export function TestCasesView({
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {lastUndoAction && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={handleUndo}
+              disabled={isUndoing}
+              className="text-muted-foreground hover:text-foreground"
+              title={`Undo: ${lastUndoAction.description}`}
+            >
+              {isUndoing ? (
+                <LoadingIcon className="w-4 h-4 animate-spin" />
+              ) : (
+                <UndoIcon className="w-4 h-4" />
+              )}
+              Undo
+            </Button>
+          )}
           <input
             ref={fileInputRef}
             type="file"
@@ -1623,6 +1671,24 @@ function ImportIcon({ className }: { className?: string }) {
         strokeLinecap="round"
         strokeLinejoin="round"
         d="M9 8.25H7.5a2.25 2.25 0 00-2.25 2.25v9a2.25 2.25 0 002.25 2.25h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25H15M9 12l3 3m0 0l3-3m-3 3V2.25"
+      />
+    </svg>
+  );
+}
+
+function UndoIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={1.5}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3"
       />
     </svg>
   );

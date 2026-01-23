@@ -1,10 +1,11 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { testCases, testCaseAuditLog } from "@/lib/db/schema";
+import { testCases, scenarios, testCaseAuditLog } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getSessionWithOrg } from "@/lib/auth";
+import { recordUndo } from "./undo-actions";
 
 interface SaveTestCaseInput {
   id?: number;
@@ -106,6 +107,18 @@ export async function saveTestCase(input: SaveTestCaseInput) {
           previousValues: JSON.stringify(oldValues),
           newValues: JSON.stringify(newValues),
         });
+
+        // Record undo action
+        await recordUndo("update_test_case", `Update "${existing.title}"`, {
+          testCaseId: input.id,
+          previousValues: {
+            title: existing.title,
+            folderId: existing.folderId,
+            state: existing.state,
+            priority: existing.priority,
+            order: existing.order,
+          },
+        });
       }
 
       revalidatePath("/cases");
@@ -142,6 +155,11 @@ export async function saveTestCase(input: SaveTestCaseInput) {
         }),
       });
 
+      // Record undo action
+      await recordUndo("create_test_case", `Create "${input.title}"`, {
+        testCaseId: newId,
+      });
+
       revalidatePath("/cases");
 
       return { success: true, id: newId };
@@ -162,7 +180,7 @@ export async function deleteTestCase(id: number) {
   const userId = session.user.id;
 
   try {
-    // Get current values for audit log
+    // Get current values for audit log and undo
     const existing = await db
       .select()
       .from(testCases)
@@ -177,6 +195,36 @@ export async function deleteTestCase(id: number) {
     if (!existing) {
       return { error: "Test case not found" };
     }
+
+    // Get all scenarios for this test case (for undo)
+    const existingScenarios = await db
+      .select()
+      .from(scenarios)
+      .where(eq(scenarios.testCaseId, id));
+
+    // Record undo action BEFORE deleting
+    await recordUndo("delete_test_case", `Delete "${existing.title}"`, {
+      testCase: {
+        id: existing.id,
+        legacyId: existing.legacyId,
+        title: existing.title,
+        folderId: existing.folderId,
+        order: existing.order,
+        template: existing.template,
+        state: existing.state,
+        priority: existing.priority,
+        createdAt: existing.createdAt.getTime(),
+        updatedAt: existing.updatedAt.getTime(),
+      },
+      scenarios: existingScenarios.map((s) => ({
+        id: s.id,
+        title: s.title,
+        gherkin: s.gherkin,
+        order: s.order,
+        createdAt: s.createdAt.getTime(),
+        updatedAt: s.updatedAt.getTime(),
+      })),
+    });
 
     // Create audit log entry for deletion
     await db.insert(testCaseAuditLog).values({
@@ -254,6 +302,30 @@ export async function bulkDeleteTestCases(ids: number[]) {
   const userId = session.user.id;
 
   try {
+    // Collect all data for undo BEFORE deleting
+    const undoTestCases: Array<{
+      testCase: {
+        id: number;
+        legacyId: string | null;
+        title: string;
+        folderId: number | null;
+        order: number;
+        template: string;
+        state: string;
+        priority: string;
+        createdAt: number;
+        updatedAt: number;
+      };
+      scenarios: Array<{
+        id: number;
+        title: string;
+        gherkin: string;
+        order: number;
+        createdAt: number;
+        updatedAt: number;
+      }>;
+    }> = [];
+
     for (const id of ids) {
       const existing = await db
         .select()
@@ -267,6 +339,34 @@ export async function bulkDeleteTestCases(ids: number[]) {
         .get();
 
       if (existing) {
+        const existingScenarios = await db
+          .select()
+          .from(scenarios)
+          .where(eq(scenarios.testCaseId, id));
+
+        undoTestCases.push({
+          testCase: {
+            id: existing.id,
+            legacyId: existing.legacyId,
+            title: existing.title,
+            folderId: existing.folderId,
+            order: existing.order,
+            template: existing.template,
+            state: existing.state,
+            priority: existing.priority,
+            createdAt: existing.createdAt.getTime(),
+            updatedAt: existing.updatedAt.getTime(),
+          },
+          scenarios: existingScenarios.map((s) => ({
+            id: s.id,
+            title: s.title,
+            gherkin: s.gherkin,
+            order: s.order,
+            createdAt: s.createdAt.getTime(),
+            updatedAt: s.updatedAt.getTime(),
+          })),
+        });
+
         await db.insert(testCaseAuditLog).values({
           testCaseId: id,
           userId,
@@ -291,6 +391,15 @@ export async function bulkDeleteTestCases(ids: number[]) {
       }
     }
 
+    // Record undo for bulk delete
+    if (undoTestCases.length > 0) {
+      await recordUndo(
+        "bulk_delete_test_cases",
+        `Delete ${undoTestCases.length} test case(s)`,
+        { testCases: undoTestCases }
+      );
+    }
+
     revalidatePath("/cases");
     return { success: true, count: ids.length };
   } catch (error) {
@@ -312,6 +421,11 @@ export async function bulkUpdateTestCaseState(
   const userId = session.user.id;
 
   try {
+    const undoUpdates: Array<{
+      testCaseId: number;
+      previousValues: Record<string, unknown>;
+    }> = [];
+
     for (const id of ids) {
       const existing = await db
         .select()
@@ -328,6 +442,11 @@ export async function bulkUpdateTestCaseState(
         const oldValues = { state: existing.state };
         const newValues = { state };
         const changes = computeDiff(oldValues, newValues);
+
+        undoUpdates.push({
+          testCaseId: id,
+          previousValues: { state: existing.state },
+        });
 
         await db
           .update(testCases)
@@ -356,6 +475,15 @@ export async function bulkUpdateTestCaseState(
       }
     }
 
+    // Record undo for bulk state update
+    if (undoUpdates.length > 0) {
+      await recordUndo(
+        "bulk_update_test_cases",
+        `Change state to "${state}" for ${undoUpdates.length} test case(s)`,
+        { updates: undoUpdates }
+      );
+    }
+
     revalidatePath("/cases");
     return { success: true, count: ids.length };
   } catch (error) {
@@ -377,6 +505,11 @@ export async function bulkMoveTestCasesToFolder(
   const userId = session.user.id;
 
   try {
+    const undoUpdates: Array<{
+      testCaseId: number;
+      previousValues: Record<string, unknown>;
+    }> = [];
+
     for (const id of ids) {
       const existing = await db
         .select()
@@ -393,6 +526,11 @@ export async function bulkMoveTestCasesToFolder(
         const oldValues = { folderId: existing.folderId };
         const newValues = { folderId };
         const changes = computeDiff(oldValues, newValues);
+
+        undoUpdates.push({
+          testCaseId: id,
+          previousValues: { folderId: existing.folderId },
+        });
 
         await db
           .update(testCases)
@@ -421,6 +559,15 @@ export async function bulkMoveTestCasesToFolder(
       }
     }
 
+    // Record undo for bulk move
+    if (undoUpdates.length > 0) {
+      await recordUndo(
+        "bulk_move_test_cases",
+        `Move ${undoUpdates.length} test case(s) to folder`,
+        { updates: undoUpdates }
+      );
+    }
+
     revalidatePath("/cases");
     return { success: true, count: ids.length };
   } catch (error) {
@@ -441,6 +588,25 @@ export async function reorderTestCases(
   const { organizationId } = session.user;
 
   try {
+    // Get current order for undo
+    const previousOrder: Array<{ id: number; order: number }> = [];
+    for (const id of orderedIds) {
+      const existing = await db
+        .select({ id: testCases.id, order: testCases.order })
+        .from(testCases)
+        .where(
+          and(
+            eq(testCases.id, id),
+            eq(testCases.organizationId, organizationId)
+          )
+        )
+        .get();
+      if (existing) {
+        previousOrder.push({ id: existing.id, order: existing.order });
+      }
+    }
+
+    // Apply new order
     for (let i = 0; i < orderedIds.length; i++) {
       await db
         .update(testCases)
@@ -452,6 +618,11 @@ export async function reorderTestCases(
           )
         );
     }
+
+    // Record undo
+    await recordUndo("reorder_test_cases", "Reorder test cases", {
+      previousOrder,
+    });
 
     revalidatePath("/cases");
     return { success: true };

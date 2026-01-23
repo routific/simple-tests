@@ -5,6 +5,7 @@ import { scenarios, testCases } from "@/lib/db/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getSessionWithOrg } from "@/lib/auth";
+import { recordUndo } from "./undo-actions";
 
 interface SaveScenarioInput {
   id?: number;
@@ -40,6 +41,26 @@ export async function saveScenario(input: SaveScenarioInput) {
     }
 
     if (input.id) {
+      // Get existing scenario for undo
+      const existing = await db
+        .select()
+        .from(scenarios)
+        .where(eq(scenarios.id, input.id))
+        .get();
+
+      if (existing) {
+        // Record undo for update
+        await recordUndo("update_scenario", `Update scenario "${input.title}"`, {
+          scenarioId: input.id,
+          testCaseId: input.testCaseId,
+          previousValues: {
+            title: existing.title,
+            gherkin: existing.gherkin,
+            order: existing.order,
+          },
+        });
+      }
+
       // Update existing scenario
       await db
         .update(scenarios)
@@ -74,6 +95,12 @@ export async function saveScenario(input: SaveScenarioInput) {
         })
         .returning({ id: scenarios.id });
 
+      // Record undo for create
+      await recordUndo("create_scenario", `Create scenario "${input.title}"`, {
+        scenarioId: result[0].id,
+        testCaseId: input.testCaseId,
+      });
+
       revalidatePath("/cases");
       return { success: true, id: result[0].id };
     }
@@ -92,6 +119,13 @@ export async function deleteScenario(id: number) {
   const { organizationId } = session.user;
 
   try {
+    // Get full scenario data for undo
+    const scenarioData = await db
+      .select()
+      .from(scenarios)
+      .where(eq(scenarios.id, id))
+      .get();
+
     // Verify scenario belongs to a test case in the organization
     const scenario = await db
       .select({
@@ -106,6 +140,21 @@ export async function deleteScenario(id: number) {
 
     if (!scenario || scenario.organizationId !== organizationId) {
       return { error: "Scenario not found" };
+    }
+
+    // Record undo BEFORE deleting
+    if (scenarioData) {
+      await recordUndo("delete_scenario", `Delete scenario "${scenarioData.title}"`, {
+        testCaseId: scenario.testCaseId,
+        scenario: {
+          id: scenarioData.id,
+          title: scenarioData.title,
+          gherkin: scenarioData.gherkin,
+          order: scenarioData.order,
+          createdAt: scenarioData.createdAt.getTime(),
+          updatedAt: scenarioData.updatedAt.getTime(),
+        },
+      });
     }
 
     await db.delete(scenarios).where(eq(scenarios.id, id));

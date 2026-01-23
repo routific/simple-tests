@@ -1,0 +1,372 @@
+"use server";
+
+import { db } from "@/lib/db";
+import { undoStack, testCases, scenarios } from "@/lib/db/schema";
+import { eq, and, desc } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
+import { getSessionWithOrg } from "@/lib/auth";
+
+// Types for undo data
+interface UndoTestCaseCreate {
+  testCaseId: number;
+}
+
+interface UndoTestCaseUpdate {
+  testCaseId: number;
+  previousValues: {
+    title: string;
+    folderId: number | null;
+    state: string;
+    priority: string;
+    order: number;
+  };
+}
+
+interface UndoTestCaseDelete {
+  testCase: {
+    id: number;
+    legacyId: string | null;
+    title: string;
+    folderId: number | null;
+    order: number;
+    template: string;
+    state: string;
+    priority: string;
+    createdAt: number;
+    updatedAt: number;
+  };
+  scenarios: Array<{
+    id: number;
+    title: string;
+    gherkin: string;
+    order: number;
+    createdAt: number;
+    updatedAt: number;
+  }>;
+}
+
+interface UndoScenarioCreate {
+  scenarioId: number;
+  testCaseId: number;
+}
+
+interface UndoScenarioUpdate {
+  scenarioId: number;
+  testCaseId: number;
+  previousValues: {
+    title: string;
+    gherkin: string;
+    order: number;
+  };
+}
+
+interface UndoScenarioDelete {
+  testCaseId: number;
+  scenario: {
+    id: number;
+    title: string;
+    gherkin: string;
+    order: number;
+    createdAt: number;
+    updatedAt: number;
+  };
+}
+
+interface UndoBulkDelete {
+  testCases: UndoTestCaseDelete[];
+}
+
+interface UndoBulkUpdate {
+  updates: Array<{
+    testCaseId: number;
+    previousValues: Record<string, unknown>;
+  }>;
+}
+
+interface UndoReorder {
+  previousOrder: Array<{ id: number; order: number }>;
+}
+
+type UndoData =
+  | UndoTestCaseCreate
+  | UndoTestCaseUpdate
+  | UndoTestCaseDelete
+  | UndoScenarioCreate
+  | UndoScenarioUpdate
+  | UndoScenarioDelete
+  | UndoBulkDelete
+  | UndoBulkUpdate
+  | UndoReorder;
+
+// Record an undo action
+export async function recordUndo(
+  actionType: string,
+  description: string,
+  undoData: UndoData
+) {
+  const session = await getSessionWithOrg();
+  if (!session) return;
+
+  const { organizationId } = session.user;
+
+  // Keep only the last 50 undo actions per organization
+  const existingCount = await db
+    .select({ id: undoStack.id })
+    .from(undoStack)
+    .where(eq(undoStack.organizationId, organizationId))
+    .orderBy(desc(undoStack.createdAt))
+    .limit(100);
+
+  if (existingCount.length >= 50) {
+    // Delete oldest entries beyond 50
+    const idsToDelete = existingCount.slice(49).map((e) => e.id);
+    for (const id of idsToDelete) {
+      await db.delete(undoStack).where(eq(undoStack.id, id));
+    }
+  }
+
+  await db.insert(undoStack).values({
+    actionType: actionType as typeof undoStack.$inferInsert.actionType,
+    description,
+    undoData: JSON.stringify(undoData),
+    organizationId,
+  });
+}
+
+// Get the last undo action
+export async function getLastUndo(): Promise<{
+  id: number;
+  description: string;
+  actionType: string;
+} | null> {
+  const session = await getSessionWithOrg();
+  if (!session) return null;
+
+  const { organizationId } = session.user;
+
+  const lastUndo = await db
+    .select({
+      id: undoStack.id,
+      description: undoStack.description,
+      actionType: undoStack.actionType,
+    })
+    .from(undoStack)
+    .where(eq(undoStack.organizationId, organizationId))
+    .orderBy(desc(undoStack.createdAt))
+    .limit(1);
+
+  return lastUndo[0] || null;
+}
+
+// Execute undo
+export async function executeUndo(): Promise<{ success?: boolean; error?: string; description?: string }> {
+  const session = await getSessionWithOrg();
+  if (!session) {
+    return { error: "Unauthorized" };
+  }
+
+  const { organizationId } = session.user;
+
+  try {
+    // Get the last undo action
+    const lastUndo = await db
+      .select()
+      .from(undoStack)
+      .where(eq(undoStack.organizationId, organizationId))
+      .orderBy(desc(undoStack.createdAt))
+      .limit(1);
+
+    if (lastUndo.length === 0) {
+      return { error: "Nothing to undo" };
+    }
+
+    const undoEntry = lastUndo[0];
+    const undoData = JSON.parse(undoEntry.undoData);
+
+    // Execute the undo based on action type
+    switch (undoEntry.actionType) {
+      case "create_test_case": {
+        // Undo create = delete
+        const data = undoData as UndoTestCaseCreate;
+        await db.delete(scenarios).where(eq(scenarios.testCaseId, data.testCaseId));
+        await db.delete(testCases).where(eq(testCases.id, data.testCaseId));
+        break;
+      }
+
+      case "update_test_case": {
+        // Undo update = restore previous values
+        const data = undoData as UndoTestCaseUpdate;
+        await db
+          .update(testCases)
+          .set({
+            title: data.previousValues.title,
+            folderId: data.previousValues.folderId,
+            state: data.previousValues.state as "active" | "draft" | "retired" | "rejected",
+            priority: data.previousValues.priority as "normal" | "high" | "critical",
+            order: data.previousValues.order,
+          })
+          .where(eq(testCases.id, data.testCaseId));
+        break;
+      }
+
+      case "delete_test_case": {
+        // Undo delete = recreate test case and scenarios
+        const data = undoData as UndoTestCaseDelete;
+
+        // Recreate test case
+        await db.insert(testCases).values({
+          id: data.testCase.id,
+          legacyId: data.testCase.legacyId,
+          title: data.testCase.title,
+          folderId: data.testCase.folderId,
+          order: data.testCase.order,
+          template: data.testCase.template as "bdd_feature" | "steps" | "text",
+          state: data.testCase.state as "active" | "draft" | "retired" | "rejected",
+          priority: data.testCase.priority as "normal" | "high" | "critical",
+          organizationId,
+          createdAt: new Date(data.testCase.createdAt),
+          updatedAt: new Date(data.testCase.updatedAt),
+        });
+
+        // Recreate scenarios
+        for (const scenario of data.scenarios) {
+          await db.insert(scenarios).values({
+            id: scenario.id,
+            testCaseId: data.testCase.id,
+            title: scenario.title,
+            gherkin: scenario.gherkin,
+            order: scenario.order,
+            createdAt: new Date(scenario.createdAt),
+            updatedAt: new Date(scenario.updatedAt),
+          });
+        }
+        break;
+      }
+
+      case "create_scenario": {
+        // Undo create = delete
+        const data = undoData as UndoScenarioCreate;
+        await db.delete(scenarios).where(eq(scenarios.id, data.scenarioId));
+        break;
+      }
+
+      case "update_scenario": {
+        // Undo update = restore previous values
+        const data = undoData as UndoScenarioUpdate;
+        await db
+          .update(scenarios)
+          .set({
+            title: data.previousValues.title,
+            gherkin: data.previousValues.gherkin,
+            order: data.previousValues.order,
+          })
+          .where(eq(scenarios.id, data.scenarioId));
+        break;
+      }
+
+      case "delete_scenario": {
+        // Undo delete = recreate scenario
+        const data = undoData as UndoScenarioDelete;
+        await db.insert(scenarios).values({
+          id: data.scenario.id,
+          testCaseId: data.testCaseId,
+          title: data.scenario.title,
+          gherkin: data.scenario.gherkin,
+          order: data.scenario.order,
+          createdAt: new Date(data.scenario.createdAt),
+          updatedAt: new Date(data.scenario.updatedAt),
+        });
+        break;
+      }
+
+      case "bulk_delete_test_cases": {
+        // Undo bulk delete = recreate all test cases and scenarios
+        const data = undoData as UndoBulkDelete;
+        for (const item of data.testCases) {
+          await db.insert(testCases).values({
+            id: item.testCase.id,
+            legacyId: item.testCase.legacyId,
+            title: item.testCase.title,
+            folderId: item.testCase.folderId,
+            order: item.testCase.order,
+            template: item.testCase.template as "bdd_feature" | "steps" | "text",
+            state: item.testCase.state as "active" | "draft" | "retired" | "rejected",
+            priority: item.testCase.priority as "normal" | "high" | "critical",
+            organizationId,
+            createdAt: new Date(item.testCase.createdAt),
+            updatedAt: new Date(item.testCase.updatedAt),
+          });
+
+          for (const scenario of item.scenarios) {
+            await db.insert(scenarios).values({
+              id: scenario.id,
+              testCaseId: item.testCase.id,
+              title: scenario.title,
+              gherkin: scenario.gherkin,
+              order: scenario.order,
+              createdAt: new Date(scenario.createdAt),
+              updatedAt: new Date(scenario.updatedAt),
+            });
+          }
+        }
+        break;
+      }
+
+      case "bulk_update_test_cases": {
+        // Undo bulk update = restore previous values
+        const data = undoData as UndoBulkUpdate;
+        for (const update of data.updates) {
+          await db
+            .update(testCases)
+            .set(update.previousValues as Record<string, unknown>)
+            .where(eq(testCases.id, update.testCaseId));
+        }
+        break;
+      }
+
+      case "reorder_test_cases": {
+        // Undo reorder = restore previous order
+        const data = undoData as UndoReorder;
+        for (const item of data.previousOrder) {
+          await db
+            .update(testCases)
+            .set({ order: item.order })
+            .where(eq(testCases.id, item.id));
+        }
+        break;
+      }
+
+      default:
+        return { error: `Unknown action type: ${undoEntry.actionType}` };
+    }
+
+    // Delete the undo entry
+    await db.delete(undoStack).where(eq(undoStack.id, undoEntry.id));
+
+    revalidatePath("/cases");
+    revalidatePath("/");
+
+    return { success: true, description: undoEntry.description };
+  } catch (error) {
+    console.error("Failed to execute undo:", error);
+    return { error: "Failed to undo action" };
+  }
+}
+
+// Clear all undo history for the organization
+export async function clearUndoHistory(): Promise<{ success?: boolean; error?: string }> {
+  const session = await getSessionWithOrg();
+  if (!session) {
+    return { error: "Unauthorized" };
+  }
+
+  const { organizationId } = session.user;
+
+  try {
+    await db.delete(undoStack).where(eq(undoStack.organizationId, organizationId));
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to clear undo history:", error);
+    return { error: "Failed to clear undo history" };
+  }
+}
