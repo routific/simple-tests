@@ -621,7 +621,7 @@ function TestCaseListContent({
   const [showStateModal, setShowStateModal] = useState(false);
 
   const handleBulkDelete = () => {
-    if (!confirm(`Delete ${selectedCases.size} test case(s)? This cannot be undone.`)) {
+    if (!confirm(`Delete ${selectedCases.size} test case(s)? You can undo this action.`)) {
       return;
     }
 
@@ -733,47 +733,52 @@ function TestCaseListContent({
     <div>
       {/* Bulk Action Toolbar - floating pill at bottom when items selected */}
       {selectedCases.size > 0 && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-foreground dark:bg-gray-800 text-background rounded-full shadow-lg flex items-center gap-3">
-          <span className="text-sm font-medium">
-            {selectedCases.size} selected
-          </span>
-          <div className="w-px h-4 bg-background/20" />
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => {
-                const ids = Array.from(selectedCases).join(",");
-                window.location.href = `/runs/new?cases=${ids}`;
-              }}
-              className="px-3 py-1 text-sm font-medium bg-brand-500 text-white rounded-full hover:bg-brand-600 transition-colors"
-            >
-              Create Run
-            </button>
-            <button
-              onClick={() => setShowStateModal(true)}
-              disabled={isPending}
-              className="px-3 py-1 text-sm text-background/80 hover:text-background transition-colors disabled:opacity-50"
-            >
-              State
-            </button>
-            <button
-              onClick={() => setShowMoveModal(true)}
-              disabled={isPending}
-              className="px-3 py-1 text-sm text-background/80 hover:text-background transition-colors disabled:opacity-50"
-            >
-              Move
-            </button>
-            <button
-              onClick={handleBulkDelete}
-              disabled={isPending}
-              className="px-3 py-1 text-sm text-red-400 hover:text-red-300 transition-colors disabled:opacity-50"
-            >
-              Delete
-            </button>
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 px-2 py-1.5 bg-white dark:bg-zinc-900 border border-border rounded-xl shadow-xl flex items-center gap-1">
+          <div className="px-3 py-1.5 flex items-center gap-2">
+            <div className="w-5 h-5 rounded bg-brand-500 text-white flex items-center justify-center text-xs font-bold">
+              {selectedCases.size}
+            </div>
+            <span className="text-sm font-medium text-foreground">selected</span>
           </div>
-          <div className="w-px h-4 bg-background/20" />
+          <div className="w-px h-6 bg-border" />
+          <button
+            onClick={() => {
+              const ids = Array.from(selectedCases).join(",");
+              window.location.href = `/runs/new?cases=${ids}`;
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-colors"
+          >
+            <PlayIcon className="w-4 h-4" />
+            Run
+          </button>
+          <button
+            onClick={() => setShowStateModal(true)}
+            disabled={isPending}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-foreground rounded-lg hover:bg-muted transition-colors disabled:opacity-50"
+          >
+            <StateIcon className="w-4 h-4" />
+            State
+          </button>
+          <button
+            onClick={() => setShowMoveModal(true)}
+            disabled={isPending}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-foreground rounded-lg hover:bg-muted transition-colors disabled:opacity-50"
+          >
+            <MoveIcon className="w-4 h-4" />
+            Move
+          </button>
+          <button
+            onClick={handleBulkDelete}
+            disabled={isPending}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-destructive rounded-lg hover:bg-destructive/10 transition-colors disabled:opacity-50"
+          >
+            <TrashIcon className="w-4 h-4" />
+            Delete
+          </button>
+          <div className="w-px h-6 bg-border" />
           <button
             onClick={onClearSelection}
-            className="text-background/60 hover:text-background transition-colors"
+            className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
             title="Clear selection"
           >
             <CloseIcon className="w-4 h-4" />
@@ -1812,6 +1817,61 @@ function CloseIcon({ className }: { className?: string }) {
         strokeLinecap="round"
         strokeLinejoin="round"
         d="M6 18L18 6M6 6l12 12"
+      />
+    </svg>
+  );
+}
+
+function StateIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={1.5}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z"
+      />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" />
+    </svg>
+  );
+}
+
+function MoveIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={1.5}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M3.75 9.776c.112-.017.227-.026.344-.026h15.812c.117 0 .232.009.344.026m-16.5 0a2.25 2.25 0 00-1.883 2.542l.857 6a2.25 2.25 0 002.227 1.932H19.05a2.25 2.25 0 002.227-1.932l.857-6a2.25 2.25 0 00-1.883-2.542m-16.5 0V6A2.25 2.25 0 016 3.75h3.879a1.5 1.5 0 011.06.44l2.122 2.12a1.5 1.5 0 001.06.44H18A2.25 2.25 0 0120.25 9v.776"
+      />
+    </svg>
+  );
+}
+
+function TrashIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={1.5}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"
       />
     </svg>
   );

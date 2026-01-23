@@ -189,13 +189,58 @@ export async function getLastRedo(): Promise<{
   return lastRedo[0] || null;
 }
 
-// Helper to get reverse action type
-function getReverseActionType(actionType: string): string {
-  // For create, the reverse is delete; for delete, the reverse is create
-  // For update, it stays update (just different values)
-  if (actionType.includes("create")) return actionType.replace("create", "delete");
-  if (actionType.includes("delete")) return actionType.replace("delete", "create");
-  return actionType;
+// Get the undo stack for display
+export async function getUndoStack(): Promise<Array<{
+  id: number;
+  description: string;
+  actionType: string;
+  createdAt: Date;
+}>> {
+  const session = await getSessionWithOrg();
+  if (!session) return [];
+
+  const { organizationId } = session.user;
+
+  const stack = await db
+    .select({
+      id: undoStack.id,
+      description: undoStack.description,
+      actionType: undoStack.actionType,
+      createdAt: undoStack.createdAt,
+    })
+    .from(undoStack)
+    .where(and(eq(undoStack.organizationId, organizationId), eq(undoStack.isRedo, false)))
+    .orderBy(desc(undoStack.createdAt))
+    .limit(10);
+
+  return stack;
+}
+
+// Get the redo stack for display
+export async function getRedoStack(): Promise<Array<{
+  id: number;
+  description: string;
+  actionType: string;
+  createdAt: Date;
+}>> {
+  const session = await getSessionWithOrg();
+  if (!session) return [];
+
+  const { organizationId } = session.user;
+
+  const stack = await db
+    .select({
+      id: undoStack.id,
+      description: undoStack.description,
+      actionType: undoStack.actionType,
+      createdAt: undoStack.createdAt,
+    })
+    .from(undoStack)
+    .where(and(eq(undoStack.organizationId, organizationId), eq(undoStack.isRedo, true)))
+    .orderBy(desc(undoStack.createdAt))
+    .limit(10);
+
+  return stack;
 }
 
 // Execute undo
@@ -467,6 +512,31 @@ export async function executeUndo(): Promise<{ success?: boolean; error?: string
         break;
       }
 
+      case "bulk_move_test_cases": {
+        // Undo bulk move = restore previous folder values (same logic as bulk_update)
+        const data = undoData as UndoBulkUpdate;
+        const redoUpdates: Array<{ testCaseId: number; previousValues: Record<string, unknown> }> = [];
+
+        for (const update of data.updates) {
+          const current = await db.select().from(testCases).where(eq(testCases.id, update.testCaseId)).get();
+          if (current) {
+            const currentValues: Record<string, unknown> = {};
+            for (const key of Object.keys(update.previousValues)) {
+              currentValues[key] = (current as Record<string, unknown>)[key];
+            }
+            redoUpdates.push({ testCaseId: update.testCaseId, previousValues: currentValues });
+          }
+
+          await db
+            .update(testCases)
+            .set(update.previousValues as Record<string, unknown>)
+            .where(eq(testCases.id, update.testCaseId));
+        }
+
+        redoData = { updates: redoUpdates } as UndoBulkUpdate;
+        break;
+      }
+
       case "reorder_test_cases": {
         // Undo reorder = restore previous order
         const data = undoData as UndoReorder;
@@ -493,10 +563,10 @@ export async function executeUndo(): Promise<{ success?: boolean; error?: string
         return { error: `Unknown action type: ${undoEntry.actionType}` };
     }
 
-    // Move the undo entry to redo stack
+    // Move the undo entry to redo stack (keep same action type - the data tells us what to do)
     if (redoData) {
       await db.insert(undoStack).values({
-        actionType: getReverseActionType(undoEntry.actionType) as typeof undoStack.$inferInsert.actionType,
+        actionType: undoEntry.actionType,
         description: undoEntry.description,
         undoData: JSON.stringify(redoData),
         isRedo: true,
@@ -710,6 +780,31 @@ export async function executeRedo(): Promise<{ success?: boolean; error?: string
         break;
       }
 
+      case "bulk_move_test_cases": {
+        // Redo bulk move (same logic as bulk_update)
+        const data = redoData as UndoBulkUpdate;
+        const undoUpdates: Array<{ testCaseId: number; previousValues: Record<string, unknown> }> = [];
+
+        for (const update of data.updates) {
+          const current = await db.select().from(testCases).where(eq(testCases.id, update.testCaseId)).get();
+          if (current) {
+            const currentValues: Record<string, unknown> = {};
+            for (const key of Object.keys(update.previousValues)) {
+              currentValues[key] = (current as Record<string, unknown>)[key];
+            }
+            undoUpdates.push({ testCaseId: update.testCaseId, previousValues: currentValues });
+          }
+
+          await db
+            .update(testCases)
+            .set(update.previousValues as Record<string, unknown>)
+            .where(eq(testCases.id, update.testCaseId));
+        }
+
+        undoData = { updates: undoUpdates } as UndoBulkUpdate;
+        break;
+      }
+
       case "reorder_test_cases": {
         // Redo reorder
         const data = redoData as UndoReorder;
@@ -735,10 +830,10 @@ export async function executeRedo(): Promise<{ success?: boolean; error?: string
         return { error: `Unknown action type: ${redoEntry.actionType}` };
     }
 
-    // Move back to undo stack
+    // Move back to undo stack (keep same action type - the data tells us what to do)
     if (undoData) {
       await db.insert(undoStack).values({
-        actionType: getReverseActionType(redoEntry.actionType) as typeof undoStack.$inferInsert.actionType,
+        actionType: redoEntry.actionType,
         description: redoEntry.description,
         undoData: JSON.stringify(undoData),
         isRedo: false,
