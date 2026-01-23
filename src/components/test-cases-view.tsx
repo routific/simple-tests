@@ -320,6 +320,112 @@ export function TestCasesView({
 }
 
 // Test Case List Content
+const STATE_OPTIONS = ["active", "draft", "retired", "rejected"] as const;
+type TestCaseState = (typeof STATE_OPTIONS)[number];
+
+function getStateBadgeVariant(state: string) {
+  switch (state) {
+    case "active":
+      return "success";
+    case "draft":
+      return "warning";
+    case "retired":
+      return "secondary";
+    case "rejected":
+      return "destructive";
+    default:
+      return "secondary";
+  }
+}
+
+// Status Dropdown Component
+function StatusDropdown({
+  testCaseId,
+  currentState,
+  onStateChange,
+}: {
+  testCaseId: number;
+  currentState: string;
+  onStateChange: () => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [isOpen]);
+
+  const handleStateSelect = (state: TestCaseState) => {
+    if (state === currentState) {
+      setIsOpen(false);
+      return;
+    }
+    startTransition(async () => {
+      await bulkUpdateTestCaseState([testCaseId], state);
+      setIsOpen(false);
+      onStateChange();
+    });
+  };
+
+  return (
+    <div ref={dropdownRef} className="relative">
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsOpen(!isOpen);
+        }}
+        disabled={isPending}
+        className="cursor-pointer"
+      >
+        <Badge
+          variant={getStateBadgeVariant(currentState)}
+          className={cn(
+            "transition-all",
+            isPending && "opacity-50",
+            !isPending && "hover:ring-2 hover:ring-offset-1 hover:ring-brand-500/50"
+          )}
+        >
+          {isPending ? "..." : currentState}
+        </Badge>
+      </button>
+      {isOpen && (
+        <div className="absolute right-0 top-full mt-1 z-50 bg-popover border border-border rounded-lg shadow-lg py-1 min-w-[120px]">
+          {STATE_OPTIONS.map((state) => (
+            <button
+              key={state}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleStateSelect(state);
+              }}
+              className={cn(
+                "w-full px-3 py-1.5 text-left text-sm flex items-center gap-2 hover:bg-muted transition-colors",
+                state === currentState && "bg-muted/50"
+              )}
+            >
+              <Badge variant={getStateBadgeVariant(state)} className="text-xs">
+                {state}
+              </Badge>
+              {state === currentState && (
+                <CheckIcon className="w-3 h-3 text-muted-foreground ml-auto" />
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TestCaseListContent({
   cases,
   folders,
@@ -356,21 +462,6 @@ function TestCaseListContent({
   const [draggedId, setDraggedId] = useState<number | null>(null);
   const [dragOverId, setDragOverId] = useState<number | null>(null);
   const [showStateModal, setShowStateModal] = useState(false);
-
-  const getStateBadgeVariant = (state: string) => {
-    switch (state) {
-      case "active":
-        return "success";
-      case "draft":
-        return "warning";
-      case "retired":
-        return "secondary";
-      case "rejected":
-        return "destructive";
-      default:
-        return "secondary";
-    }
-  };
 
   const handleBulkDelete = () => {
     if (!confirm(`Delete ${selectedCases.size} test case(s)? This cannot be undone.`)) {
@@ -674,9 +765,11 @@ function TestCaseListContent({
                     <span className="truncate">{formatBreadcrumb(buildFolderBreadcrumb(testCase.folderId, folders))}</span>
                   </span>
                 )}
-                <Badge variant={getStateBadgeVariant(testCase.state)}>
-                  {testCase.state}
-                </Badge>
+                <StatusDropdown
+                  testCaseId={testCase.id}
+                  currentState={testCase.state}
+                  onStateChange={onSelectionAction}
+                />
                 <ChevronRightIcon className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
             </div>
@@ -1299,6 +1392,24 @@ function LoadingIcon({ className }: { className?: string }) {
         className="opacity-75"
         fill="currentColor"
         d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+      />
+    </svg>
+  );
+}
+
+function CheckIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M4.5 12.75l6 6 9-13.5"
       />
     </svg>
   );
