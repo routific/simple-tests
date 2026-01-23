@@ -80,8 +80,11 @@ export function TestCaseEditor({
           // Create a default scenario for new test case
           await saveScenario({
             testCaseId: result.id,
-            title: "Default Scenario",
-            gherkin: "",
+            title: "Describe the test scenario here",
+            gherkin: `Scenario: Describe the test scenario here
+  Given some initial context or precondition
+  When an action is performed
+  Then the expected outcome should occur`,
             order: 0,
           });
           router.push(`/cases/${result.id}`);

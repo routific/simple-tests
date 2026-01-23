@@ -76,7 +76,10 @@ export function ScenarioAccordion({
     const newScenario: Scenario = {
       id: tempId,
       title: "",
-      gherkin: "Scenario: New Scenario\n",
+      gherkin: `Scenario: Describe the test scenario here
+  Given some initial context or precondition
+  When an action is performed
+  Then the expected outcome should occur`,
       order: scenarios.length,
     };
     const newScenarios = [...scenarios, newScenario];

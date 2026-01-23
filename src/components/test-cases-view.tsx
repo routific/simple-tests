@@ -17,7 +17,7 @@ import {
   reorderTestCases,
 } from "@/app/cases/actions";
 import { exportTestCases, importTestCases, ExportData } from "@/app/cases/export-actions";
-import { getScenarios } from "@/app/cases/scenario-actions";
+import { getScenarios, saveScenario } from "@/app/cases/scenario-actions";
 import { cn } from "@/lib/utils";
 import { buildFolderBreadcrumb, formatBreadcrumb } from "@/lib/folders";
 import { FolderPicker } from "@/components/folder-picker";
@@ -1079,6 +1079,17 @@ function NewCaseModal({
         if (result.error) {
           setError(result.error);
         } else if (result.id) {
+          // Create a default scenario with BDD template
+          await saveScenario({
+            testCaseId: result.id,
+            title: "Describe the test scenario here",
+            gherkin: `Scenario: Describe the test scenario here
+  Given some initial context or precondition
+  When an action is performed
+  Then the expected outcome should occur`,
+            order: 0,
+          });
+
           // Reset form and close
           setTitle("");
           setState("active");
