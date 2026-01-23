@@ -164,7 +164,7 @@ function HighlightedLine({ line, lineNumber }: { line: string; lineNumber: numbe
       <span className="w-11 shrink-0 text-right pr-4 text-muted-foreground/50 select-none text-xs leading-6">
         {lineNumber}
       </span>
-      <span className="flex-1 leading-6">
+      <span className="flex-1 min-w-0 leading-6 break-words">
         {tokens.length === 0 ? (
           <span>&nbsp;</span>
         ) : (
@@ -208,7 +208,7 @@ export function GherkinEditor({ value, onChange, readOnly }: Props) {
         className="absolute inset-0 overflow-hidden pointer-events-none font-mono text-sm p-3"
         aria-hidden="true"
       >
-        <div className="whitespace-pre">
+        <div className="whitespace-pre-wrap break-words">
           {lines.map((line, i) => (
             <HighlightedLine key={i} line={line} lineNumber={i + 1} />
           ))}

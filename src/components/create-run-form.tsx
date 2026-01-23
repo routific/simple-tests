@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { buildFolderBreadcrumb, formatBreadcrumb } from "@/lib/folders";
 
 interface Scenario {
   id: number;
@@ -89,6 +90,19 @@ export function CreateRunForm({ folders, cases, caseCounts, initialSelectedCaseI
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState("");
   const [stateFilter, setStateFilter] = useState<string>("");
+
+  // Flatten folder tree for breadcrumb lookups
+  const flatFolders = useMemo(() => {
+    const result: { id: number; name: string; parentId: number | null }[] = [];
+    function flatten(nodes: Folder[]) {
+      for (const node of nodes) {
+        result.push({ id: node.id, name: node.name, parentId: node.parentId });
+        if (node.children) flatten(node.children);
+      }
+    }
+    flatten(folders);
+    return result;
+  }, [folders]);
 
   // Filter cases based on search and state
   const filteredCases = useMemo(() => {
@@ -579,10 +593,12 @@ export function CreateRunForm({ folders, cases, caseCounts, initialSelectedCaseI
                               </div>
                               <div className="grid grid-cols-[160px_70px_40px] gap-2 items-center ml-4 flex-shrink-0">
                                 <div className="flex justify-end">
-                                  {testCase.folderName ? (
+                                  {testCase.folderId ? (
                                     <span className="text-xs text-muted-foreground flex items-center gap-1.5 max-w-full truncate">
                                       <FolderIcon className="w-3 h-3 flex-shrink-0" />
-                                      <span className="truncate">{testCase.folderName}</span>
+                                      <span className="truncate">
+                                        {formatBreadcrumb(buildFolderBreadcrumb(testCase.folderId, flatFolders))}
+                                      </span>
                                     </span>
                                   ) : (
                                     <span className="text-xs text-muted-foreground">No folder</span>
