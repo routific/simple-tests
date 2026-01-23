@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import type { FolderWithChildren } from "@/lib/folders";
 import {
@@ -105,6 +105,21 @@ export function FolderTree({
   caseCounts,
 }: FolderTreeProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Build folder URL preserving current filters (state)
+  const buildFolderUrl = useCallback((folderId?: number) => {
+    const params = new URLSearchParams();
+    if (folderId) {
+      params.set("folder", String(folderId));
+    }
+    const stateFilter = searchParams.get("state");
+    if (stateFilter) {
+      params.set("state", stateFilter);
+    }
+    const queryString = params.toString();
+    return queryString ? `/cases?${queryString}` : "/cases";
+  }, [searchParams]);
 
   // Calculate which folders should be expanded (ancestors of selected)
   const expandedByDefault = useMemo(() => {
@@ -366,7 +381,7 @@ export function FolderTree({
         onDrop={(e) => handleDrop(e, "root")}
       >
         <Link
-          href="/cases"
+          href={buildFolderUrl()}
           className={cn(
             "flex items-center gap-2 px-3 py-2 rounded-lg mx-2 transition-colors",
             selectedFolderId === null
@@ -420,6 +435,7 @@ export function FolderTree({
             onNewFolderNameChange={setNewFolderName}
             onNewFolderSubmit={handleNewFolderSubmit}
             onNewFolderCancel={() => setNewFolderParentId(null)}
+            buildFolderUrl={buildFolderUrl}
           />
         ))}
       </div>
@@ -470,6 +486,7 @@ function FolderItem({
   onNewFolderNameChange,
   onNewFolderSubmit,
   onNewFolderCancel,
+  buildFolderUrl,
 }: {
   folder: FolderWithChildren;
   selectedFolderId?: number | null;
@@ -495,6 +512,7 @@ function FolderItem({
   onNewFolderNameChange: (value: string) => void;
   onNewFolderSubmit: () => void;
   onNewFolderCancel: () => void;
+  buildFolderUrl: (folderId?: number) => string;
 }) {
   const isOpen = expandedFolders.has(folder.id);
   const hasChildren = folder.children.length > 0;
@@ -608,7 +626,7 @@ function FolderItem({
           />
         ) : (
           <Link
-            href={`/cases?folder=${folder.id}`}
+            href={buildFolderUrl(folder.id)}
             className="flex-1 truncate px-1"
             onClick={(e) => e.stopPropagation()}
           >
@@ -652,6 +670,7 @@ function FolderItem({
               onNewFolderNameChange={onNewFolderNameChange}
               onNewFolderSubmit={onNewFolderSubmit}
               onNewFolderCancel={onNewFolderCancel}
+              buildFolderUrl={buildFolderUrl}
             />
           ))}
           {/* New folder input as child */}
