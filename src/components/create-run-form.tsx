@@ -558,7 +558,7 @@ export function CreateRunForm({ folders, cases, caseCounts, initialSelectedCaseI
                                 selectedCases.has(testCase.id) && "bg-brand-50 dark:bg-brand-950/50"
                               )}
                             >
-                              <div className="flex items-center gap-3 min-w-0 flex-1">
+                              <div className="flex items-center gap-1 min-w-0 flex-1">
                                 <div
                                   className="p-2 -m-2 cursor-pointer flex-shrink-0"
                                   onClick={(e) => {
@@ -577,23 +577,29 @@ export function CreateRunForm({ folders, cases, caseCounts, initialSelectedCaseI
                                   {testCase.title}
                                 </span>
                               </div>
-                              <div className="flex items-center gap-3 ml-4 flex-shrink-0">
+                              <div className="grid grid-cols-[160px_70px_40px] gap-2 items-center ml-4 flex-shrink-0">
+                                <div className="flex justify-end">
+                                  {testCase.folderName ? (
+                                    <span className="text-xs text-muted-foreground flex items-center gap-1.5 max-w-full truncate">
+                                      <FolderIcon className="w-3 h-3 flex-shrink-0" />
+                                      <span className="truncate">{testCase.folderName}</span>
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground">No folder</span>
+                                  )}
+                                </div>
+                                <div className="flex justify-end">
+                                  <Badge variant={getStateBadgeVariant(testCase.state)}>
+                                    {testCase.state}
+                                  </Badge>
+                                </div>
                                 <span
-                                  className="text-xs text-muted-foreground flex items-center gap-1"
+                                  className="text-xs text-muted-foreground flex items-center gap-1 justify-end tabular-nums"
                                   title={`${testCase.scenarios.length} scenario${testCase.scenarios.length !== 1 ? 's' : ''}`}
                                 >
                                   <ScenarioIcon className="w-3 h-3" />
                                   {testCase.scenarios.length}
                                 </span>
-                                {testCase.folderName && (
-                                  <span className="text-xs text-muted-foreground flex items-center gap-1 max-w-[150px] truncate">
-                                    <FolderIcon className="w-3 h-3 flex-shrink-0" />
-                                    {testCase.folderName}
-                                  </span>
-                                )}
-                                <Badge variant={getStateBadgeVariant(testCase.state)}>
-                                  {testCase.state}
-                                </Badge>
                               </div>
                             </div>
                           ))}

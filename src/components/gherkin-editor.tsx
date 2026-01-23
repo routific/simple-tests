@@ -161,7 +161,7 @@ function HighlightedLine({ line, lineNumber }: { line: string; lineNumber: numbe
 
   return (
     <div className="flex">
-      <span className="w-10 shrink-0 text-right pr-4 text-muted-foreground/50 select-none text-xs leading-6">
+      <span className="w-11 shrink-0 text-right pr-4 text-muted-foreground/50 select-none text-xs leading-6">
         {lineNumber}
       </span>
       <span className="flex-1 leading-6">
@@ -228,7 +228,7 @@ Scenario: Successful login with valid credentials
   When the user enters valid credentials
   And clicks the login button
   Then the user should be redirected to the dashboard`}
-        className="relative w-full h-96 font-mono text-sm p-3 pl-[3.5rem] resize-none bg-transparent text-transparent caret-white selection:bg-blue-500/30 focus:outline-none focus:ring-2 focus:ring-brand-500/30 placeholder:text-gray-600"
+        className="relative w-full h-96 font-mono text-sm p-3 pl-[3.5rem] leading-6 resize-none bg-transparent text-transparent caret-white selection:bg-blue-500/30 focus:outline-none focus:ring-2 focus:ring-brand-500/30 placeholder:text-gray-600"
         spellCheck={false}
         style={{ caretColor: "white" }}
       />
