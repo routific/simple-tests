@@ -1,9 +1,9 @@
 import { db } from "@/lib/db";
 import { testCases, folders, users, scenarios } from "@/lib/db/schema";
-import { eq, like, and, count } from "drizzle-orm";
+import { eq, like, and, count, inArray } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { FolderPanel } from "@/components/folder-panel";
-import { buildFolderTree } from "@/lib/folders";
+import { buildFolderTree, getDescendantFolderIds } from "@/lib/folders";
 import { TestCasesView } from "@/components/test-cases-view";
 import { getSessionWithOrg } from "@/lib/auth";
 
@@ -64,10 +64,16 @@ export default async function CasesPage({ searchParams }: Props) {
 
   const folderTree = buildFolderTree(foldersWithCounts);
 
+  // Get all descendant folder IDs when a folder is selected
+  const selectedFolderIds = folderId
+    ? getDescendantFolderIds(folderId, allFolders)
+    : null;
+
   // Build query conditions - always filter by organization
   const conditions = [eq(testCases.organizationId, organizationId)];
-  if (folderId) {
-    conditions.push(eq(testCases.folderId, folderId));
+  if (selectedFolderIds) {
+    // Include test cases from the selected folder and all its descendants
+    conditions.push(inArray(testCases.folderId, selectedFolderIds));
   }
   if (search) {
     conditions.push(like(testCases.title, `%${search}%`));
@@ -155,6 +161,7 @@ export default async function CasesPage({ searchParams }: Props) {
           totalCount={totalCount}
           hasMore={cases.length < totalCount}
           currentOffset={offset}
+          selectedFolderIds={selectedFolderIds}
         />
       </div>
     </div>

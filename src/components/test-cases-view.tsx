@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect, useRef } from "react";
+import { useState, useTransition, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/modal";
 import { SlidePanel } from "@/components/ui/slide-panel";
@@ -57,6 +57,8 @@ interface TestCasesViewProps {
   totalCount: number;
   hasMore: boolean;
   currentOffset: number;
+  /** When viewing a folder, this contains all descendant folder IDs (including the selected one) */
+  selectedFolderIds?: number[] | null;
 }
 
 export function TestCasesView({
@@ -69,6 +71,7 @@ export function TestCasesView({
   totalCount,
   hasMore,
   currentOffset,
+  selectedFolderIds,
 }: TestCasesViewProps) {
   const router = useRouter();
   const [isNewCaseModalOpen, setIsNewCaseModalOpen] = useState(false);
@@ -270,6 +273,7 @@ export function TestCasesView({
         selectedCases={selectedCases}
         hasMore={hasMore}
         currentOffset={currentOffset}
+        selectedFolderIds={selectedFolderIds}
         onCaseClick={handleCaseClick}
         onToggleSelection={toggleCaseSelection}
         onSelectAll={selectAllCases}
@@ -467,6 +471,7 @@ function TestCaseListContent({
   selectedCases,
   hasMore,
   currentOffset,
+  selectedFolderIds,
   onCaseClick,
   onToggleSelection,
   onSelectAll,
@@ -482,6 +487,7 @@ function TestCaseListContent({
   selectedCases: Set<number>;
   hasMore: boolean;
   currentOffset: number;
+  selectedFolderIds?: number[] | null;
   onCaseClick: (testCase: TestCase) => void;
   onToggleSelection: (id: number, e: React.MouseEvent) => void;
   onSelectAll: () => void;
@@ -756,98 +762,23 @@ function TestCaseListContent({
           </p>
         </div>
       ) : (
-        <div className="divide-y divide-border">
-          {cases.map((testCase, index) => (
-            <div key={testCase.id} className="relative">
-              {/* Drop indicator line - before */}
-              {dropIndicator?.id === testCase.id && dropIndicator.position === "before" && (
-                <div className="absolute top-0 left-0 right-0 h-0.5 bg-brand-500 z-10">
-                  <div className="absolute -left-0.5 -top-1 w-2.5 h-2.5 rounded-full bg-brand-500" />
-                </div>
-              )}
-              <div
-                draggable
-                onDragStart={(e) => {
-                  e.dataTransfer.effectAllowed = "move";
-                  e.dataTransfer.setData(
-                    "text/plain",
-                    JSON.stringify({ type: "testcase", id: testCase.id, name: testCase.title })
-                  );
-                  // Set custom drag data for folder tree to read
-                  (window as unknown as { __draggedTestCase?: { id: number; name: string } }).__draggedTestCase = {
-                    id: testCase.id,
-                    name: testCase.title,
-                  };
-                  handleDragStart(testCase.id);
-                }}
-                onDragEnd={() => {
-                  delete (window as unknown as { __draggedTestCase?: { id: number; name: string } }).__draggedTestCase;
-                  handleDragEnd();
-                }}
-                onDragOver={(e) => handleDragOver(e, testCase.id)}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                onClick={() => onCaseClick(testCase)}
-                className={cn(
-                  "w-full flex items-center justify-between py-2.5 px-4 hover:bg-muted/50 transition-colors group text-left",
-                  "cursor-grab active:cursor-grabbing",
-                  selectedCases.has(testCase.id) && "bg-brand-50 dark:bg-brand-950/50",
-                  draggedId === testCase.id && "opacity-50"
-                )}
-              >
-              <div className="flex items-center gap-1 min-w-0 flex-1">
-                <div
-                  className="p-2 -m-2 cursor-pointer flex-shrink-0"
-                  onClick={(e) => onToggleSelection(testCase.id, e)}
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedCases.has(testCase.id)}
-                    onChange={() => {}} // Controlled by parent onClick
-                    className="rounded border-input text-brand-600 focus:ring-brand-500 dark:border-muted-foreground/30 dark:bg-muted/50 pointer-events-none"
-                  />
-                </div>
-                <DragHandleIcon className="w-4 h-4 text-muted-foreground/50 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
-                <span className="font-medium text-foreground truncate group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
-                  {testCase.title}
-                </span>
-              </div>
-              {/* Right side: folder, status, scenario count, chevron */}
-              <div className="grid grid-cols-[160px_70px_40px_20px] gap-2 items-center ml-4 flex-shrink-0">
-                <div className="flex justify-end">
-                  <InlineFolderPicker
-                    testCaseId={testCase.id}
-                    currentFolderId={testCase.folderId ?? null}
-                    folders={folders}
-                    onFolderChange={onSelectionAction}
-                  />
-                </div>
-                <div className="flex justify-end">
-                  <StatusDropdown
-                    testCaseId={testCase.id}
-                    currentState={testCase.state}
-                    onStateChange={onSelectionAction}
-                  />
-                </div>
-                <span
-                  className="text-xs text-muted-foreground flex items-center gap-1 justify-end tabular-nums"
-                  title={`${testCase.scenarioCount || 0} scenario${testCase.scenarioCount !== 1 ? 's' : ''}`}
-                >
-                  <ScenarioIcon className="w-3 h-3" />
-                  {testCase.scenarioCount || 0}
-                </span>
-                <ChevronRightIcon className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-              </div>
-              </div>
-              {/* Drop indicator line - after (only show on last item or when this item is target) */}
-              {dropIndicator?.id === testCase.id && dropIndicator.position === "after" && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-500 z-10">
-                  <div className="absolute -left-0.5 -top-1 w-2.5 h-2.5 rounded-full bg-brand-500" />
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
+        <GroupedTestCaseList
+          cases={cases}
+          folders={folders}
+          currentFolderId={currentFolderId}
+          selectedFolderIds={selectedFolderIds}
+          selectedCases={selectedCases}
+          draggedId={draggedId}
+          dropIndicator={dropIndicator}
+          onCaseClick={onCaseClick}
+          onToggleSelection={onToggleSelection}
+          onSelectionAction={onSelectionAction}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        />
       )}
       {hasMore && (
         <div className="p-4 border-t border-border">
@@ -861,6 +792,233 @@ function TestCaseListContent({
         </div>
       )}
     </div>
+  );
+}
+
+// Grouped Test Case List - renders test cases with folder subsection dividers
+function GroupedTestCaseList({
+  cases,
+  folders,
+  currentFolderId,
+  selectedFolderIds,
+  selectedCases,
+  draggedId,
+  dropIndicator,
+  onCaseClick,
+  onToggleSelection,
+  onSelectionAction,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+}: {
+  cases: TestCase[];
+  folders: Folder[];
+  currentFolderId: number | null;
+  selectedFolderIds?: number[] | null;
+  selectedCases: Set<number>;
+  draggedId: number | null;
+  dropIndicator: { id: number; position: "before" | "after" } | null;
+  onCaseClick: (testCase: TestCase) => void;
+  onToggleSelection: (id: number, e: React.MouseEvent) => void;
+  onSelectionAction: () => void;
+  onDragStart: (id: number) => void;
+  onDragEnd: () => void;
+  onDragOver: (e: React.DragEvent, id: number) => void;
+  onDragLeave: (e: React.DragEvent) => void;
+  onDrop: (e: React.DragEvent) => void;
+}) {
+  // Check if we're showing cases from multiple folders (parent + children)
+  const showFolderGroups = selectedFolderIds && selectedFolderIds.length > 1;
+
+  // Group cases by folder
+  const groupedCases = useMemo(() => {
+    if (!showFolderGroups) {
+      return [{ folderId: currentFolderId, folderName: null, cases }];
+    }
+
+    // Build folder lookup
+    const folderMap = new Map(folders.map((f) => [f.id, f]));
+
+    // Get relative path from current folder to target folder
+    const getRelativePath = (folderId: number | null): string => {
+      if (!folderId || folderId === currentFolderId) return "";
+
+      const path: string[] = [];
+      let currentId: number | null = folderId;
+
+      while (currentId !== null && currentId !== currentFolderId) {
+        const folder = folderMap.get(currentId);
+        if (!folder) break;
+        path.unshift(folder.name);
+        currentId = folder.parentId;
+      }
+
+      return path.join(" / ");
+    };
+
+    // Group cases by folderId
+    const groups = new Map<number | null, { cases: TestCase[]; path: string }>();
+
+    // First, add group for current folder
+    groups.set(currentFolderId, { cases: [], path: "" });
+
+    cases.forEach((testCase) => {
+      const fid = testCase.folderId ?? null;
+      if (!groups.has(fid)) {
+        groups.set(fid, { cases: [], path: getRelativePath(fid) });
+      }
+      groups.get(fid)!.cases.push(testCase);
+    });
+
+    // Convert to array and sort: current folder first, then by path
+    const result: { folderId: number | null; folderName: string | null; cases: TestCase[] }[] = [];
+
+    // Add current folder group first (if it has cases)
+    const currentGroup = groups.get(currentFolderId);
+    if (currentGroup && currentGroup.cases.length > 0) {
+      result.push({ folderId: currentFolderId, folderName: null, cases: currentGroup.cases });
+    }
+
+    // Add child folder groups
+    groups.forEach((group, fid) => {
+      if (fid !== currentFolderId && group.cases.length > 0) {
+        result.push({ folderId: fid, folderName: group.path, cases: group.cases });
+      }
+    });
+
+    return result;
+  }, [cases, folders, currentFolderId, showFolderGroups]);
+
+  return (
+    <div>
+      {groupedCases.map((group, groupIndex) => (
+        <div key={group.folderId ?? "root"}>
+          {/* Folder subsection divider */}
+          {showFolderGroups && group.folderName && (
+            <div className="flex items-center gap-2 px-4 py-2 bg-muted/50 border-y border-border">
+              <SubfolderIcon className="w-4 h-4 text-muted-foreground" />
+              <span className="text-sm font-medium text-muted-foreground">
+                {group.folderName}
+              </span>
+              <span className="text-xs text-muted-foreground/60">
+                ({group.cases.length})
+              </span>
+            </div>
+          )}
+          <div className="divide-y divide-border">
+            {group.cases.map((testCase) => (
+              <div key={testCase.id} className="relative">
+                {/* Drop indicator line - before */}
+                {dropIndicator?.id === testCase.id && dropIndicator.position === "before" && (
+                  <div className="absolute top-0 left-0 right-0 h-0.5 bg-brand-500 z-10">
+                    <div className="absolute -left-0.5 -top-1 w-2.5 h-2.5 rounded-full bg-brand-500" />
+                  </div>
+                )}
+                <div
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.effectAllowed = "move";
+                    e.dataTransfer.setData(
+                      "text/plain",
+                      JSON.stringify({ type: "testcase", id: testCase.id, name: testCase.title })
+                    );
+                    (window as unknown as { __draggedTestCase?: { id: number; name: string } }).__draggedTestCase = {
+                      id: testCase.id,
+                      name: testCase.title,
+                    };
+                    onDragStart(testCase.id);
+                  }}
+                  onDragEnd={() => {
+                    delete (window as unknown as { __draggedTestCase?: { id: number; name: string } }).__draggedTestCase;
+                    onDragEnd();
+                  }}
+                  onDragOver={(e) => onDragOver(e, testCase.id)}
+                  onDragLeave={onDragLeave}
+                  onDrop={onDrop}
+                  onClick={() => onCaseClick(testCase)}
+                  className={cn(
+                    "w-full flex items-center justify-between py-2.5 px-4 hover:bg-muted/50 transition-colors group text-left",
+                    "cursor-grab active:cursor-grabbing",
+                    selectedCases.has(testCase.id) && "bg-brand-50 dark:bg-brand-950/50",
+                    draggedId === testCase.id && "opacity-50"
+                  )}
+                >
+                  <div className="flex items-center gap-1 min-w-0 flex-1">
+                    <div
+                      className="p-2 -m-2 cursor-pointer flex-shrink-0"
+                      onClick={(e) => onToggleSelection(testCase.id, e)}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedCases.has(testCase.id)}
+                        onChange={() => {}}
+                        className="rounded border-input text-brand-600 focus:ring-brand-500 dark:border-muted-foreground/30 dark:bg-muted/50 pointer-events-none"
+                      />
+                    </div>
+                    <DragHandleIcon className="w-4 h-4 text-muted-foreground/50 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <span className="font-medium text-foreground truncate group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
+                      {testCase.title}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-[160px_70px_40px_20px] gap-2 items-center ml-4 flex-shrink-0">
+                    <div className="flex justify-end">
+                      <InlineFolderPicker
+                        testCaseId={testCase.id}
+                        currentFolderId={testCase.folderId ?? null}
+                        folders={folders}
+                        onFolderChange={onSelectionAction}
+                      />
+                    </div>
+                    <div className="flex justify-end">
+                      <StatusDropdown
+                        testCaseId={testCase.id}
+                        currentState={testCase.state}
+                        onStateChange={onSelectionAction}
+                      />
+                    </div>
+                    <span
+                      className="text-xs text-muted-foreground flex items-center gap-1 justify-end tabular-nums"
+                      title={`${testCase.scenarioCount || 0} scenario${testCase.scenarioCount !== 1 ? 's' : ''}`}
+                    >
+                      <ScenarioIcon className="w-3 h-3" />
+                      {testCase.scenarioCount || 0}
+                    </span>
+                    <ChevronRightIcon className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                </div>
+                {/* Drop indicator line - after */}
+                {dropIndicator?.id === testCase.id && dropIndicator.position === "after" && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-500 z-10">
+                    <div className="absolute -left-0.5 -top-1 w-2.5 h-2.5 rounded-full bg-brand-500" />
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Subfolder icon for section dividers
+function SubfolderIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={1.5}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
+      />
+    </svg>
   );
 }
 

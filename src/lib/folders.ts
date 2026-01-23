@@ -49,3 +49,25 @@ export function buildFolderBreadcrumb(
 export function formatBreadcrumb(path: string[], separator = " > "): string {
   return path.join(separator);
 }
+
+/**
+ * Get all descendant folder IDs for a given folder (recursive)
+ * Returns array including the folder itself and all its descendants
+ */
+export function getDescendantFolderIds(
+  folderId: number,
+  folders: Pick<Folder, "id" | "parentId">[]
+): number[] {
+  const result: number[] = [folderId];
+
+  function collectChildren(parentId: number) {
+    const children = folders.filter((f) => f.parentId === parentId);
+    for (const child of children) {
+      result.push(child.id);
+      collectChildren(child.id);
+    }
+  }
+
+  collectChildren(folderId);
+  return result;
+}
