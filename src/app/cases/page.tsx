@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { testCases, folders, users, scenarios } from "@/lib/db/schema";
-import { eq, like, sql, and, count } from "drizzle-orm";
+import { eq, like, and, count } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { FolderPanel } from "@/components/folder-panel";
 import { buildFolderTree } from "@/lib/folders";
@@ -107,7 +107,7 @@ export default async function CasesPage({ searchParams }: Props) {
     .leftJoin(folders, eq(testCases.folderId, folders.id))
     .leftJoin(users, eq(testCases.updatedBy, users.id))
     .where(and(...conditions))
-    .orderBy(folderId ? testCases.order : sql`${testCases.updatedAt} DESC`)
+    .orderBy(testCases.order)
     .limit(loadLimit);
 
   // Get scenario counts per test case
