@@ -480,11 +480,11 @@ export function CreateRunForm({ folders, cases, caseCounts }: Props) {
               </div>
             </div>
 
-            <Card>
+            <Card className="overflow-hidden">
               <CardContent className="p-0">
-                <div className="flex">
+                <div className="flex h-[60vh]">
                   {/* Left: Selection List */}
-                  <div className="flex-1 border-r border-border">
+                  <div className="flex-1 min-w-0 border-r border-border flex flex-col">
                     {/* Search and Filter Bar */}
                     <div className="p-4 border-b border-border flex gap-3 bg-muted/20">
                       <div className="flex items-center gap-3">
@@ -529,7 +529,7 @@ export function CreateRunForm({ folders, cases, caseCounts }: Props) {
                     </div>
 
                     {/* Results */}
-                    <div className="max-h-[50vh] overflow-auto">
+                    <div className="flex-1 overflow-auto">
                       {filteredCases.length === 0 ? (
                         <div className="p-12 text-center">
                           <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mx-auto mb-3">
@@ -643,7 +643,7 @@ function SelectionPreview({
   };
 
   return (
-    <div className="w-80 bg-muted/30 flex flex-col max-h-[calc(50vh+57px)]">
+    <div className="w-80 flex-shrink-0 bg-muted/30 flex flex-col">
       <div className="p-3 border-b border-border bg-muted/50">
         <span className="text-sm font-medium text-foreground">
           Selected ({selectedCases.size})
