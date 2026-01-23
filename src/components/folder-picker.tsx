@@ -191,8 +191,8 @@ export function FolderPicker({
             "flex items-center justify-between gap-2",
           ],
           variant === "inline" && [
-            "text-xs text-muted-foreground flex items-center gap-1.5 max-w-[200px] truncate",
-            "rounded px-1.5 py-0.5 -mx-1.5 -my-0.5 transition-all",
+            "text-xs text-muted-foreground flex items-center gap-1.5 max-w-full truncate",
+            "rounded px-1.5 py-0.5 transition-all",
             "hover:bg-muted hover:text-foreground",
           ]
         )}
