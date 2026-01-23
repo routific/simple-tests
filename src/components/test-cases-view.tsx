@@ -18,10 +18,25 @@ import {
 } from "@/app/cases/actions";
 import { exportTestCases, importTestCases, ExportData } from "@/app/cases/export-actions";
 import { getScenarios, saveScenario } from "@/app/cases/scenario-actions";
-import { getLastUndo, getLastRedo, executeUndo, executeRedo } from "@/app/cases/undo-actions";
+import { getLastUndo, getLastRedo, getUndoStack, getRedoStack, executeUndo, executeRedo } from "@/app/cases/undo-actions";
 import { cn } from "@/lib/utils";
 import { buildFolderBreadcrumb, formatBreadcrumb } from "@/lib/folders";
 import { FolderPicker } from "@/components/folder-picker";
+
+// Helper to format time ago
+function formatTimeAgo(date: Date): string {
+  const now = new Date();
+  const diffMs = now.getTime() - new Date(date).getTime();
+  const diffSeconds = Math.floor(diffMs / 1000);
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  const diffHours = Math.floor(diffMinutes / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffSeconds < 60) return "just now";
+  if (diffMinutes < 60) return `${diffMinutes} minute${diffMinutes !== 1 ? "s" : ""} ago`;
+  if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? "s" : ""} ago`;
+  return `${diffDays} day${diffDays !== 1 ? "s" : ""} ago`;
+}
 
 interface Scenario {
   id: number;
@@ -86,14 +101,41 @@ export function TestCasesView({
   const [isRedoing, setIsRedoing] = useState(false);
   const [lastUndoAction, setLastUndoAction] = useState<{ id: number; description: string } | null>(null);
   const [lastRedoAction, setLastRedoAction] = useState<{ id: number; description: string } | null>(null);
+  const [undoStackItems, setUndoStackItems] = useState<Array<{ id: number; description: string; actionType: string; createdAt: Date }>>([]);
+  const [redoStackItems, setRedoStackItems] = useState<Array<{ id: number; description: string; actionType: string; createdAt: Date }>>([]);
+  const [showUndoDropdown, setShowUndoDropdown] = useState(false);
+  const [showRedoDropdown, setShowRedoDropdown] = useState(false);
+  const undoDropdownRef = useRef<HTMLDivElement>(null);
+  const redoDropdownRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch last undo/redo actions on mount and after changes
   const refreshUndoRedo = async () => {
-    const [lastUndo, lastRedo] = await Promise.all([getLastUndo(), getLastRedo()]);
+    const [lastUndo, lastRedo, undoItems, redoItems] = await Promise.all([
+      getLastUndo(),
+      getLastRedo(),
+      getUndoStack(),
+      getRedoStack(),
+    ]);
     setLastUndoAction(lastUndo);
     setLastRedoAction(lastRedo);
+    setUndoStackItems(undoItems);
+    setRedoStackItems(redoItems);
   };
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (undoDropdownRef.current && !undoDropdownRef.current.contains(e.target as Node)) {
+        setShowUndoDropdown(false);
+      }
+      if (redoDropdownRef.current && !redoDropdownRef.current.contains(e.target as Node)) {
+        setShowRedoDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   useEffect(() => {
     refreshUndoRedo();
@@ -309,38 +351,108 @@ export function TestCasesView({
         </div>
         <div className="flex items-center gap-2">
           {lastUndoAction && (
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={handleUndo}
-              disabled={isUndoing}
-              className="text-muted-foreground hover:text-foreground"
-              title={`Undo: ${lastUndoAction.description} (${navigator.platform.includes("Mac") ? "⌘" : "Ctrl"}+Z)`}
-            >
-              {isUndoing ? (
-                <LoadingIcon className="w-4 h-4 animate-spin" />
-              ) : (
-                <UndoIcon className="w-4 h-4" />
+            <div className="relative" ref={undoDropdownRef}>
+              <div className="flex items-center">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleUndo}
+                  disabled={isUndoing}
+                  className="text-muted-foreground hover:text-foreground rounded-r-none pr-1"
+                  title={`Undo: ${lastUndoAction.description} (${navigator.platform.includes("Mac") ? "⌘" : "Ctrl"}+Z)`}
+                >
+                  {isUndoing ? (
+                    <LoadingIcon className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <UndoIcon className="w-4 h-4" />
+                  )}
+                  Undo
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setShowUndoDropdown(!showUndoDropdown)}
+                  className="text-muted-foreground hover:text-foreground rounded-l-none pl-0 pr-1"
+                >
+                  <ChevronDownIcon className="w-3 h-3" />
+                </Button>
+              </div>
+              {showUndoDropdown && undoStackItems.length > 0 && (
+                <div className="absolute right-0 top-full mt-1 w-64 bg-popover border border-border rounded-md shadow-lg z-50">
+                  <div className="p-2 text-xs font-medium text-muted-foreground border-b border-border">
+                    Undo History
+                  </div>
+                  <div className="max-h-48 overflow-y-auto">
+                    {undoStackItems.map((item, index) => (
+                      <div
+                        key={item.id}
+                        className={cn(
+                          "px-3 py-2 text-sm",
+                          index === 0 ? "bg-accent/50" : "hover:bg-accent/30"
+                        )}
+                      >
+                        <div className="font-medium truncate">{item.description}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatTimeAgo(item.createdAt)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
-              Undo
-            </Button>
+            </div>
           )}
           {lastRedoAction && (
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={handleRedo}
-              disabled={isRedoing}
-              className="text-muted-foreground hover:text-foreground"
-              title={`Redo: ${lastRedoAction.description} (${navigator.platform.includes("Mac") ? "⌘" : "Ctrl"}+Shift+Z)`}
-            >
-              {isRedoing ? (
-                <LoadingIcon className="w-4 h-4 animate-spin" />
-              ) : (
-                <RedoIcon className="w-4 h-4" />
+            <div className="relative" ref={redoDropdownRef}>
+              <div className="flex items-center">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleRedo}
+                  disabled={isRedoing}
+                  className="text-muted-foreground hover:text-foreground rounded-r-none pr-1"
+                  title={`Redo: ${lastRedoAction.description} (${navigator.platform.includes("Mac") ? "⌘" : "Ctrl"}+Shift+Z)`}
+                >
+                  {isRedoing ? (
+                    <LoadingIcon className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <RedoIcon className="w-4 h-4" />
+                  )}
+                  Redo
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setShowRedoDropdown(!showRedoDropdown)}
+                  className="text-muted-foreground hover:text-foreground rounded-l-none pl-0 pr-1"
+                >
+                  <ChevronDownIcon className="w-3 h-3" />
+                </Button>
+              </div>
+              {showRedoDropdown && redoStackItems.length > 0 && (
+                <div className="absolute right-0 top-full mt-1 w-64 bg-popover border border-border rounded-md shadow-lg z-50">
+                  <div className="p-2 text-xs font-medium text-muted-foreground border-b border-border">
+                    Redo History
+                  </div>
+                  <div className="max-h-48 overflow-y-auto">
+                    {redoStackItems.map((item, index) => (
+                      <div
+                        key={item.id}
+                        className={cn(
+                          "px-3 py-2 text-sm",
+                          index === 0 ? "bg-accent/50" : "hover:bg-accent/30"
+                        )}
+                      >
+                        <div className="font-medium truncate">{item.description}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatTimeAgo(item.createdAt)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
-              Redo
-            </Button>
+            </div>
           )}
           <input
             ref={fileInputRef}
@@ -749,7 +861,7 @@ function TestCaseListContent({
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-colors"
           >
             <PlayIcon className="w-4 h-4" />
-            Run
+            Create Run
           </button>
           <button
             onClick={() => setShowStateModal(true)}
@@ -757,7 +869,7 @@ function TestCaseListContent({
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-foreground rounded-lg hover:bg-muted transition-colors disabled:opacity-50"
           >
             <StateIcon className="w-4 h-4" />
-            State
+            Change State
           </button>
           <button
             onClick={() => setShowMoveModal(true)}
@@ -765,7 +877,7 @@ function TestCaseListContent({
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-foreground rounded-lg hover:bg-muted transition-colors disabled:opacity-50"
           >
             <MoveIcon className="w-4 h-4" />
-            Move
+            Move Folder
           </button>
           <button
             onClick={handleBulkDelete}
@@ -1425,7 +1537,7 @@ function TestCasePanel({
 
   const handleDelete = () => {
     if (!testCase) return;
-    if (!confirm("Are you sure you want to delete this test case?")) return;
+    if (!confirm("Delete this test case? You can undo this action.")) return;
 
     startTransition(async () => {
       try {
@@ -1799,6 +1911,24 @@ function RedoIcon({ className }: { className?: string }) {
         strokeLinecap="round"
         strokeLinejoin="round"
         d="M15 15l6-6m0 0l-6-6m6 6H9a6 6 0 000 12h3"
+      />
+    </svg>
+  );
+}
+
+function ChevronDownIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M19.5 8.25l-7.5 7.5-7.5-7.5"
       />
     </svg>
   );
