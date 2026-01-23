@@ -622,13 +622,6 @@ function TestCaseListContent({
       return;
     }
 
-    // Only allow reordering within a folder view
-    if (currentFolderId === null) {
-      setDraggedId(null);
-      setDragOverId(null);
-      return;
-    }
-
     // Calculate new order
     const currentIds = cases.map((c) => c.id);
     const fromIndex = currentIds.indexOf(draggedId);
@@ -818,7 +811,7 @@ function TestCaseListContent({
           {cases.map((testCase) => (
             <div
               key={testCase.id}
-              draggable={currentFolderId !== null}
+              draggable
               onDragStart={(e) => {
                 e.dataTransfer.effectAllowed = "move";
                 e.dataTransfer.setData(
@@ -842,7 +835,7 @@ function TestCaseListContent({
               onClick={() => onCaseClick(testCase)}
               className={cn(
                 "w-full flex items-center justify-between py-2.5 px-4 hover:bg-muted/50 transition-colors group text-left",
-                currentFolderId !== null && "cursor-grab active:cursor-grabbing",
+                "cursor-grab active:cursor-grabbing",
                 selectedCases.has(testCase.id) && "bg-brand-50 dark:bg-brand-950/50",
                 draggedId === testCase.id && "opacity-50",
                 dragOverId === testCase.id && "border-t-2 border-brand-500"
@@ -860,9 +853,7 @@ function TestCaseListContent({
                     className="rounded border-input text-brand-600 focus:ring-brand-500 pointer-events-none"
                   />
                 </div>
-                {currentFolderId !== null && (
-                  <DragHandleIcon className="w-4 h-4 text-muted-foreground/50 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
-                )}
+                <DragHandleIcon className="w-4 h-4 text-muted-foreground/50 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
                 <span className="font-medium text-foreground truncate group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
                   {testCase.title}
                 </span>
