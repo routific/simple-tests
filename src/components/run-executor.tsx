@@ -135,13 +135,13 @@ export function RunExecutor({ run, results }: Props) {
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
             <div className="w-48 h-2 bg-gray-200 rounded-full overflow-hidden">
-              <div className="h-full bg-green-500" style={{ width: `${passRate}%` }} />
+              <div className="h-full bg-emerald-400" style={{ width: `${passRate}%` }} />
             </div>
             <span className="text-sm font-medium">{passRate}% passed</span>
           </div>
           <div className="flex items-center gap-3 text-sm">
-            <span className="text-green-600">{stats.passed} passed</span>
-            <span className="text-red-600">{stats.failed} failed</span>
+            <span className="text-emerald-600">{stats.passed} passed</span>
+            <span className="text-rose-500">{stats.failed} failed</span>
             <span className="text-gray-600">{stats.pending} pending</span>
             {stats.blocked > 0 && <span className="text-orange-600">{stats.blocked} blocked</span>}
             {stats.skipped > 0 && <span className="text-gray-400">{stats.skipped} skipped</span>}
@@ -221,14 +221,14 @@ export function RunExecutor({ run, results }: Props) {
                     <button
                       onClick={() => handleStatusUpdate("passed")}
                       disabled={isPending}
-                      className="flex-1 px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:opacity-90 disabled:opacity-50"
+                      className="flex-1 px-4 py-2 text-sm font-medium text-white bg-emerald-500 rounded-md hover:opacity-90 disabled:opacity-50"
                     >
                       Pass
                     </button>
                     <button
                       onClick={() => handleStatusUpdate("failed")}
                       disabled={isPending}
-                      className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:opacity-90 disabled:opacity-50"
+                      className="flex-1 px-4 py-2 text-sm font-medium text-white bg-rose-500 rounded-md hover:opacity-90 disabled:opacity-50"
                     >
                       Fail
                     </button>
@@ -271,7 +271,7 @@ export function RunExecutor({ run, results }: Props) {
 function StatusIcon({ status }: { status: string }) {
   if (status === "passed") {
     return (
-      <div className="w-5 h-5 rounded-full bg-green-100 text-green-600 flex items-center justify-center">
+      <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-500 flex items-center justify-center">
         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
         </svg>
@@ -280,7 +280,7 @@ function StatusIcon({ status }: { status: string }) {
   }
   if (status === "failed") {
     return (
-      <div className="w-5 h-5 rounded-full bg-red-100 text-red-600 flex items-center justify-center">
+      <div className="w-5 h-5 rounded-full bg-rose-100 text-rose-500 flex items-center justify-center">
         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
         </svg>
