@@ -814,13 +814,13 @@ function TestCaseListContent({
               </div>
               <div className="flex items-center gap-3 ml-4 flex-shrink-0">
                 <span
-                  className="text-xs text-muted-foreground flex items-center gap-1 w-10 justify-end tabular-nums flex-shrink-0"
+                  className="text-xs text-muted-foreground flex items-center gap-1 tabular-nums flex-shrink-0 mr-2"
                   title={`${testCase.scenarioCount || 0} scenario${testCase.scenarioCount !== 1 ? 's' : ''}`}
                 >
                   <ScenarioIcon className="w-3 h-3 flex-shrink-0" />
                   {testCase.scenarioCount || 0}
                 </span>
-                <div className="w-[150px] flex justify-end">
+                <div className="w-[160px] flex justify-end flex-shrink-0">
                   <InlineFolderPicker
                     testCaseId={testCase.id}
                     currentFolderId={testCase.folderId ?? null}
