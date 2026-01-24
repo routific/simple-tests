@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { undoStack, testCases, scenarios } from "@/lib/db/schema";
+import { undoStack, testCases, scenarios, folders } from "@/lib/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getSessionWithOrg } from "@/lib/auth";
@@ -87,6 +87,46 @@ interface UndoReorder {
   previousOrder: Array<{ id: number; order: number }>;
 }
 
+// Folder undo types
+interface UndoFolderCreate {
+  folderId: number;
+}
+
+interface UndoFolderRename {
+  folderId: number;
+  previousName: string;
+}
+
+interface UndoFolderDelete {
+  folder: {
+    id: number;
+    name: string;
+    parentId: number | null;
+    order: number;
+  };
+}
+
+interface UndoFolderMove {
+  folderId: number;
+  previousParentId: number | null;
+  previousOrder: number;
+}
+
+interface UndoMoveTestCaseToFolder {
+  testCaseId: number;
+  previousFolderId: number | null;
+}
+
+interface UndoReorderFolders {
+  parentId: number | null;
+  previousOrder: Array<{ id: number; order: number }>;
+}
+
+interface UndoReorderScenarios {
+  testCaseId: number;
+  previousOrder: Array<{ id: number; order: number }>;
+}
+
 type UndoData =
   | UndoTestCaseCreate
   | UndoTestCaseUpdate
@@ -96,7 +136,14 @@ type UndoData =
   | UndoScenarioDelete
   | UndoBulkDelete
   | UndoBulkUpdate
-  | UndoReorder;
+  | UndoReorder
+  | UndoFolderCreate
+  | UndoFolderRename
+  | UndoFolderDelete
+  | UndoFolderMove
+  | UndoMoveTestCaseToFolder
+  | UndoReorderFolders
+  | UndoReorderScenarios;
 
 // Record an undo action
 export async function recordUndo(
@@ -559,6 +606,145 @@ export async function executeUndo(): Promise<{ success?: boolean; error?: string
         break;
       }
 
+      case "reorder_scenarios": {
+        // Undo scenario reorder = restore previous order
+        const data = undoData as UndoReorderScenarios;
+        const currentOrder: Array<{ id: number; order: number }> = [];
+
+        for (const item of data.previousOrder) {
+          const current = await db.select({ id: scenarios.id, order: scenarios.order }).from(scenarios).where(eq(scenarios.id, item.id)).get();
+          if (current) {
+            currentOrder.push({ id: current.id, order: current.order });
+          }
+
+          await db
+            .update(scenarios)
+            .set({ order: item.order })
+            .where(eq(scenarios.id, item.id));
+        }
+
+        redoData = { testCaseId: data.testCaseId, previousOrder: currentOrder } as UndoReorderScenarios;
+        break;
+      }
+
+      case "create_folder": {
+        // Undo create = delete folder
+        const data = undoData as UndoFolderCreate;
+
+        // Get folder data for redo
+        const folder = await db.select().from(folders).where(eq(folders.id, data.folderId)).get();
+        if (folder) {
+          redoData = {
+            folder: {
+              id: folder.id,
+              name: folder.name,
+              parentId: folder.parentId,
+              order: folder.order,
+            },
+          } as UndoFolderDelete;
+        }
+
+        await db.delete(folders).where(eq(folders.id, data.folderId));
+        break;
+      }
+
+      case "rename_folder": {
+        // Undo rename = restore previous name
+        const data = undoData as UndoFolderRename;
+
+        // Get current name for redo
+        const current = await db.select().from(folders).where(eq(folders.id, data.folderId)).get();
+        if (current) {
+          redoData = {
+            folderId: data.folderId,
+            previousName: current.name,
+          } as UndoFolderRename;
+        }
+
+        await db
+          .update(folders)
+          .set({ name: data.previousName })
+          .where(eq(folders.id, data.folderId));
+        break;
+      }
+
+      case "delete_folder": {
+        // Undo delete = recreate folder
+        const data = undoData as UndoFolderDelete;
+        redoData = { folderId: data.folder.id } as UndoFolderCreate;
+
+        await db.insert(folders).values({
+          id: data.folder.id,
+          name: data.folder.name,
+          parentId: data.folder.parentId,
+          order: data.folder.order,
+          organizationId,
+        });
+        break;
+      }
+
+      case "move_folder": {
+        // Undo move = restore previous parent and order
+        const data = undoData as UndoFolderMove;
+
+        // Get current values for redo
+        const current = await db.select().from(folders).where(eq(folders.id, data.folderId)).get();
+        if (current) {
+          redoData = {
+            folderId: data.folderId,
+            previousParentId: current.parentId,
+            previousOrder: current.order,
+          } as UndoFolderMove;
+        }
+
+        await db
+          .update(folders)
+          .set({ parentId: data.previousParentId, order: data.previousOrder })
+          .where(eq(folders.id, data.folderId));
+        break;
+      }
+
+      case "move_test_case_to_folder": {
+        // Undo move = restore previous folder
+        const data = undoData as UndoMoveTestCaseToFolder;
+
+        // Get current folder for redo
+        const current = await db.select().from(testCases).where(eq(testCases.id, data.testCaseId)).get();
+        if (current) {
+          redoData = {
+            testCaseId: data.testCaseId,
+            previousFolderId: current.folderId,
+          } as UndoMoveTestCaseToFolder;
+        }
+
+        await db
+          .update(testCases)
+          .set({ folderId: data.previousFolderId })
+          .where(eq(testCases.id, data.testCaseId));
+        break;
+      }
+
+      case "reorder_folders": {
+        // Undo reorder = restore previous order
+        const data = undoData as UndoReorderFolders;
+        const currentOrder: Array<{ id: number; order: number }> = [];
+
+        for (const item of data.previousOrder) {
+          const current = await db.select({ id: folders.id, order: folders.order }).from(folders).where(eq(folders.id, item.id)).get();
+          if (current) {
+            currentOrder.push({ id: current.id, order: current.order });
+          }
+
+          await db
+            .update(folders)
+            .set({ order: item.order })
+            .where(eq(folders.id, item.id));
+        }
+
+        redoData = { parentId: data.parentId, previousOrder: currentOrder } as UndoReorderFolders;
+        break;
+      }
+
       default:
         return { error: `Unknown action type: ${undoEntry.actionType}` };
     }
@@ -823,6 +1009,130 @@ export async function executeRedo(): Promise<{ success?: boolean; error?: string
         }
 
         undoData = { previousOrder: currentOrder } as UndoReorder;
+        break;
+      }
+
+      case "reorder_scenarios": {
+        // Redo scenario reorder
+        const data = redoData as UndoReorderScenarios;
+        const currentOrder: Array<{ id: number; order: number }> = [];
+
+        for (const item of data.previousOrder) {
+          const current = await db.select({ id: scenarios.id, order: scenarios.order }).from(scenarios).where(eq(scenarios.id, item.id)).get();
+          if (current) {
+            currentOrder.push({ id: current.id, order: current.order });
+          }
+
+          await db
+            .update(scenarios)
+            .set({ order: item.order })
+            .where(eq(scenarios.id, item.id));
+        }
+
+        undoData = { testCaseId: data.testCaseId, previousOrder: currentOrder } as UndoReorderScenarios;
+        break;
+      }
+
+      case "create_folder": {
+        // Redo create = recreate folder
+        const data = redoData as UndoFolderDelete;
+        undoData = { folderId: data.folder.id } as UndoFolderCreate;
+
+        await db.insert(folders).values({
+          id: data.folder.id,
+          name: data.folder.name,
+          parentId: data.folder.parentId,
+          order: data.folder.order,
+          organizationId,
+        });
+        break;
+      }
+
+      case "rename_folder": {
+        // Redo rename = apply the new name
+        const data = redoData as UndoFolderRename;
+
+        const current = await db.select().from(folders).where(eq(folders.id, data.folderId)).get();
+        if (current) {
+          undoData = {
+            folderId: data.folderId,
+            previousName: current.name,
+          } as UndoFolderRename;
+        }
+
+        await db
+          .update(folders)
+          .set({ name: data.previousName })
+          .where(eq(folders.id, data.folderId));
+        break;
+      }
+
+      case "delete_folder": {
+        // Redo delete = delete again
+        const data = redoData as UndoFolderDelete;
+        undoData = data;
+
+        await db.delete(folders).where(eq(folders.id, data.folder.id));
+        break;
+      }
+
+      case "move_folder": {
+        // Redo move = apply the new position
+        const data = redoData as UndoFolderMove;
+
+        const current = await db.select().from(folders).where(eq(folders.id, data.folderId)).get();
+        if (current) {
+          undoData = {
+            folderId: data.folderId,
+            previousParentId: current.parentId,
+            previousOrder: current.order,
+          } as UndoFolderMove;
+        }
+
+        await db
+          .update(folders)
+          .set({ parentId: data.previousParentId, order: data.previousOrder })
+          .where(eq(folders.id, data.folderId));
+        break;
+      }
+
+      case "move_test_case_to_folder": {
+        // Redo move = apply the new folder
+        const data = redoData as UndoMoveTestCaseToFolder;
+
+        const current = await db.select().from(testCases).where(eq(testCases.id, data.testCaseId)).get();
+        if (current) {
+          undoData = {
+            testCaseId: data.testCaseId,
+            previousFolderId: current.folderId,
+          } as UndoMoveTestCaseToFolder;
+        }
+
+        await db
+          .update(testCases)
+          .set({ folderId: data.previousFolderId })
+          .where(eq(testCases.id, data.testCaseId));
+        break;
+      }
+
+      case "reorder_folders": {
+        // Redo folder reorder
+        const data = redoData as UndoReorderFolders;
+        const currentOrder: Array<{ id: number; order: number }> = [];
+
+        for (const item of data.previousOrder) {
+          const current = await db.select({ id: folders.id, order: folders.order }).from(folders).where(eq(folders.id, item.id)).get();
+          if (current) {
+            currentOrder.push({ id: current.id, order: current.order });
+          }
+
+          await db
+            .update(folders)
+            .set({ order: item.order })
+            .where(eq(folders.id, item.id));
+        }
+
+        undoData = { parentId: data.parentId, previousOrder: currentOrder } as UndoReorderFolders;
         break;
       }
 

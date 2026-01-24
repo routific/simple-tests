@@ -192,6 +192,25 @@ export async function reorderScenarios(testCaseId: number, scenarioIds: number[]
       return { error: "Test case not found" };
     }
 
+    // Get current order for undo
+    const previousOrder: Array<{ id: number; order: number }> = [];
+    for (const id of scenarioIds) {
+      const existing = await db
+        .select({ id: scenarios.id, order: scenarios.order })
+        .from(scenarios)
+        .where(eq(scenarios.id, id))
+        .get();
+      if (existing) {
+        previousOrder.push({ id: existing.id, order: existing.order });
+      }
+    }
+
+    // Record undo
+    await recordUndo("reorder_scenarios", "Reorder scenarios", {
+      testCaseId,
+      previousOrder,
+    });
+
     // Update order for each scenario
     await Promise.all(
       scenarioIds.map((id, index) =>

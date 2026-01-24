@@ -5,6 +5,7 @@ import { folders, testCases } from "@/lib/db/schema";
 import { eq, sql, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getSessionWithOrg } from "@/lib/auth";
+import { recordUndo } from "@/app/cases/undo-actions";
 
 export async function createFolder(input: {
   name: string;
@@ -43,6 +44,11 @@ export async function createFolder(input: {
       })
       .returning({ id: folders.id });
 
+    // Record undo for create
+    await recordUndo("create_folder", `Create folder "${input.name}"`, {
+      folderId: result[0].id,
+    });
+
     revalidatePath("/cases");
     return { success: true, id: result[0].id };
   } catch (error) {
@@ -60,6 +66,23 @@ export async function renameFolder(id: number, name: string) {
   const { organizationId } = session.user;
 
   try {
+    // Get current folder data for undo
+    const existing = await db
+      .select()
+      .from(folders)
+      .where(and(eq(folders.id, id), eq(folders.organizationId, organizationId)))
+      .get();
+
+    if (!existing) {
+      return { error: "Folder not found" };
+    }
+
+    // Record undo before updating
+    await recordUndo("rename_folder", `Rename folder "${existing.name}" to "${name}"`, {
+      folderId: id,
+      previousName: existing.name,
+    });
+
     await db
       .update(folders)
       .set({ name })
@@ -83,6 +106,17 @@ export async function deleteFolder(id: number) {
   const { organizationId } = session.user;
 
   try {
+    // Get folder data for undo
+    const existing = await db
+      .select()
+      .from(folders)
+      .where(and(eq(folders.id, id), eq(folders.organizationId, organizationId)))
+      .get();
+
+    if (!existing) {
+      return { error: "Folder not found" };
+    }
+
     // Check for child folders
     const children = await db
       .select({ id: folders.id })
@@ -117,6 +151,16 @@ export async function deleteFolder(id: number) {
       };
     }
 
+    // Record undo BEFORE deleting
+    await recordUndo("delete_folder", `Delete folder "${existing.name}"`, {
+      folder: {
+        id: existing.id,
+        name: existing.name,
+        parentId: existing.parentId,
+        order: existing.order,
+      },
+    });
+
     await db
       .delete(folders)
       .where(
@@ -143,6 +187,17 @@ export async function moveFolder(
   const { organizationId } = session.user;
 
   try {
+    // Get current folder data for undo
+    const existing = await db
+      .select()
+      .from(folders)
+      .where(and(eq(folders.id, id), eq(folders.organizationId, organizationId)))
+      .get();
+
+    if (!existing) {
+      return { error: "Folder not found" };
+    }
+
     // Prevent circular references - can't move a folder into its own descendant
     if (newParentId !== null) {
       const isDescendant = await checkIsDescendant(id, newParentId, organizationId);
@@ -150,6 +205,13 @@ export async function moveFolder(
         return { error: "Cannot move a folder into its own subfolder" };
       }
     }
+
+    // Record undo before making changes
+    await recordUndo("move_folder", `Move folder "${existing.name}"`, {
+      folderId: id,
+      previousParentId: existing.parentId,
+      previousOrder: existing.order,
+    });
 
     // Get current siblings at new location
     const siblings = await db
@@ -233,6 +295,30 @@ export async function moveTestCaseToFolder(
   const { organizationId } = session.user;
 
   try {
+    // Get current test case data for undo
+    const existing = await db
+      .select()
+      .from(testCases)
+      .where(
+        and(
+          eq(testCases.id, testCaseId),
+          eq(testCases.organizationId, organizationId)
+        )
+      )
+      .get();
+
+    if (!existing) {
+      return { error: "Test case not found" };
+    }
+
+    // Only record undo if folder actually changed
+    if (existing.folderId !== folderId) {
+      await recordUndo("move_test_case_to_folder", `Move "${existing.title}" to folder`, {
+        testCaseId,
+        previousFolderId: existing.folderId,
+      });
+    }
+
     await db
       .update(testCases)
       .set({ folderId, updatedAt: new Date() })
@@ -263,6 +349,25 @@ export async function reorderFolders(
   const { organizationId } = session.user;
 
   try {
+    // Get current order for undo
+    const previousOrder: Array<{ id: number; order: number }> = [];
+    for (const id of orderedIds) {
+      const existing = await db
+        .select({ id: folders.id, order: folders.order })
+        .from(folders)
+        .where(and(eq(folders.id, id), eq(folders.organizationId, organizationId)))
+        .get();
+      if (existing) {
+        previousOrder.push({ id: existing.id, order: existing.order });
+      }
+    }
+
+    // Record undo
+    await recordUndo("reorder_folders", "Reorder folders", {
+      parentId,
+      previousOrder,
+    });
+
     for (let i = 0; i < orderedIds.length; i++) {
       await db
         .update(folders)
