@@ -1,5 +1,5 @@
 import { eq, and, inArray } from "drizzle-orm";
-import { db, testRuns, testRunResults, testCases } from "../shared/index.js";
+import { db, testRuns, testRunResults, scenarios, testCases } from "../shared/index.js";
 import { AuthContext, hasPermission } from "../auth/index.js";
 import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
@@ -10,7 +10,7 @@ export function registerTestRunTools(auth: AuthContext): Tool[] {
     tools.push(
       {
         name: "create_test_run",
-        description: "Create a new test run with selected test cases",
+        description: "Create a new test run with selected scenarios",
         inputSchema: {
           type: "object",
           properties: {
@@ -22,13 +22,13 @@ export function registerTestRunTools(auth: AuthContext): Tool[] {
               type: "string",
               description: "Description of the test run",
             },
-            caseIds: {
+            scenarioIds: {
               type: "array",
               items: { type: "number" },
-              description: "Array of test case IDs to include in the run",
+              description: "Array of scenario IDs to include in the run",
             },
           },
-          required: ["name", "caseIds"],
+          required: ["name", "scenarioIds"],
         },
       },
       {
@@ -89,92 +89,108 @@ async function createTestRun(
   args: Record<string, unknown>,
   auth: AuthContext
 ): Promise<CallToolResult> {
-  const { name, description, caseIds } = args as {
-    name: string;
-    description?: string;
-    caseIds: number[];
-  };
-
-  if (!name || !caseIds || !Array.isArray(caseIds) || caseIds.length === 0) {
-    return {
-      content: [{ type: "text", text: "Error: name and non-empty caseIds array are required" }],
-      isError: true,
+  try {
+    const { name, description, scenarioIds } = args as {
+      name: string;
+      description?: string;
+      scenarioIds: number[];
     };
-  }
 
-  // Verify all test cases exist and belong to org
-  const existingCases = await db
-    .select()
-    .from(testCases)
-    .where(
-      and(
-        inArray(testCases.id, caseIds),
-        eq(testCases.organizationId, auth.organizationId)
-      )
-    );
+    console.error(`[MCP] createTestRun called with: name="${name}", scenarioIds=${JSON.stringify(scenarioIds)}`);
 
-  const existingIds = new Set(existingCases.map((c) => c.id));
-  const missingIds = caseIds.filter((id) => !existingIds.has(id));
+    if (!name || !scenarioIds || !Array.isArray(scenarioIds) || scenarioIds.length === 0) {
+      return {
+        content: [{ type: "text", text: "Error: name and non-empty scenarioIds array are required" }],
+        isError: true,
+      };
+    }
 
-  if (missingIds.length > 0) {
+    // Verify all scenarios exist and belong to org (via test case)
+    const existingScenarios = await db
+      .select({
+        scenario: scenarios,
+        testCase: testCases,
+      })
+      .from(scenarios)
+      .innerJoin(testCases, eq(scenarios.testCaseId, testCases.id))
+      .where(
+        and(
+          inArray(scenarios.id, scenarioIds),
+          eq(testCases.organizationId, auth.organizationId)
+        )
+      );
+
+    const existingIds = new Set(existingScenarios.map((s) => s.scenario.id));
+    const missingIds = scenarioIds.filter((id) => !existingIds.has(id));
+
+    if (missingIds.length > 0) {
+      return {
+        content: [{ type: "text", text: `Error: Scenarios not found: ${missingIds.join(", ")}` }],
+        isError: true,
+      };
+    }
+
+    const now = new Date();
+
+    // Create the test run
+    const runResult = await db
+      .insert(testRuns)
+      .values({
+        name,
+        organizationId: auth.organizationId,
+        createdBy: auth.userId,
+        createdAt: now,
+        status: "in_progress",
+      })
+      .returning();
+
+    const testRun = runResult[0];
+    console.error(`[MCP] Test run created with id: ${testRun.id}`);
+
+    // Create result entries for each scenario
+    const resultEntries = scenarioIds.map((scenarioId) => ({
+      testRunId: testRun.id,
+      scenarioId,
+      status: "pending" as const,
+    }));
+
+    await db.insert(testRunResults).values(resultEntries);
+
+    // Fetch the created results
+    const results = await db
+      .select()
+      .from(testRunResults)
+      .where(eq(testRunResults.testRunId, testRun.id));
+
+    console.error(`[MCP] createTestRun completed successfully`);
     return {
-      content: [{ type: "text", text: `Error: Test cases not found: ${missingIds.join(", ")}` }],
-      isError: true,
-    };
-  }
-
-  const now = new Date();
-
-  // Create the test run
-  const runResult = await db
-    .insert(testRuns)
-    .values({
-      name,
-      description: description ?? null,
-      organizationId: auth.organizationId,
-      createdBy: auth.userId,
-      createdAt: now,
-      status: "in_progress",
-    })
-    .returning();
-
-  const testRun = runResult[0];
-
-  // Create result entries for each test case
-  const resultEntries = caseIds.map((caseId) => ({
-    testRunId: testRun.id,
-    testCaseId: caseId,
-    status: "pending" as const,
-  }));
-
-  await db.insert(testRunResults).values(resultEntries);
-
-  // Fetch the created results
-  const results = await db
-    .select()
-    .from(testRunResults)
-    .where(eq(testRunResults.testRunId, testRun.id));
-
-  return {
-    content: [
-      {
-        type: "text",
-        text: JSON.stringify(
-          {
-            success: true,
-            testRun,
-            results,
-            summary: {
-              total: results.length,
-              pending: results.length,
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(
+            {
+              success: true,
+              testRun,
+              results,
+              summary: {
+                total: results.length,
+                pending: results.length,
+              },
             },
-          },
-          null,
-          2
-        ),
-      },
-    ],
-  };
+            null,
+            2
+          ),
+        },
+      ],
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`[MCP] createTestRun error:`, errorMessage);
+    return {
+      content: [{ type: "text", text: `Error creating test run: ${errorMessage}` }],
+      isError: true,
+    };
+  }
 }
 
 async function updateTestResult(

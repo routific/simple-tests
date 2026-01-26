@@ -127,102 +127,125 @@ async function createTestCase(
   args: Record<string, unknown>,
   auth: AuthContext
 ): Promise<CallToolResult> {
-  const { title, gherkin, folderId, state, priority, scenarioTitle } = args as {
-    title: string;
-    gherkin: string;
-    folderId?: number;
-    state?: "active" | "draft" | "retired" | "rejected";
-    priority?: "normal" | "high" | "critical";
-    scenarioTitle?: string;
-  };
-
-  if (!title || !gherkin) {
-    return {
-      content: [{ type: "text", text: "Error: title and gherkin are required" }],
-      isError: true,
+  try {
+    const { title, gherkin, folderId, state, priority, scenarioTitle } = args as {
+      title: string;
+      gherkin: string;
+      folderId?: number;
+      state?: "active" | "draft" | "retired" | "rejected";
+      priority?: "normal" | "high" | "critical";
+      scenarioTitle?: string;
     };
-  }
 
-  // If folderId specified, verify it exists
-  if (folderId !== undefined && folderId !== null) {
-    const folder = await db
-      .select()
-      .from(folders)
-      .where(
-        and(
-          eq(folders.id, folderId),
-          eq(folders.organizationId, auth.organizationId)
-        )
-      )
-      .limit(1);
+    console.error(`[MCP] createTestCase called with: title="${title}", folderId=${folderId}, orgId=${auth.organizationId}, userId=${auth.userId}`);
 
-    if (folder.length === 0) {
+    if (!title || !gherkin) {
       return {
-        content: [{ type: "text", text: `Error: Folder not found: ${folderId}` }],
+        content: [{ type: "text", text: "Error: title and gherkin are required" }],
         isError: true,
       };
     }
-  }
 
-  const now = new Date();
+    // If folderId specified, verify it exists
+    if (folderId !== undefined && folderId !== null) {
+      const folder = await db
+        .select()
+        .from(folders)
+        .where(
+          and(
+            eq(folders.id, folderId),
+            eq(folders.organizationId, auth.organizationId)
+          )
+        )
+        .limit(1);
 
-  // Create the test case
-  const result = await db
-    .insert(testCases)
-    .values({
-      title,
-      folderId: folderId ?? null,
-      state: state ?? "active",
-      priority: priority ?? "normal",
-      organizationId: auth.organizationId,
-      createdBy: auth.userId,
-      updatedBy: auth.userId,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .returning();
+      if (folder.length === 0) {
+        return {
+          content: [{ type: "text", text: `Error: Folder not found: ${folderId}` }],
+          isError: true,
+        };
+      }
+    }
 
-  const testCase = result[0];
+    const now = new Date();
 
-  // Create a scenario with the gherkin content
-  const scenarioResult = await db
-    .insert(scenarios)
-    .values({
+    // Create the test case
+    console.error(`[MCP] Inserting test case...`);
+    const result = await db
+      .insert(testCases)
+      .values({
+        title,
+        folderId: folderId ?? null,
+        state: state ?? "active",
+        priority: priority ?? "normal",
+        organizationId: auth.organizationId,
+        createdBy: auth.userId,
+        updatedBy: auth.userId,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning();
+
+    const testCase = result[0];
+    console.error(`[MCP] Test case created with id: ${testCase.id}`);
+
+    // Create a scenario with the gherkin content
+    console.error(`[MCP] Inserting scenario...`);
+    const scenarioResult = await db
+      .insert(scenarios)
+      .values({
+        testCaseId: testCase.id,
+        title: scenarioTitle || title,
+        gherkin,
+        order: 0,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning();
+
+    const scenario = scenarioResult[0];
+    console.error(`[MCP] Scenario created with id: ${scenario.id}`);
+
+    // Create audit log entry
+    console.error(`[MCP] Creating audit log...`);
+    await db.insert(testCaseAuditLog).values({
       testCaseId: testCase.id,
-      title: scenarioTitle || title,
-      gherkin,
-      order: 0,
+      userId: auth.userId,
+      action: "created",
+      changes: JSON.stringify(["title", "state", "priority", "folderId", "scenario"]),
+      newValues: JSON.stringify({
+        title,
+        state: testCase.state,
+        priority: testCase.priority,
+        folderId: testCase.folderId,
+        scenario: { title: scenario.title, gherkin },
+      }),
       createdAt: now,
-      updatedAt: now,
-    })
-    .returning();
+    });
 
-  const scenario = scenarioResult[0];
-
-  // Create audit log entry
-  await db.insert(testCaseAuditLog).values({
-    testCaseId: testCase.id,
-    userId: auth.userId,
-    action: "created",
-    changes: JSON.stringify(["title", "state", "priority", "folderId", "scenario"]),
-    newValues: JSON.stringify({
-      title,
-      state: testCase.state,
-      priority: testCase.priority,
-      folderId: testCase.folderId,
-      scenario: { title: scenario.title, gherkin },
-    }),
-    createdAt: now,
-  });
-
-  return {
-    content: [
-      {
-        type: "text",
-        text: JSON.stringify({ success: true, testCase, scenario }, null, 2),
-      },
-    ],
-  };
+    console.error(`[MCP] createTestCase completed successfully`);
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ success: true, testCase, scenario }, null, 2),
+        },
+      ],
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    console.error(`[MCP] createTestCase error:`, errorMessage, errorStack);
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Error creating test case: ${errorMessage}`,
+        },
+      ],
+      isError: true,
+    };
+  }
 }
 
 async function updateTestCase(

@@ -17,6 +17,10 @@ const isLocal =
 
 const dbUrl = process.env.TURSO_DATABASE_URL || defaultDbPath;
 
+// Debug: log the database path being used
+console.error(`[MCP DB] __dirname: ${__dirname}`);
+console.error(`[MCP DB] Database URL: ${dbUrl}`);
+
 const client = createClient({
   url: dbUrl,
   authToken: isLocal ? undefined : process.env.TURSO_AUTH_TOKEN,

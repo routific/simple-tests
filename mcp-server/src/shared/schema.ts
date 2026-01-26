@@ -146,23 +146,27 @@ export const testRuns = sqliteTable(
   (table) => [index("test_runs_org_idx").on(table.organizationId)]
 );
 
-export const testRunResults = sqliteTable("test_run_results", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  testRunId: integer("test_run_id")
-    .notNull()
-    .references(() => testRuns.id),
-  testCaseId: integer("test_case_id")
-    .notNull()
-    .references(() => testCases.id),
-  status: text("status", {
-    enum: ["pending", "passed", "failed", "blocked", "skipped"],
-  })
-    .notNull()
-    .default("pending"),
-  notes: text("notes"),
-  executedAt: integer("executed_at", { mode: "timestamp" }),
-  executedBy: text("executed_by").references(() => users.id),
-});
+export const testRunResults = sqliteTable(
+  "test_run_results",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    testRunId: integer("test_run_id")
+      .notNull()
+      .references(() => testRuns.id, { onDelete: "cascade" }),
+    scenarioId: integer("scenario_id")
+      .notNull()
+      .references(() => scenarios.id, { onDelete: "cascade" }),
+    status: text("status", {
+      enum: ["pending", "passed", "failed", "blocked", "skipped"],
+    })
+      .notNull()
+      .default("pending"),
+    notes: text("notes"),
+    executedAt: integer("executed_at", { mode: "timestamp" }),
+    executedBy: text("executed_by").references(() => users.id),
+  },
+  (table) => [index("test_run_results_run_idx").on(table.testRunId)]
+);
 
 export const apiTokens = sqliteTable(
   "api_tokens",

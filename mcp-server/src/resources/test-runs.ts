@@ -1,5 +1,5 @@
 import { eq, and, desc } from "drizzle-orm";
-import { db, testRuns, testRunResults, testCases, users } from "../shared/index.js";
+import { db, testRuns, testRunResults, testCases, scenarios, users } from "../shared/index.js";
 import { AuthContext } from "../auth/index.js";
 import type { Resource } from "@modelcontextprotocol/sdk/types.js";
 
@@ -84,11 +84,13 @@ async function getSingleTestRun(id: number, auth: AuthContext) {
     throw new Error(`Test run not found: ${id}`);
   }
 
-  // Get results with test case info
+  // Get results with scenario and test case info
   const results = await db
     .select({
       id: testRunResults.id,
-      testCaseId: testRunResults.testCaseId,
+      scenarioId: testRunResults.scenarioId,
+      scenarioTitle: scenarios.title,
+      testCaseId: scenarios.testCaseId,
       testCaseTitle: testCases.title,
       status: testRunResults.status,
       notes: testRunResults.notes,
@@ -96,7 +98,8 @@ async function getSingleTestRun(id: number, auth: AuthContext) {
       executedByName: users.name,
     })
     .from(testRunResults)
-    .leftJoin(testCases, eq(testRunResults.testCaseId, testCases.id))
+    .leftJoin(scenarios, eq(testRunResults.scenarioId, scenarios.id))
+    .leftJoin(testCases, eq(scenarios.testCaseId, testCases.id))
     .leftJoin(users, eq(testRunResults.executedBy, users.id))
     .where(eq(testRunResults.testRunId, id));
 

@@ -46,27 +46,39 @@ export function createMcpServer(auth: AuthContext) {
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
 
-    // Folder tools
-    if (name.startsWith("create_folder") || name.startsWith("rename_folder") ||
-        name.startsWith("delete_folder") || name.startsWith("move_folder")) {
-      return handleFolderTool(name, args || {}, auth);
-    }
+    try {
+      console.error(`[MCP Server] Tool call: ${name}`, JSON.stringify(args || {}).slice(0, 200));
 
-    // Test case tools
-    if (name.startsWith("create_test_case") || name.startsWith("update_test_case") ||
-        name.startsWith("delete_test_case")) {
-      return handleTestCaseTool(name, args || {}, auth);
-    }
+      // Folder tools
+      if (name.startsWith("create_folder") || name.startsWith("rename_folder") ||
+          name.startsWith("delete_folder") || name.startsWith("move_folder")) {
+        return await handleFolderTool(name, args || {}, auth);
+      }
 
-    // Test run tools
-    if (name.startsWith("create_test_run") || name.startsWith("update_test_result")) {
-      return handleTestRunTool(name, args || {}, auth);
-    }
+      // Test case tools
+      if (name.startsWith("create_test_case") || name.startsWith("update_test_case") ||
+          name.startsWith("delete_test_case")) {
+        return await handleTestCaseTool(name, args || {}, auth);
+      }
 
-    return {
-      content: [{ type: "text", text: `Unknown tool: ${name}` }],
-      isError: true,
-    };
+      // Test run tools
+      if (name.startsWith("create_test_run") || name.startsWith("update_test_result")) {
+        return await handleTestRunTool(name, args || {}, auth);
+      }
+
+      return {
+        content: [{ type: "text", text: `Unknown tool: ${name}` }],
+        isError: true,
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      console.error(`[MCP Server] Tool error:`, errorMessage, errorStack);
+      return {
+        content: [{ type: "text", text: `Tool error: ${errorMessage}` }],
+        isError: true,
+      };
+    }
   });
 
   // List available resources
