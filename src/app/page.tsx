@@ -1,22 +1,35 @@
 import { db } from "@/lib/db";
 import { testCases, testRuns, testRunResults, folders } from "@/lib/db/schema";
-import { count, eq, sql } from "drizzle-orm";
+import { count, eq, sql, and } from "drizzle-orm";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { getSessionWithOrg } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-async function getStats() {
-  const [totalCases] = await db.select({ count: count() }).from(testCases);
-  const [totalRuns] = await db.select({ count: count() }).from(testRuns);
-  const [totalFolders] = await db.select({ count: count() }).from(folders);
+async function getStats(organizationId: string) {
+  const [totalCases] = await db
+    .select({ count: count() })
+    .from(testCases)
+    .where(eq(testCases.organizationId, organizationId));
+
+  const [totalRuns] = await db
+    .select({ count: count() })
+    .from(testRuns)
+    .where(eq(testRuns.organizationId, organizationId));
+
+  const [totalFolders] = await db
+    .select({ count: count() })
+    .from(folders)
+    .where(eq(folders.organizationId, organizationId));
 
   const [activeCases] = await db
     .select({ count: count() })
     .from(testCases)
-    .where(eq(testCases.state, "active"));
+    .where(and(eq(testCases.organizationId, organizationId), eq(testCases.state, "active")));
 
   const recentRuns = await db
     .select({
@@ -26,6 +39,7 @@ async function getStats() {
       createdAt: testRuns.createdAt,
     })
     .from(testRuns)
+    .where(eq(testRuns.organizationId, organizationId))
     .orderBy(sql`${testRuns.createdAt} DESC`)
     .limit(5);
 
@@ -56,7 +70,12 @@ async function getStats() {
 }
 
 export default async function Dashboard() {
-  const stats = await getStats();
+  const session = await getSessionWithOrg();
+  if (!session) {
+    redirect("/api/auth/signin");
+  }
+
+  const stats = await getStats(session.user.organizationId);
 
   return (
     <div className="p-8 max-w-6xl animate-fade-in">
