@@ -344,21 +344,17 @@ npm run import ./your-export.csv
 npm run dev
 ```
 
-The app runs at http://localhost:3000 with a local SQLite database.
-
-> **Note:** Linear OAuth won't work locally without credentials. For local development without auth, you may need to temporarily bypass the auth checks.
+The app runs at http://localhost:3000.
 
 ## Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `TURSO_DATABASE_URL` | Production | Turso database URL (defaults to `file:local.db`) |
-| `TURSO_AUTH_TOKEN` | Production | Turso authentication token |
-| `LINEAR_CLIENT_ID` | Production | Linear OAuth application client ID |
-| `LINEAR_CLIENT_SECRET` | Production | Linear OAuth application client secret |
-| `AUTH_SECRET` | Production | NextAuth.js secret (generate with `openssl rand -base64 32`) |
-
-> **Note:** When Linear OAuth credentials are not configured, the app runs in local development mode with authentication bypassed.
+| `TURSO_DATABASE_URL` | Yes | Turso database URL |
+| `TURSO_AUTH_TOKEN` | Yes | Turso authentication token |
+| `LINEAR_CLIENT_ID` | Yes | Linear OAuth application client ID |
+| `LINEAR_CLIENT_SECRET` | Yes | Linear OAuth application client secret |
+| `AUTH_SECRET` | Yes | NextAuth.js secret (generate with `openssl rand -base64 32`) |
 
 ## Security
 

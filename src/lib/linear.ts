@@ -1,5 +1,5 @@
 import { LinearClient } from "@linear/sdk";
-import { auth, isLocalDevMode } from "./auth";
+import { auth } from "./auth";
 
 export async function getLinearClient() {
   const session = await auth();
@@ -35,11 +35,6 @@ export interface LinearIssue {
 }
 
 export async function getProjects(): Promise<LinearProject[]> {
-  // In local dev mode, Linear APIs are not available
-  if (isLocalDevMode()) {
-    return [];
-  }
-
   try {
     const client = await getLinearClient();
     const projects = await client.projects({
@@ -62,11 +57,6 @@ export async function getProjects(): Promise<LinearProject[]> {
 }
 
 export async function getMilestones(projectId?: string): Promise<LinearMilestone[]> {
-  // In local dev mode, Linear APIs are not available
-  if (isLocalDevMode()) {
-    return [];
-  }
-
   try {
     const client = await getLinearClient();
 
@@ -93,11 +83,6 @@ export async function getMilestones(projectId?: string): Promise<LinearMilestone
 }
 
 export async function getIssues(search?: string): Promise<LinearIssue[]> {
-  // In local dev mode, Linear APIs are not available
-  if (isLocalDevMode()) {
-    return [];
-  }
-
   try {
     const client = await getLinearClient();
 

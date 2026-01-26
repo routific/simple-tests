@@ -5,26 +5,6 @@ import { users, organizations } from "./db/schema";
 import { eq } from "drizzle-orm";
 import { LinearClient } from "@linear/sdk";
 
-// Check if we're in local dev mode (no Linear credentials configured)
-// This is a function to ensure it's evaluated at runtime, not build time
-export function isLocalDevMode() {
-  return !process.env.LINEAR_CLIENT_ID || !process.env.LINEAR_CLIENT_SECRET;
-}
-
-// Mock session for local development
-const LOCAL_DEV_SESSION = {
-  user: {
-    id: "local-dev-user",
-    name: "Local Developer",
-    email: "dev@localhost",
-    image: undefined,
-    linearUsername: "local-dev",
-    organizationId: "local-dev-org",
-    organizationName: "Local Development",
-  },
-  accessToken: undefined,
-};
-
 interface LinearProfile {
   id: string;
   name: string;
@@ -193,59 +173,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
 });
 
-// Ensure local dev org and user exist
-let localDevSeeded = false;
-async function ensureLocalDevData() {
-  if (localDevSeeded) return;
-
-  try {
-    // Check if local dev org exists
-    const existingOrg = await db
-      .select()
-      .from(organizations)
-      .where(eq(organizations.id, "local-dev-org"))
-      .get();
-
-    if (!existingOrg) {
-      await db.insert(organizations).values({
-        id: "local-dev-org",
-        name: "Local Development",
-        logoUrl: undefined,
-      });
-    }
-
-    // Check if local dev user exists
-    const existingUser = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, "local-dev-user"))
-      .get();
-
-    if (!existingUser) {
-      await db.insert(users).values({
-        id: "local-dev-user",
-        linearUsername: "local-dev",
-        email: "dev@localhost",
-        name: "Local Developer",
-        avatar: undefined,
-        organizationId: "local-dev-org",
-      });
-    }
-
-    localDevSeeded = true;
-  } catch (error) {
-    console.error("Failed to seed local dev data:", error);
-  }
-}
-
 // Helper to get organization-scoped data
 export async function getSessionWithOrg() {
-  // In local dev mode, return mock session
-  if (isLocalDevMode()) {
-    await ensureLocalDevData();
-    return LOCAL_DEV_SESSION;
-  }
-
   const session = await auth();
   if (!session?.user?.organizationId) {
     return null;

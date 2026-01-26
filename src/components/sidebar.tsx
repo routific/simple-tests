@@ -8,9 +8,6 @@ import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Button } from "@/components/ui/button";
 
-// Check if we're in local dev mode (client-side check via env exposure)
-const isLocalDevMode = !process.env.NEXT_PUBLIC_HAS_LINEAR_AUTH;
-
 const navItems = [
   { href: "/", label: "Dashboard", icon: HomeIcon },
   { href: "/cases", label: "Test Cases", icon: TestCaseIcon },
@@ -144,35 +141,7 @@ export function Sidebar() {
 
       {/* User Section */}
       <div className={cn("border-t border-border", collapsed ? "p-2" : "p-4")}>
-        {isLocalDevMode ? (
-          // Local dev mode - show local dev indicator
-          <div
-            className={cn(
-              "flex items-center",
-              collapsed ? "justify-center" : "gap-3"
-            )}
-          >
-            <div
-              className="w-9 h-9 rounded-full bg-amber-500/10 flex items-center justify-center shrink-0"
-              title={collapsed ? "Local Development" : undefined}
-            >
-              <CodeIcon className="w-4 h-4 text-amber-600" />
-            </div>
-            <div
-              className={cn(
-                "flex-1 min-w-0 overflow-hidden transition-all duration-300",
-                collapsed ? "w-0 opacity-0" : "w-auto opacity-100"
-              )}
-            >
-              <div className="text-sm font-medium truncate text-foreground">
-                Local Dev
-              </div>
-              <div className="text-xs text-muted-foreground">
-                No auth required
-              </div>
-            </div>
-          </div>
-        ) : status === "loading" ? (
+        {status === "loading" ? (
           <div
             className={cn(
               "flex items-center",
@@ -360,20 +329,3 @@ function LinearIcon({ className }: { className?: string }) {
   );
 }
 
-function CodeIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={1.5}
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5"
-      />
-    </svg>
-  );
-}
