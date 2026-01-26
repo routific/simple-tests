@@ -43,16 +43,26 @@ SimpleTests delivers these core features with a fast, lightweight interface that
 │ linear_username │     │ name            │     │ legacy_id       │
 │ email           │     │ parent_id       │◄────│ folder_id       │
 │ name            │     │ order           │     │ title           │
-│ avatar          │     │ organization_id │─────│ gherkin         │
-│ organization_id │─┐   └─────────────────┘     │ template        │
-│ created_at      │ │                           │ state           │
-└─────────────────┘ │                           │ priority        │
+│ avatar          │     │ organization_id │─────│ template        │
+│ organization_id │─┐   └─────────────────┘     │ state           │
+│ created_at      │ │                           │ priority        │
+└─────────────────┘ │                           │ order           │
        │            │                           │ organization_id │───┐
        │            │                           │ created_at      │   │
        │            │                           │ updated_at      │   │
        │            │                           │ created_by      │◄──┤
        │            │                           │ updated_by      │◄──┤
        │            │                           └─────────────────┘   │
+       │            │                                   │             │
+       │            │                           ┌───────┴───────┐     │
+       │            │                           │   scenarios   │     │
+       │            │                           ├───────────────┤     │
+       │            │                           │ id (pk)       │     │
+       │            │                           │ test_case_id  │     │
+       │            │                           │ title         │     │
+       │            │                           │ gherkin       │     │
+       │            │                           │ order         │     │
+       │            │                           └───────────────┘     │
        │            │                                                 │
        │            │   ┌─────────────────────┐                       │
        │            │   │ test_case_audit_log │                       │
@@ -67,13 +77,24 @@ SimpleTests delivers these core features with a fast, lightweight interface that
        │            │   │ created_at          │                       │
        │            │   └─────────────────────┘                       │
        │            │                                                 │
-       │            │   ┌─────────────────────┐   ┌──────────────────┐│
+       │            │   ┌─────────────────┐                           │
+       │            │   │    releases     │                           │
+       │            │   ├─────────────────┤                           │
+       │            │   │ id (pk)         │◄──────────┐               │
+       │            │   │ name            │           │               │
+       │            │   │ organization_id │───────────┼───────────────┤
+       │            │   │ status          │           │               │
+       │            │   │ created_at      │           │               │
+       │            │   │ created_by      │◄──────────┼───────────────┤
+       │            │   └─────────────────┘           │               │
+       │            │                                 │               │
+       │            │   ┌─────────────────────┐   ┌───┴──────────────┐│
        │            │   │     test_runs       │   │test_run_results  ││
        │            │   ├─────────────────────┤   ├──────────────────┤│
        │            │   │ id (pk)             │◄──│ test_run_id      ││
-       │            └──►│ organization_id     │   │ test_case_id     │┘
+       │            └──►│ organization_id     │   │ scenario_id      │┘
        │                │ name                │   │ status           │
-       │                │ description         │   │ notes            │
+       │                │ release_id          │───│ notes            │
        └───────────────►│ created_by          │   │ executed_at      │
                         │ status              │   │ executed_by      │
                         │ linear_project_id   │   └──────────────────┘
@@ -92,9 +113,12 @@ SimpleTests delivers these core features with a fast, lightweight interface that
 - **Users** - Authenticated via Linear OAuth, belong to an organization
 - **Folders** - Support nested hierarchy via `parent_id` self-reference, scoped by org
 - **Test cases** - Belong to a folder, track who created/updated them, with full audit log
-- **Test runs** - Collections of test cases with optional Linear project/milestone/issue links
-- **Test run results** - Track pass/fail status and notes for each case in a run
+- **Scenarios** - Multiple Gherkin scenarios per test case, ordered within the case
+- **Releases** - Logical groupings for organizing test runs (e.g., "v2.0", "Sprint 15")
+- **Test runs** - Collections of scenarios to execute, optionally linked to a release and Linear project/milestone/issue
+- **Test run results** - Track pass/fail status and notes for each scenario in a run
 - **Audit log** - Records all changes to test cases with field-level diffs
+- **Undo stack** - Enables undo/redo for folder and scenario operations
 
 ### Application Structure
 
@@ -111,13 +135,17 @@ src/
 │   ├── folders/
 │   │   └── actions.ts           # Folder management (create, rename, delete, move)
 │   ├── runs/
-│   │   ├── page.tsx             # Test runs list
+│   │   ├── page.tsx             # Test runs list grouped by release
 │   │   ├── [id]/page.tsx        # Run execution view
 │   │   ├── new/page.tsx         # Create new run
-│   │   └── actions.ts           # Server actions
+│   │   ├── runs-list.tsx        # Runs list component with release grouping
+│   │   └── actions.ts           # Server actions (create, update, add/remove scenarios)
+│   ├── releases/
+│   │   └── actions.ts           # Release management actions
 │   ├── import/page.tsx          # Import instructions
 │   ├── api/
 │   │   ├── auth/[...nextauth]/  # Auth.js route handler
+│   │   ├── repository/          # Import/export endpoints
 │   │   └── linear/              # Linear API endpoints
 │   │       ├── projects/        # Fetch Linear projects
 │   │       ├── milestones/      # Fetch Linear milestones
@@ -136,10 +164,12 @@ src/
 │   ├── sidebar.tsx              # Collapsible navigation sidebar
 │   ├── folder-tree.tsx          # Drag-and-drop folder hierarchy
 │   ├── folder-panel.tsx         # Resizable folder sidebar
-│   ├── test-cases-view.tsx      # Test case list with modal/panel interactions
+│   ├── folder-picker.tsx        # Nested folder selection dropdown
+│   ├── test-cases-view.tsx      # Test case list with bulk actions
 │   ├── gherkin-editor.tsx       # Gherkin textarea with syntax highlighting
 │   ├── create-run-form.tsx      # Run creation with Linear integration
-│   └── run-executor.tsx         # Run execution UI
+│   ├── run-executor.tsx         # Run execution UI with edit support
+│   └── release-picker.tsx       # Release selection with inline creation
 │
 ├── lib/
 │   ├── db/
@@ -222,6 +252,13 @@ Syntax highlighting is applied client-side with semantic colors:
 - Tags (@tag) in cyan
 - Comments (#) in muted gray
 - Tables (|) in green
+- Placeholders (<param>) in orange
+
+#### 7. Multi-Scenario Test Cases
+Test cases can contain multiple scenarios, each with their own Gherkin content. This allows:
+- Grouping related scenarios under a single test case
+- Individual scenario selection when creating test runs
+- Better organization for complex features
 
 ## Features
 
@@ -231,20 +268,27 @@ Syntax highlighting is applied client-side with semantic colors:
 - **Resizable panels** - Drag to resize the folder tree width
 - **Slide-in panels** - View and edit test cases without leaving the list
 - **Modal dialogs** - Create new cases with folder context
+- **Responsive design** - Adapts to different screen sizes
 
 ### Test Case Repository
 - **Folder tree sidebar** - Expandable/collapsible hierarchy with drag-and-drop
+- **Nested folder view** - View test cases from parent folder and all descendants
 - **Drag-and-drop organization** - Move folders and test cases between folders
 - **Right-click context menu** - Rename, delete, or add subfolders
-- **Search and filter** - By title, state
-- **Gherkin editor** - Plain text with syntax highlighting
+- **Search and filter** - By title, state (active, draft, retired, rejected)
+- **Bulk operations** - Select multiple cases to move, change state, delete, or create run
+- **Undo/redo** - Revert folder and scenario changes with keyboard shortcuts (Cmd+Z, Cmd+Shift+Z)
+- **Gherkin editor** - Plain text with live syntax highlighting
+- **Multi-scenario support** - Multiple scenarios per test case
 - **State management** - Active, Draft, Retired, Rejected
 - **Audit history** - See who changed what and when
 
 ### Test Runs
-- **Create runs** - Name, select cases by folder or individually
+- **Create runs** - Name, select cases/scenarios by folder or individually
+- **Releases** - Group runs by release (e.g., "v2.0", "Sprint 15")
+- **Edit runs** - Update name, release, add/remove scenarios after creation
 - **Linear integration** - Link to projects, milestones, and issues
-- **Execute runs** - Step through cases, mark Pass/Fail/Blocked/Skipped
+- **Execute runs** - Step through scenarios, mark Pass/Fail/Blocked/Skipped
 - **Add notes** - Capture observations during testing
 - **Progress tracking** - Visual progress bar, status counts
 
@@ -301,44 +345,6 @@ The app runs at http://localhost:3000 with a local SQLite database.
 
 > **Note:** Linear OAuth won't work locally without credentials. For local development without auth, you may need to temporarily bypass the auth checks.
 
-### Production Setup
-
-1. **Create Turso database**
-   ```bash
-   turso db create simple-tests
-   turso db tokens create simple-tests
-   ```
-
-2. **Create Linear OAuth application**
-   - Go to [Linear Settings > API > OAuth Applications](https://linear.app/settings/api/applications)
-   - Create a new application
-   - Set the callback URL to `https://your-domain.com/api/auth/callback/linear`
-   - Copy the Client ID and Client Secret
-
-3. **Set environment variables**
-   ```env
-   # Database
-   TURSO_DATABASE_URL=libsql://your-db.turso.io
-   TURSO_AUTH_TOKEN=your-token
-
-   # Linear OAuth
-   LINEAR_CLIENT_ID=your-linear-client-id
-   LINEAR_CLIENT_SECRET=your-linear-client-secret
-
-   # Auth.js
-   AUTH_SECRET=generate-with-openssl-rand-base64-32
-   ```
-
-4. **Push database schema**
-   ```bash
-   npm run db:push
-   ```
-
-5. **Deploy to Vercel**
-   ```bash
-   vercel
-   ```
-
 ## Environment Variables
 
 | Variable | Required | Description |
@@ -365,7 +371,8 @@ The app runs at http://localhost:3000 with a local SQLite database.
 | `src/lib/linear.ts` | Linear API client |
 | `src/app/cases/actions.ts` | Test case mutations with audit logging |
 | `src/app/folders/actions.ts` | Folder management mutations |
-| `src/app/runs/actions.ts` | Test run mutations |
+| `src/app/runs/actions.ts` | Test run mutations (create, update, add/remove scenarios) |
+| `src/app/releases/actions.ts` | Release management mutations |
 | `scripts/import-testmo.ts` | CSV import script |
 | `drizzle.config.ts` | Database migration config |
 
@@ -378,18 +385,3 @@ npm run db:push      # Push schema to database
 npm run db:studio    # Open Drizzle Studio (database UI)
 npm run import       # Import Testmo CSV
 ```
-
-## Future Considerations
-
-### Potential Enhancements
-- **Keyboard shortcuts** - Vim-style navigation
-- **Bulk operations** - Move/archive multiple cases
-- **Test templates** - Create cases from templates
-- **Export functionality** - Generate reports, CSV export
-- **Linear comments** - Post test results as issue comments
-
-### What's Intentionally Omitted
-- Complex permissions/roles (organization membership is sufficient)
-- Environment-specific results (just pass/fail)
-- Automated test integration (focus on manual testing)
-- Rich text editing (plain Gherkin is sufficient)
