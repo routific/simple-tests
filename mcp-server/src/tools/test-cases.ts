@@ -1,5 +1,5 @@
 import { eq, and } from "drizzle-orm";
-import { db, testCases, testCaseAuditLog, folders } from "../shared/index.js";
+import { db, testCases, testCaseAuditLog, folders, scenarios } from "../shared/index.js";
 import { AuthContext, hasPermission } from "../auth/index.js";
 import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
@@ -10,7 +10,7 @@ export function registerTestCaseTools(auth: AuthContext): Tool[] {
     tools.push(
       {
         name: "create_test_case",
-        description: "Create a new test case with Gherkin BDD format",
+        description: "Create a new test case with Gherkin BDD format. Creates a test case and a scenario with the gherkin content.",
         inputSchema: {
           type: "object",
           properties: {
@@ -36,13 +36,17 @@ export function registerTestCaseTools(auth: AuthContext): Tool[] {
               enum: ["normal", "high", "critical"],
               description: "Priority level (default: normal)",
             },
+            scenarioTitle: {
+              type: "string",
+              description: "Title for the scenario (defaults to test case title)",
+            },
           },
           required: ["title", "gherkin"],
         },
       },
       {
         name: "update_test_case",
-        description: "Update an existing test case",
+        description: "Update an existing test case. Note: To update gherkin content, use the scenarios directly.",
         inputSchema: {
           type: "object",
           properties: {
@@ -53,10 +57,6 @@ export function registerTestCaseTools(auth: AuthContext): Tool[] {
             title: {
               type: "string",
               description: "New title",
-            },
-            gherkin: {
-              type: "string",
-              description: "New Gherkin specification",
             },
             folderId: {
               type: "number",
@@ -127,12 +127,13 @@ async function createTestCase(
   args: Record<string, unknown>,
   auth: AuthContext
 ): Promise<CallToolResult> {
-  const { title, gherkin, folderId, state, priority } = args as {
+  const { title, gherkin, folderId, state, priority, scenarioTitle } = args as {
     title: string;
     gherkin: string;
     folderId?: number;
     state?: "active" | "draft" | "retired" | "rejected";
     priority?: "normal" | "high" | "critical";
+    scenarioTitle?: string;
   };
 
   if (!title || !gherkin) {
@@ -164,11 +165,12 @@ async function createTestCase(
   }
 
   const now = new Date();
+
+  // Create the test case
   const result = await db
     .insert(testCases)
     .values({
       title,
-      gherkin,
       folderId: folderId ?? null,
       state: state ?? "active",
       priority: priority ?? "normal",
@@ -182,18 +184,33 @@ async function createTestCase(
 
   const testCase = result[0];
 
+  // Create a scenario with the gherkin content
+  const scenarioResult = await db
+    .insert(scenarios)
+    .values({
+      testCaseId: testCase.id,
+      title: scenarioTitle || title,
+      gherkin,
+      order: 0,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning();
+
+  const scenario = scenarioResult[0];
+
   // Create audit log entry
   await db.insert(testCaseAuditLog).values({
     testCaseId: testCase.id,
     userId: auth.userId,
     action: "created",
-    changes: JSON.stringify(["title", "gherkin", "state", "priority", "folderId"]),
+    changes: JSON.stringify(["title", "state", "priority", "folderId", "scenario"]),
     newValues: JSON.stringify({
       title,
-      gherkin,
       state: testCase.state,
       priority: testCase.priority,
       folderId: testCase.folderId,
+      scenario: { title: scenario.title, gherkin },
     }),
     createdAt: now,
   });
@@ -202,7 +219,7 @@ async function createTestCase(
     content: [
       {
         type: "text",
-        text: JSON.stringify({ success: true, testCase }, null, 2),
+        text: JSON.stringify({ success: true, testCase, scenario }, null, 2),
       },
     ],
   };
@@ -212,10 +229,9 @@ async function updateTestCase(
   args: Record<string, unknown>,
   auth: AuthContext
 ): Promise<CallToolResult> {
-  const { id, title, gherkin, folderId, state, priority } = args as {
+  const { id, title, folderId, state, priority } = args as {
     id: number;
     title?: string;
-    gherkin?: string;
     folderId?: number;
     state?: "active" | "draft" | "retired" | "rejected";
     priority?: "normal" | "high" | "critical";
@@ -286,12 +302,8 @@ async function updateTestCase(
     newValues.title = title;
   }
 
-  if (gherkin !== undefined && gherkin !== oldTestCase.gherkin) {
-    updates.gherkin = gherkin;
-    changes.push("gherkin");
-    previousValues.gherkin = oldTestCase.gherkin;
-    newValues.gherkin = gherkin;
-  }
+  // Note: gherkin is now stored in scenarios table, not on test cases
+  // Use update_scenario tool to update gherkin content
 
   if (folderId !== undefined && folderId !== oldTestCase.folderId) {
     updates.folderId = folderId ?? null;

@@ -50,7 +50,7 @@ export const testCases = sqliteTable(
     legacyId: text("legacy_id"),
     title: text("title").notNull(),
     folderId: integer("folder_id").references(() => folders.id),
-    gherkin: text("gherkin").notNull().default(""),
+    order: integer("order").notNull().default(0),
     template: text("template", { enum: ["bdd_feature", "steps", "text"] })
       .notNull()
       .default("bdd_feature"),
@@ -74,6 +74,27 @@ export const testCases = sqliteTable(
     updatedBy: text("updated_by").references(() => users.id),
   },
   (table) => [index("test_cases_org_idx").on(table.organizationId)]
+);
+
+// Scenarios table - each test case has multiple scenarios
+export const scenarios = sqliteTable(
+  "scenarios",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    testCaseId: integer("test_case_id")
+      .notNull()
+      .references(() => testCases.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    gherkin: text("gherkin").notNull().default(""),
+    order: integer("order").notNull().default(0),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [index("scenarios_test_case_idx").on(table.testCaseId)]
 );
 
 export const testCaseAuditLog = sqliteTable(
@@ -173,6 +194,7 @@ export type Organization = typeof organizations.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type Folder = typeof folders.$inferSelect;
 export type TestCase = typeof testCases.$inferSelect;
+export type Scenario = typeof scenarios.$inferSelect;
 export type TestCaseAuditLog = typeof testCaseAuditLog.$inferSelect;
 export type TestRun = typeof testRuns.$inferSelect;
 export type TestRunResult = typeof testRunResults.$inferSelect;
