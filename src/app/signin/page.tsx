@@ -52,7 +52,6 @@ export default function SignInPage() {
             onClick={() => signIn("linear", { callbackUrl: "/" })}
             className="w-full h-12 text-base font-medium bg-[#5E6AD2] hover:bg-[#4F5BC7] text-white shadow-lg shadow-[#5E6AD2]/25"
           >
-            <LinearLogo className="w-5 h-5 mr-2" />
             Continue with Linear
           </Button>
 
@@ -123,14 +122,3 @@ function LinearIcon({ className = "w-4 h-4" }: { className?: string }) {
   );
 }
 
-// Official Linear logo
-function LinearLogo({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 100 100" fill="currentColor">
-      <path d="M1.22541 61.5228c-.2225-.9485.90748-1.5459 1.59638-.857L39.3342 97.1782c.6889.6889.0915 1.8189-.857 1.5964C17.0116 93.5765 3.05765 79.3523 1.22541 61.5228Z" />
-      <path d="M98.7746 38.4772c.2225.9485-.9075 1.5459-1.5964.857L60.6658 2.82181c-.6889-.68886-.0915-1.8189.857-1.59639C82.9884 6.42347 96.9423 20.6477 98.7746 38.4772Z" />
-      <path d="M38.4772 1.22541c.9485-.2225 1.5459.90748.857 1.59638L2.82181 39.3342c-.68886.6889-1.8189.0915-1.59639-.857C6.42347 17.0116 20.6477 3.05765 38.4772 1.22541Z" />
-      <path d="M61.5228 98.7746c-.9485.2225-1.5459-.9075-.857-1.5964l36.5125-36.5124c.6889-.6889 1.8189-.0915 1.5964.857-5.1981 21.4608-19.4223 35.4146-37.2519 37.2518Z" />
-    </svg>
-  );
-}
