@@ -1,6 +1,9 @@
 # SimpleTests
 
-A lightweight, fast test case management app built to replace Testmo. Designed for teams who need a simple way to maintain a repository of Gherkin BDD test cases and coordinate manual test runs for releases.
+A lightweight, fast test case management app with integration to Linear. Designed for teams who need a simple way to maintain a repository of Gherkin BDD test cases and coordinate manual test runs for releases.
+
+<img width="1726" height="986" alt="image" src="https://github.com/user-attachments/assets/e7539c18-3803-4c46-93da-ed4f980a063e" />
+
 
 ## Why SimpleTests?
 
