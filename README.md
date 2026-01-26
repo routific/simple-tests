@@ -351,9 +351,11 @@ The app runs at http://localhost:3000 with a local SQLite database.
 |----------|----------|-------------|
 | `TURSO_DATABASE_URL` | Production | Turso database URL (defaults to `file:local.db`) |
 | `TURSO_AUTH_TOKEN` | Production | Turso authentication token |
-| `LINEAR_CLIENT_ID` | Yes | Linear OAuth application client ID |
-| `LINEAR_CLIENT_SECRET` | Yes | Linear OAuth application client secret |
-| `AUTH_SECRET` | Yes | NextAuth.js secret (generate with `openssl rand -base64 32`) |
+| `LINEAR_CLIENT_ID` | Production | Linear OAuth application client ID |
+| `LINEAR_CLIENT_SECRET` | Production | Linear OAuth application client secret |
+| `AUTH_SECRET` | Production | NextAuth.js secret (generate with `openssl rand -base64 32`) |
+
+> **Note:** When Linear OAuth credentials are not configured, the app runs in local development mode with authentication bypassed.
 
 ## Security
 
