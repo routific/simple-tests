@@ -36,7 +36,7 @@ export interface LinearIssue {
 
 export async function getProjects(): Promise<LinearProject[]> {
   // In local dev mode, Linear APIs are not available
-  if (isLocalDevMode) {
+  if (isLocalDevMode()) {
     return [];
   }
 
@@ -63,7 +63,7 @@ export async function getProjects(): Promise<LinearProject[]> {
 
 export async function getMilestones(projectId?: string): Promise<LinearMilestone[]> {
   // In local dev mode, Linear APIs are not available
-  if (isLocalDevMode) {
+  if (isLocalDevMode()) {
     return [];
   }
 
@@ -94,7 +94,7 @@ export async function getMilestones(projectId?: string): Promise<LinearMilestone
 
 export async function getIssues(search?: string): Promise<LinearIssue[]> {
   // In local dev mode, Linear APIs are not available
-  if (isLocalDevMode) {
+  if (isLocalDevMode()) {
     return [];
   }
 

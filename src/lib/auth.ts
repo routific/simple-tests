@@ -6,7 +6,10 @@ import { eq } from "drizzle-orm";
 import { LinearClient } from "@linear/sdk";
 
 // Check if we're in local dev mode (no Linear credentials configured)
-export const isLocalDevMode = !process.env.LINEAR_CLIENT_ID || !process.env.LINEAR_CLIENT_SECRET;
+// This is a function to ensure it's evaluated at runtime, not build time
+export function isLocalDevMode() {
+  return !process.env.LINEAR_CLIENT_ID || !process.env.LINEAR_CLIENT_SECRET;
+}
 
 // Mock session for local development
 const LOCAL_DEV_SESSION = {
@@ -238,7 +241,7 @@ async function ensureLocalDevData() {
 // Helper to get organization-scoped data
 export async function getSessionWithOrg() {
   // In local dev mode, return mock session
-  if (isLocalDevMode) {
+  if (isLocalDevMode()) {
     await ensureLocalDevData();
     return LOCAL_DEV_SESSION;
   }
