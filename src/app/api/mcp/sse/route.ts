@@ -74,11 +74,16 @@ export async function OPTIONS() {
 }
 
 export async function GET(request: NextRequest) {
-  // Extract and validate token
-  const token = extractBearerToken(request.headers.get("authorization"));
+  // Extract token from Authorization header or query parameter
+  let token = extractBearerToken(request.headers.get("authorization"));
+
+  // Fallback to query parameter for clients that don't support custom headers
+  if (!token) {
+    token = request.nextUrl.searchParams.get("token");
+  }
 
   if (!token) {
-    return new Response(JSON.stringify({ error: "Authorization header required" }), {
+    return new Response(JSON.stringify({ error: "Authorization required. Use Bearer token header or ?token= query parameter" }), {
       status: 401,
       headers: { "Content-Type": "application/json", ...corsHeaders },
     });

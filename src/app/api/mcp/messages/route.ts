@@ -7,11 +7,16 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
-  // Extract and validate token
-  const token = extractBearerToken(request.headers.get("authorization"));
+  // Extract token from Authorization header or query parameter
+  let token = extractBearerToken(request.headers.get("authorization"));
+
+  // Fallback to query parameter for clients that don't support custom headers
+  if (!token) {
+    token = request.nextUrl.searchParams.get("token");
+  }
 
   if (!token) {
-    return NextResponse.json({ error: "Authorization header required" }, { status: 401 });
+    return NextResponse.json({ error: "Authorization required" }, { status: 401 });
   }
 
   const auth = await validateToken(token);
