@@ -60,6 +60,19 @@ class NextJsSSETransport implements McpTransport {
   }
 }
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
+export async function OPTIONS() {
+  return new Response(null, {
+    status: 204,
+    headers: corsHeaders,
+  });
+}
+
 export async function GET(request: NextRequest) {
   // Extract and validate token
   const token = extractBearerToken(request.headers.get("authorization"));
@@ -67,7 +80,7 @@ export async function GET(request: NextRequest) {
   if (!token) {
     return new Response(JSON.stringify({ error: "Authorization header required" }), {
       status: 401,
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...corsHeaders },
     });
   }
 
@@ -76,7 +89,7 @@ export async function GET(request: NextRequest) {
   if (!auth) {
     return new Response(JSON.stringify({ error: "Invalid or expired API token" }), {
       status: 401,
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...corsHeaders },
     });
   }
 
@@ -111,6 +124,7 @@ export async function GET(request: NextRequest) {
       "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
       "X-Accel-Buffering": "no",
+      ...corsHeaders,
     },
   });
 }
