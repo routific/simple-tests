@@ -117,12 +117,32 @@ export const testCaseAuditLog = sqliteTable(
   (table) => [index("audit_log_test_case_idx").on(table.testCaseId)]
 );
 
+// Releases - logical groupings for test runs
+export const releases = sqliteTable(
+  "releases",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    name: text("name").notNull(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    status: text("status", { enum: ["active", "completed"] })
+      .notNull()
+      .default("active"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    createdBy: text("created_by").references(() => users.id),
+  },
+  (table) => [index("releases_org_idx").on(table.organizationId)]
+);
+
 export const testRuns = sqliteTable(
   "test_runs",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
     name: text("name").notNull(),
-    description: text("description"),
+    releaseId: integer("release_id").references(() => releases.id),
     organizationId: text("organization_id")
       .notNull()
       .default("local-dev-org")
@@ -213,6 +233,7 @@ export type Folder = typeof folders.$inferSelect;
 export type TestCase = typeof testCases.$inferSelect;
 export type Scenario = typeof scenarios.$inferSelect;
 export type TestCaseAuditLog = typeof testCaseAuditLog.$inferSelect;
+export type Release = typeof releases.$inferSelect;
 export type TestRun = typeof testRuns.$inferSelect;
 export type TestRunResult = typeof testRunResults.$inferSelect;
 export type UndoStackEntry = typeof undoStack.$inferSelect;

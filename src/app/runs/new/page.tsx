@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { testCases, folders, scenarios } from "@/lib/db/schema";
+import { testCases, folders, scenarios, releases } from "@/lib/db/schema";
 import { eq, count, and } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { CreateRunForm } from "@/components/create-run-form";
@@ -25,6 +25,17 @@ export default async function NewRunPage({ searchParams }: Props) {
   }
 
   const { organizationId } = session.user;
+
+  // Fetch releases for the organization
+  const allReleases = await db
+    .select({
+      id: releases.id,
+      name: releases.name,
+      status: releases.status,
+    })
+    .from(releases)
+    .where(eq(releases.organizationId, organizationId))
+    .orderBy(releases.createdAt);
 
   const allFolders = await db
     .select()
@@ -102,6 +113,7 @@ export default async function NewRunPage({ searchParams }: Props) {
         folders={folderTree}
         cases={cases}
         caseCounts={caseCounts}
+        releases={allReleases as { id: number; name: string; status: "active" | "completed" }[]}
         initialSelectedCaseIds={initialSelectedCaseIds}
       />
     </div>

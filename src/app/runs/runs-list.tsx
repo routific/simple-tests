@@ -1,0 +1,392 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import Link from "next/link";
+import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { completeRelease, reopenRelease } from "@/app/releases/actions";
+
+interface RunWithStats {
+  id: number;
+  name: string;
+  releaseId: number | null;
+  status: "in_progress" | "completed";
+  createdAt: Date | null;
+  linearIssueIdentifier: string | null;
+  linearProjectName: string | null;
+  stats: Record<string, number>;
+  total: number;
+}
+
+interface Release {
+  id: number;
+  name: string;
+  status: "active" | "completed";
+}
+
+interface RunsListProps {
+  runs: RunWithStats[];
+  releases: Release[];
+}
+
+export function RunsList({ runs, releases }: RunsListProps) {
+  const [activeTab, setActiveTab] = useState<"active" | "completed">("active");
+  const [expandedReleases, setExpandedReleases] = useState<Set<number | "unassigned">>(() => {
+    const ids: (number | "unassigned")[] = ["unassigned", ...releases.filter(r => r.status === "active").map(r => r.id)];
+    return new Set(ids);
+  });
+  const [isPending, startTransition] = useTransition();
+  const [optimisticReleases, setOptimisticReleases] = useState(releases);
+
+  // Group runs by release
+  const runsByRelease = new Map<number | "unassigned", RunWithStats[]>();
+  runsByRelease.set("unassigned", []);
+
+  for (const release of optimisticReleases) {
+    runsByRelease.set(release.id, []);
+  }
+
+  for (const run of runs) {
+    const key = run.releaseId ?? "unassigned";
+    const existing = runsByRelease.get(key) || [];
+    existing.push(run);
+    runsByRelease.set(key, existing);
+  }
+
+  // Filter releases by status for current tab
+  const activeReleases = optimisticReleases.filter(r => r.status === "active");
+  const completedReleases = optimisticReleases.filter(r => r.status === "completed");
+
+  const toggleExpand = (id: number | "unassigned") => {
+    setExpandedReleases(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const handleCompleteRelease = (releaseId: number) => {
+    // Optimistic update
+    setOptimisticReleases(prev => prev.map(r =>
+      r.id === releaseId ? { ...r, status: "completed" as const } : r
+    ));
+
+    startTransition(async () => {
+      const result = await completeRelease(releaseId);
+      if (result.error) {
+        // Revert on error
+        setOptimisticReleases(prev => prev.map(r =>
+          r.id === releaseId ? { ...r, status: "active" as const } : r
+        ));
+      }
+    });
+  };
+
+  const handleReopenRelease = (releaseId: number) => {
+    // Optimistic update
+    setOptimisticReleases(prev => prev.map(r =>
+      r.id === releaseId ? { ...r, status: "active" as const } : r
+    ));
+
+    startTransition(async () => {
+      const result = await reopenRelease(releaseId);
+      if (result.error) {
+        // Revert on error
+        setOptimisticReleases(prev => prev.map(r =>
+          r.id === releaseId ? { ...r, status: "completed" as const } : r
+        ));
+      }
+    });
+  };
+
+  const renderReleaseGroup = (release: Release | "unassigned", releaseRuns: RunWithStats[]) => {
+    const isUnassigned = release === "unassigned";
+    const id = isUnassigned ? "unassigned" : release.id;
+    const name = isUnassigned ? "Unassigned" : release.name;
+    const status = isUnassigned ? null : release.status;
+    const isExpanded = expandedReleases.has(id);
+
+    return (
+      <div key={id} className="border-b border-border last:border-b-0">
+        {/* Release Header */}
+        <div
+          className={cn(
+            "flex items-center justify-between p-4 cursor-pointer hover:bg-muted/50 transition-colors",
+            isExpanded && "bg-muted/30"
+          )}
+          onClick={() => toggleExpand(id)}
+        >
+          <div className="flex items-center gap-3">
+            <ChevronIcon
+              className={cn(
+                "w-4 h-4 text-muted-foreground transition-transform",
+                isExpanded && "rotate-90"
+              )}
+            />
+            <div className="flex items-center gap-2">
+              {!isUnassigned && <ReleaseIcon className="w-4 h-4 text-muted-foreground" />}
+              <span className={cn(
+                "font-medium",
+                isUnassigned && "text-muted-foreground"
+              )}>
+                {name}
+              </span>
+              <Badge variant="secondary" className="font-normal">
+                {releaseRuns.length} run{releaseRuns.length !== 1 ? "s" : ""}
+              </Badge>
+            </div>
+          </div>
+
+          {!isUnassigned && (
+            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+              {status === "active" ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleCompleteRelease(release.id)}
+                  disabled={isPending}
+                  className="h-7 text-xs"
+                >
+                  <CheckIcon className="w-3 h-3 mr-1" />
+                  Complete
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleReopenRelease(release.id)}
+                  disabled={isPending}
+                  className="h-7 text-xs"
+                >
+                  <RefreshIcon className="w-3 h-3 mr-1" />
+                  Reopen
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Release Runs */}
+        {isExpanded && (
+          <div className="bg-background">
+            {releaseRuns.length === 0 ? (
+              <div className="py-8 px-4 text-center text-muted-foreground text-sm">
+                No runs in this release
+              </div>
+            ) : (
+              <div className="divide-y divide-border">
+                {releaseRuns.map((run) => (
+                  <RunRow key={run.id} run={run} />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const currentReleases = activeTab === "active" ? activeReleases : completedReleases;
+  const unassignedRuns = runsByRelease.get("unassigned") || [];
+
+  return (
+    <>
+      {/* Tabs */}
+      <div className="flex gap-1 mb-6 p-1 bg-muted rounded-lg w-fit">
+        <button
+          onClick={() => setActiveTab("active")}
+          className={cn(
+            "px-4 py-2 text-sm font-medium rounded-md transition-colors",
+            activeTab === "active"
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          Active
+          <Badge variant="secondary" className="ml-2">
+            {activeReleases.length}
+          </Badge>
+        </button>
+        <button
+          onClick={() => setActiveTab("completed")}
+          className={cn(
+            "px-4 py-2 text-sm font-medium rounded-md transition-colors",
+            activeTab === "completed"
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          Completed
+          <Badge variant="secondary" className="ml-2">
+            {completedReleases.length}
+          </Badge>
+        </button>
+      </div>
+
+      {/* Content */}
+      <Card>
+        <CardHeader className="pb-0">
+          <CardTitle className="text-base font-medium">
+            {activeTab === "active" ? "Active Releases" : "Completed Releases"}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0 mt-4">
+          {currentReleases.length === 0 && (activeTab === "completed" || unassignedRuns.length === 0) ? (
+            <div className="py-12 text-center text-muted-foreground">
+              No {activeTab} releases
+            </div>
+          ) : (
+            <div>
+              {/* Releases */}
+              {currentReleases.map(release =>
+                renderReleaseGroup(release, runsByRelease.get(release.id) || [])
+              )}
+
+              {/* Unassigned runs - show in active tab */}
+              {activeTab === "active" && unassignedRuns.length > 0 &&
+                renderReleaseGroup("unassigned", unassignedRuns)
+              }
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </>
+  );
+}
+
+function RunRow({ run }: { run: RunWithStats }) {
+  const passRate = run.total > 0
+    ? Math.round(((run.stats.passed || 0) / run.total) * 100)
+    : 0;
+
+  return (
+    <Link
+      href={`/runs/${run.id}`}
+      className="flex items-center justify-between p-4 pl-12 hover:bg-muted/50 transition-colors group"
+    >
+      <div className="min-w-0">
+        <div className="font-medium text-foreground group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
+          {run.name}
+        </div>
+        <div className="text-sm text-muted-foreground flex items-center gap-3 mt-0.5 flex-wrap">
+          <span>
+            {run.createdAt?.toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            })}
+          </span>
+          <span className="text-border">·</span>
+          <span>{run.total} cases</span>
+          {run.linearIssueIdentifier && (
+            <>
+              <span className="text-border">·</span>
+              <span className="inline-flex items-center gap-1">
+                <LinearIcon className="w-3.5 h-3.5" />
+                {run.linearIssueIdentifier}
+              </span>
+            </>
+          )}
+          {run.linearProjectName && (
+            <>
+              <span className="text-border">·</span>
+              <span>{run.linearProjectName}</span>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-5">
+        {/* Progress Bar */}
+        {run.total > 0 && (
+          <div className="flex items-center gap-3">
+            <div className="w-28 h-2 bg-muted rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-green-500 to-emerald-500 transition-all duration-500"
+                style={{ width: `${passRate}%` }}
+              />
+            </div>
+            <span className="text-sm font-medium text-muted-foreground w-10 tabular-nums">
+              {passRate}%
+            </span>
+          </div>
+        )}
+
+        {/* Status Badges */}
+        <div className="flex items-center gap-1.5">
+          {run.stats.passed && (
+            <Badge variant="success">{run.stats.passed}</Badge>
+          )}
+          {run.stats.failed && (
+            <Badge variant="destructive">{run.stats.failed}</Badge>
+          )}
+          {run.stats.pending && (
+            <Badge variant="secondary">{run.stats.pending}</Badge>
+          )}
+        </div>
+
+        {/* Run Status */}
+        <Badge variant={run.status === "completed" ? "default" : "warning"}>
+          {run.status}
+        </Badge>
+
+        <ChevronRightIcon className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+      </div>
+    </Link>
+  );
+}
+
+function ChevronIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+    </svg>
+  );
+}
+
+function ChevronRightIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+    </svg>
+  );
+}
+
+function ReleaseIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" />
+    </svg>
+  );
+}
+
+function CheckIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+    </svg>
+  );
+}
+
+function RefreshIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+    </svg>
+  );
+}
+
+function LinearIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 100 100" fill="currentColor">
+      <path d="M1.22541 61.5228c-.2225-.9485.90748-1.5459 1.59638-.857L39.3342 97.1782c.6889.6889.0915 1.8189-.857 1.5765C17.7437 93.8542 4.10651 79.4589 1.22541 61.5228ZM.00189135 46.8891c-.01764375.2833.00333.5765.06289.8686.135.6547.39457 1.2773.76287 1.8359.30428.4629.66873.8855 1.05571 1.2634L52.3503 99.1795c.3879.3784.8213.7343 1.2928 1.0345 1.0157.6628 2.2042.9876 3.3784.8914C71.4499 100.167 83.9267 94.0717 93.2182 84.775c9.2874-9.2923 15.3823-21.7691 16.3172-36.2074.1022-1.5776-.3576-3.1011-1.2642-4.3177-2.7682-3.7138-5.9254-7.0862-9.4048-10.0739C83.2167 20.3171 63.1916 11.5273 41.1236 12.4818 18.9216 13.4426 2.47935 29.0281.00189135 46.8891Z" />
+    </svg>
+  );
+}

@@ -8,7 +8,7 @@ import { getSessionWithOrg } from "@/lib/auth";
 
 interface CreateRunInput {
   name: string;
-  description: string | null;
+  releaseId: number | null;
   scenarioIds: number[];
   linearProjectId: string | null;
   linearProjectName: string | null;
@@ -33,7 +33,7 @@ export async function createTestRun(input: CreateRunInput) {
       .insert(testRuns)
       .values({
         name: input.name,
-        description: input.description,
+        releaseId: input.releaseId,
         organizationId,
         createdBy: userId,
         status: "in_progress",

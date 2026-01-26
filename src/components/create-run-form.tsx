@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { buildFolderBreadcrumb, formatBreadcrumb } from "@/lib/folders";
+import { ReleasePicker } from "@/components/release-picker";
 
 interface Scenario {
   id: number;
@@ -54,10 +55,17 @@ interface Folder {
   children: Folder[];
 }
 
+interface Release {
+  id: number;
+  name: string;
+  status: "active" | "completed";
+}
+
 interface Props {
   folders: Folder[];
   cases: TestCase[];
   caseCounts: Record<number, number>;
+  releases: Release[];
   initialSelectedCaseIds?: number[];
 }
 
@@ -76,11 +84,12 @@ function getStateBadgeVariant(state: string) {
   }
 }
 
-export function CreateRunForm({ folders, cases, caseCounts, initialSelectedCaseIds = [] }: Props) {
+export function CreateRunForm({ folders, cases, caseCounts, releases: initialReleases, initialSelectedCaseIds = [] }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
+  const [selectedReleaseId, setSelectedReleaseId] = useState<number | null>(null);
+  const [releases, setReleases] = useState<Release[]>(initialReleases);
   const [selectedCases, setSelectedCases] = useState<Set<number>>(
     () => new Set(initialSelectedCaseIds)
   );
@@ -273,7 +282,7 @@ export function CreateRunForm({ folders, cases, caseCounts, initialSelectedCaseI
       try {
         const result = await createTestRun({
           name: name.trim(),
-          description: description.trim() || null,
+          releaseId: selectedReleaseId,
           scenarioIds,
           linearProjectId: selectedProject?.id || null,
           linearProjectName: selectedProject?.name || null,
@@ -350,18 +359,21 @@ export function CreateRunForm({ folders, cases, caseCounts, initialSelectedCaseI
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g., Release 2.0 Regression"
+                  placeholder="e.g., Login Tests"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">
-                  Description <span className="text-muted-foreground font-normal">(optional)</span>
+                  Release <span className="text-muted-foreground font-normal">(optional)</span>
                 </label>
-                <Input
-                  type="text"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="e.g., Full regression for v2.0 release"
+                <ReleasePicker
+                  releases={releases}
+                  value={selectedReleaseId}
+                  onChange={setSelectedReleaseId}
+                  onReleaseCreated={(newRelease) => {
+                    setReleases((prev) => [...prev, newRelease]);
+                  }}
+                  placeholder="No release"
                 />
               </div>
             </div>
