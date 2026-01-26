@@ -1,8 +1,9 @@
 import { db } from "@/lib/db";
-import { testRuns, testRunResults, testCases, folders, scenarios } from "@/lib/db/schema";
+import { testRuns, testRunResults, testCases, folders, scenarios, releases } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { RunExecutor } from "@/components/run-executor";
+import { getSessionWithOrg } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,12 @@ interface Props {
 }
 
 export default async function RunDetailPage({ params }: Props) {
+  const session = await getSessionWithOrg();
+  if (!session) {
+    redirect("/api/auth/signin");
+  }
+
+  const { organizationId } = session.user;
   const { id } = await params;
   const runId = parseInt(id);
 
@@ -40,9 +47,40 @@ export default async function RunDetailPage({ params }: Props) {
     .where(eq(testRunResults.testRunId, runId))
     .orderBy(folders.name, testCases.title, scenarios.order);
 
+  // Fetch releases for editing
+  const allReleases = await db
+    .select({
+      id: releases.id,
+      name: releases.name,
+      status: releases.status,
+    })
+    .from(releases)
+    .where(eq(releases.organizationId, organizationId))
+    .orderBy(releases.createdAt);
+
+  // Fetch all available scenarios for adding to run
+  const availableScenarios = await db
+    .select({
+      id: scenarios.id,
+      title: scenarios.title,
+      testCaseId: scenarios.testCaseId,
+      testCaseTitle: testCases.title,
+      folderName: folders.name,
+    })
+    .from(scenarios)
+    .innerJoin(testCases, eq(scenarios.testCaseId, testCases.id))
+    .leftJoin(folders, eq(testCases.folderId, folders.id))
+    .where(eq(testCases.organizationId, organizationId))
+    .orderBy(folders.name, testCases.title, scenarios.order);
+
   return (
     <div className="h-full flex flex-col">
-      <RunExecutor run={run} results={results} />
+      <RunExecutor
+        run={run}
+        results={results}
+        releases={allReleases as { id: number; name: string; status: "active" | "completed" }[]}
+        availableScenarios={availableScenarios}
+      />
     </div>
   );
 }

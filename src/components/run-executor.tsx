@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { GherkinDisplay } from "./gherkin-editor";
-import { updateTestResult, completeTestRun, deleteTestRun } from "@/app/runs/actions";
+import { ReleasePicker } from "./release-picker";
+import { Input } from "./ui/input";
+import { updateTestResult, completeTestRun, deleteTestRun, updateTestRun, addScenariosToRun, removeScenariosFromRun } from "@/app/runs/actions";
 import type { TestRun } from "@/lib/db/schema";
 
 interface Result {
@@ -21,18 +23,60 @@ interface Result {
   folderName: string | null;
 }
 
+interface Release {
+  id: number;
+  name: string;
+  status: "active" | "completed";
+}
+
+interface AvailableScenario {
+  id: number;
+  title: string;
+  testCaseId: number;
+  testCaseTitle: string;
+  folderName: string | null;
+}
+
 interface Props {
   run: TestRun;
   results: Result[];
+  releases: Release[];
+  availableScenarios: AvailableScenario[];
 }
 
-export function RunExecutor({ run, results }: Props) {
+export function RunExecutor({ run, results, releases: initialReleases, availableScenarios }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [selectedResult, setSelectedResult] = useState<Result | null>(
     results.find((r) => r.status === "pending") || results[0] || null
   );
   const [notes, setNotes] = useState("");
+
+  // Edit mode state
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState(run.name);
+  const [editReleaseId, setEditReleaseId] = useState<number | null>(run.releaseId);
+  const [releases, setReleases] = useState<Release[]>(initialReleases);
+  const [showAddScenarios, setShowAddScenarios] = useState(false);
+  const [scenarioSearch, setScenarioSearch] = useState("");
+  const [selectedToAdd, setSelectedToAdd] = useState<Set<number>>(new Set());
+  const [selectedToRemove, setSelectedToRemove] = useState<Set<number>>(new Set());
+
+  // Get scenario IDs already in this run
+  const existingScenarioIds = useMemo(() => new Set(results.map(r => r.scenarioId)), [results]);
+
+  // Filter available scenarios that aren't already in the run
+  const filteredAvailable = useMemo(() => {
+    return availableScenarios
+      .filter(s => !existingScenarioIds.has(s.id))
+      .filter(s => {
+        if (!scenarioSearch) return true;
+        const search = scenarioSearch.toLowerCase();
+        return s.title.toLowerCase().includes(search) ||
+          s.testCaseTitle.toLowerCase().includes(search) ||
+          (s.folderName?.toLowerCase().includes(search) ?? false);
+      });
+  }, [availableScenarios, existingScenarioIds, scenarioSearch]);
 
   const stats = {
     total: results.length,
@@ -83,46 +127,179 @@ export function RunExecutor({ run, results }: Props) {
     });
   };
 
+  const handleSaveEdit = () => {
+    if (!editName.trim()) return;
+
+    startTransition(async () => {
+      await updateTestRun({
+        runId: run.id,
+        name: editName.trim(),
+        releaseId: editReleaseId,
+      });
+      setIsEditing(false);
+      router.refresh();
+    });
+  };
+
+  const handleCancelEdit = () => {
+    setEditName(run.name);
+    setEditReleaseId(run.releaseId);
+    setIsEditing(false);
+  };
+
+  const handleAddScenarios = () => {
+    if (selectedToAdd.size === 0) return;
+
+    startTransition(async () => {
+      await addScenariosToRun({
+        runId: run.id,
+        scenarioIds: Array.from(selectedToAdd),
+      });
+      setSelectedToAdd(new Set());
+      setShowAddScenarios(false);
+      setScenarioSearch("");
+      router.refresh();
+    });
+  };
+
+  const handleRemoveScenarios = () => {
+    if (selectedToRemove.size === 0) return;
+
+    if (!confirm(`Remove ${selectedToRemove.size} scenario(s) from this run?`)) return;
+
+    startTransition(async () => {
+      await removeScenariosFromRun({
+        runId: run.id,
+        resultIds: Array.from(selectedToRemove),
+      });
+      setSelectedToRemove(new Set());
+      if (selectedResult && selectedToRemove.has(selectedResult.id)) {
+        setSelectedResult(null);
+      }
+      router.refresh();
+    });
+  };
+
+  const toggleAddSelection = (scenarioId: number) => {
+    setSelectedToAdd(prev => {
+      const next = new Set(prev);
+      if (next.has(scenarioId)) {
+        next.delete(scenarioId);
+      } else {
+        next.add(scenarioId);
+      }
+      return next;
+    });
+  };
+
+  const toggleRemoveSelection = (resultId: number) => {
+    setSelectedToRemove(prev => {
+      const next = new Set(prev);
+      if (next.has(resultId)) {
+        next.delete(resultId);
+      } else {
+        next.add(resultId);
+      }
+      return next;
+    });
+  };
+
+  const selectedRelease = releases.find(r => r.id === run.releaseId);
+
   return (
     <>
       <div className="p-4 border-b border-[hsl(var(--border))] flex items-center justify-between">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
           <Link
             href="/runs"
             className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
           >
             <BackIcon className="w-5 h-5" />
           </Link>
-          <div>
-            <h1 className="text-xl font-semibold">{run.name}</h1>
-            <div className="text-sm text-[hsl(var(--muted-foreground))] flex items-center gap-3">
-              <span>{run.createdAt?.toLocaleDateString()}</span>
-              <span
-                className={cn(
-                  "px-2 py-0.5 text-xs font-medium rounded",
-                  run.status === "completed"
-                    ? "bg-blue-100 text-blue-800"
-                    : "bg-yellow-100 text-yellow-800"
-                )}
+          {isEditing ? (
+            <div className="flex items-center gap-3">
+              <Input
+                type="text"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                className="w-64"
+                placeholder="Run name"
+              />
+              <ReleasePicker
+                releases={releases}
+                value={editReleaseId}
+                onChange={setEditReleaseId}
+                onReleaseCreated={(newRelease) => {
+                  setReleases(prev => [...prev, newRelease]);
+                }}
+                placeholder="No release"
+                className="w-48"
+              />
+              <button
+                onClick={handleSaveEdit}
+                disabled={isPending || !editName.trim()}
+                className="px-3 py-1.5 text-sm font-medium text-white bg-brand-500 rounded-md hover:bg-brand-600 disabled:opacity-50"
               >
-                {run.status}
-              </span>
+                Save
+              </button>
+              <button
+                onClick={handleCancelEdit}
+                disabled={isPending}
+                className="px-3 py-1.5 text-sm font-medium text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+              >
+                Cancel
+              </button>
             </div>
-          </div>
+          ) : (
+            <div>
+              <h1 className="text-xl font-semibold">{run.name}</h1>
+              <div className="text-sm text-[hsl(var(--muted-foreground))] flex items-center gap-3">
+                <span>{run.createdAt?.toLocaleDateString()}</span>
+                {selectedRelease && (
+                  <>
+                    <span className="text-border">·</span>
+                    <span>{selectedRelease.name}</span>
+                  </>
+                )}
+                <span
+                  className={cn(
+                    "px-2 py-0.5 text-xs font-medium rounded",
+                    run.status === "completed"
+                      ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"
+                      : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400"
+                  )}
+                >
+                  {run.status}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleDelete}
-            disabled={isPending}
-            className="px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 rounded-md disabled:opacity-50"
-          >
-            Delete
-          </button>
-          {run.status === "in_progress" && (
+        <div className="flex items-center gap-1">
+          {!isEditing && (
+            <>
+              <button
+                onClick={() => setIsEditing(true)}
+                className="p-2 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))] rounded-md transition-colors"
+                title="Edit run"
+              >
+                <EditIcon className="w-4 h-4" />
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={isPending}
+                className="p-2 text-[hsl(var(--muted-foreground))] hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors disabled:opacity-50"
+                title="Delete run"
+              >
+                <TrashIcon className="w-4 h-4" />
+              </button>
+            </>
+          )}
+          {run.status === "in_progress" && !isEditing && (
             <button
               onClick={handleComplete}
               disabled={isPending}
-              className="px-4 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:opacity-90 disabled:opacity-50"
+              className="ml-2 px-4 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:opacity-90 disabled:opacity-50"
             >
               Complete Run
             </button>
@@ -151,29 +328,83 @@ export function RunExecutor({ run, results }: Props) {
 
       <div className="flex-1 flex overflow-hidden">
         {/* Scenario list */}
-        <div className="w-80 border-r border-[hsl(var(--border))] overflow-auto">
-          {results.map((result) => (
-            <button
-              key={result.id}
-              onClick={() => {
-                setSelectedResult(result);
-                setNotes(result.notes || "");
-              }}
-              className={cn(
-                "w-full text-left p-3 border-b border-[hsl(var(--border))] hover:bg-[hsl(var(--muted))]",
-                selectedResult?.id === result.id && "bg-[hsl(var(--muted))]"
+        <div className="w-80 border-r border-[hsl(var(--border))] overflow-auto flex flex-col">
+          {/* List header with actions */}
+          {run.status === "in_progress" && (
+            <div className="p-2 border-b border-[hsl(var(--border))] bg-[hsl(var(--muted))] flex items-center justify-between gap-2">
+              {selectedToRemove.size > 0 ? (
+                <>
+                  <span className="text-sm text-[hsl(var(--muted-foreground))]">
+                    {selectedToRemove.size} selected
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setSelectedToRemove(new Set())}
+                      className="px-2 py-1 text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleRemoveScenarios}
+                      disabled={isPending}
+                      className="px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded disabled:opacity-50"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <span className="text-sm font-medium">{results.length} scenarios</span>
+                  <button
+                    onClick={() => setShowAddScenarios(true)}
+                    className="px-2 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/20 rounded flex items-center gap-1"
+                  >
+                    <PlusIcon className="w-3 h-3" />
+                    Add
+                  </button>
+                </>
               )}
-            >
-              <div className="flex items-center gap-2">
-                <StatusIcon status={result.status} />
-                <span className="font-medium truncate flex-1">{result.scenarioTitle}</span>
+            </div>
+          )}
+
+          {/* Scenario list */}
+          <div className="flex-1 overflow-auto">
+            {results.map((result) => (
+              <div
+                key={result.id}
+                className={cn(
+                  "w-full text-left p-3 border-b border-[hsl(var(--border))] hover:bg-[hsl(var(--muted))] flex items-start gap-2",
+                  selectedResult?.id === result.id && "bg-[hsl(var(--muted))]"
+                )}
+              >
+                {run.status === "in_progress" && (
+                  <input
+                    type="checkbox"
+                    checked={selectedToRemove.has(result.id)}
+                    onChange={() => toggleRemoveSelection(result.id)}
+                    className="mt-1 rounded border-gray-300"
+                  />
+                )}
+                <button
+                  onClick={() => {
+                    setSelectedResult(result);
+                    setNotes(result.notes || "");
+                  }}
+                  className="flex-1 text-left min-w-0"
+                >
+                  <div className="flex items-center gap-2">
+                    <StatusIcon status={result.status} />
+                    <span className="font-medium truncate flex-1">{result.scenarioTitle}</span>
+                  </div>
+                  <div className="text-xs text-[hsl(var(--muted-foreground))] mt-1 ml-6">
+                    {result.testCaseTitle}
+                    {result.folderName && ` • ${result.folderName}`}
+                  </div>
+                </button>
               </div>
-              <div className="text-xs text-[hsl(var(--muted-foreground))] mt-1 ml-6">
-                {result.testCaseTitle}
-                {result.folderName && ` • ${result.folderName}`}
-              </div>
-            </button>
-          ))}
+            ))}
+          </div>
         </div>
 
         {/* Detail panel */}
@@ -264,6 +495,96 @@ export function RunExecutor({ run, results }: Props) {
           )}
         </div>
       </div>
+
+      {/* Add Scenarios Modal */}
+      {showAddScenarios && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-[hsl(var(--background))] rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+            <div className="p-4 border-b border-[hsl(var(--border))] flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Add Scenarios</h2>
+              <button
+                onClick={() => {
+                  setShowAddScenarios(false);
+                  setSelectedToAdd(new Set());
+                  setScenarioSearch("");
+                }}
+                className="p-1 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+              >
+                <CloseIcon className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 border-b border-[hsl(var(--border))]">
+              <Input
+                type="text"
+                value={scenarioSearch}
+                onChange={(e) => setScenarioSearch(e.target.value)}
+                placeholder="Search scenarios..."
+                className="w-full"
+              />
+            </div>
+
+            <div className="flex-1 overflow-auto">
+              {filteredAvailable.length === 0 ? (
+                <div className="p-8 text-center text-[hsl(var(--muted-foreground))]">
+                  {scenarioSearch ? "No matching scenarios found" : "All scenarios are already in this run"}
+                </div>
+              ) : (
+                <div className="divide-y divide-[hsl(var(--border))]">
+                  {filteredAvailable.map((scenario) => (
+                    <label
+                      key={scenario.id}
+                      className={cn(
+                        "flex items-start gap-3 p-3 cursor-pointer hover:bg-[hsl(var(--muted))]",
+                        selectedToAdd.has(scenario.id) && "bg-brand-50 dark:bg-brand-900/20"
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedToAdd.has(scenario.id)}
+                        onChange={() => toggleAddSelection(scenario.id)}
+                        className="mt-1 rounded border-gray-300"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium">{scenario.title}</div>
+                        <div className="text-sm text-[hsl(var(--muted-foreground))]">
+                          {scenario.testCaseTitle}
+                          {scenario.folderName && ` • ${scenario.folderName}`}
+                        </div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-[hsl(var(--border))] flex items-center justify-between">
+              <span className="text-sm text-[hsl(var(--muted-foreground))]">
+                {selectedToAdd.size} selected
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setShowAddScenarios(false);
+                    setSelectedToAdd(new Set());
+                    setScenarioSearch("");
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddScenarios}
+                  disabled={isPending || selectedToAdd.size === 0}
+                  className="px-4 py-2 text-sm font-medium text-white bg-brand-500 rounded-md hover:bg-brand-600 disabled:opacity-50"
+                >
+                  Add {selectedToAdd.size > 0 && `(${selectedToAdd.size})`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
@@ -300,6 +621,38 @@ function BackIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+    </svg>
+  );
+}
+
+function EditIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+    </svg>
+  );
+}
+
+function PlusIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+    </svg>
+  );
+}
+
+function CloseIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+    </svg>
+  );
+}
+
+function TrashIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
     </svg>
   );
 }

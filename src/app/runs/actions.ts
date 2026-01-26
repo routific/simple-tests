@@ -162,3 +162,157 @@ export async function deleteTestRun(runId: number) {
     return { error: "Failed to delete test run" };
   }
 }
+
+interface UpdateRunInput {
+  runId: number;
+  name?: string;
+  releaseId?: number | null;
+}
+
+export async function updateTestRun(input: UpdateRunInput) {
+  const session = await getSessionWithOrg();
+  if (!session) {
+    return { error: "Unauthorized" };
+  }
+
+  const { organizationId } = session.user;
+
+  try {
+    // Verify the run belongs to the organization
+    const run = await db
+      .select()
+      .from(testRuns)
+      .where(
+        and(eq(testRuns.id, input.runId), eq(testRuns.organizationId, organizationId))
+      )
+      .get();
+
+    if (!run) {
+      return { error: "Test run not found" };
+    }
+
+    const updates: Partial<typeof testRuns.$inferInsert> = {};
+    if (input.name !== undefined) updates.name = input.name;
+    if (input.releaseId !== undefined) updates.releaseId = input.releaseId;
+
+    await db
+      .update(testRuns)
+      .set(updates)
+      .where(eq(testRuns.id, input.runId));
+
+    revalidatePath("/runs");
+    revalidatePath(`/runs/${input.runId}`);
+
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to update test run:", error);
+    return { error: "Failed to update test run" };
+  }
+}
+
+interface AddScenariosInput {
+  runId: number;
+  scenarioIds: number[];
+}
+
+export async function addScenariosToRun(input: AddScenariosInput) {
+  const session = await getSessionWithOrg();
+  if (!session) {
+    return { error: "Unauthorized" };
+  }
+
+  const { organizationId } = session.user;
+
+  try {
+    // Verify the run belongs to the organization
+    const run = await db
+      .select()
+      .from(testRuns)
+      .where(
+        and(eq(testRuns.id, input.runId), eq(testRuns.organizationId, organizationId))
+      )
+      .get();
+
+    if (!run) {
+      return { error: "Test run not found" };
+    }
+
+    // Get existing scenario IDs in this run
+    const existing = await db
+      .select({ scenarioId: testRunResults.scenarioId })
+      .from(testRunResults)
+      .where(eq(testRunResults.testRunId, input.runId));
+
+    const existingIds = new Set(existing.map((e) => e.scenarioId));
+
+    // Only add scenarios that aren't already in the run
+    const newScenarioIds = input.scenarioIds.filter((id) => !existingIds.has(id));
+
+    if (newScenarioIds.length > 0) {
+      await db.insert(testRunResults).values(
+        newScenarioIds.map((scenarioId) => ({
+          testRunId: input.runId,
+          scenarioId,
+          status: "pending" as const,
+        }))
+      );
+    }
+
+    revalidatePath("/runs");
+    revalidatePath(`/runs/${input.runId}`);
+
+    return { success: true, added: newScenarioIds.length };
+  } catch (error) {
+    console.error("Failed to add scenarios to run:", error);
+    return { error: "Failed to add scenarios to run" };
+  }
+}
+
+interface RemoveScenariosInput {
+  runId: number;
+  resultIds: number[];
+}
+
+export async function removeScenariosFromRun(input: RemoveScenariosInput) {
+  const session = await getSessionWithOrg();
+  if (!session) {
+    return { error: "Unauthorized" };
+  }
+
+  const { organizationId } = session.user;
+
+  try {
+    // Verify the run belongs to the organization
+    const run = await db
+      .select()
+      .from(testRuns)
+      .where(
+        and(eq(testRuns.id, input.runId), eq(testRuns.organizationId, organizationId))
+      )
+      .get();
+
+    if (!run) {
+      return { error: "Test run not found" };
+    }
+
+    // Delete the specified results
+    for (const resultId of input.resultIds) {
+      await db
+        .delete(testRunResults)
+        .where(
+          and(
+            eq(testRunResults.id, resultId),
+            eq(testRunResults.testRunId, input.runId)
+          )
+        );
+    }
+
+    revalidatePath("/runs");
+    revalidatePath(`/runs/${input.runId}`);
+
+    return { success: true, removed: input.resultIds.length };
+  } catch (error) {
+    console.error("Failed to remove scenarios from run:", error);
+    return { error: "Failed to remove scenarios from run" };
+  }
+}
