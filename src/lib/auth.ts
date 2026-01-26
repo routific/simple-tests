@@ -52,6 +52,7 @@ function LinearProvider(): OAuthConfig<LinearProfile> {
       url: "https://api.linear.app/oauth/token",
     },
     userinfo: {
+      url: "https://api.linear.app/graphql",
       async request({ tokens }: { tokens: { access_token?: string } }) {
         const client = new LinearClient({ accessToken: tokens.access_token });
         const viewer = await client.viewer;
