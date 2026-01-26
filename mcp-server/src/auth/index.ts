@@ -10,35 +10,53 @@ export interface AuthContext {
 }
 
 /**
- * Hash a token using SHA-256
+ * Hash a secret using SHA-256
  */
-export function hashToken(token: string): string {
-  return createHash("sha256").update(token).digest("hex");
+export function hashSecret(secret: string): string {
+  return createHash("sha256").update(secret).digest("hex");
+}
+
+/**
+ * Parse a token string into its components
+ * Token format: st_<id>.<secret>
+ */
+export function parseToken(token: string): { id: string; secret: string } | null {
+  if (!token) {
+    return null;
+  }
+
+  const dotIndex = token.indexOf(".");
+  if (dotIndex === -1) {
+    return null;
+  }
+
+  const id = token.slice(0, dotIndex);
+  const secret = token.slice(dotIndex + 1);
+
+  if (!id.startsWith("st_") || !secret) {
+    return null;
+  }
+
+  return { id, secret };
 }
 
 /**
  * Validate an API token and return the auth context
  */
 export async function validateToken(token: string): Promise<AuthContext | null> {
-  if (!token) {
+  const parsed = parseToken(token);
+  if (!parsed) {
     return null;
   }
 
-  const tokenHash = hashToken(token);
+  const { id, secret } = parsed;
+  const secretHash = hashSecret(secret);
 
+  // Look up by token ID (primary key) for efficiency
   const result = await db
     .select()
     .from(apiTokens)
-    .where(
-      and(
-        eq(apiTokens.tokenHash, tokenHash),
-        isNull(apiTokens.revokedAt),
-        or(
-          isNull(apiTokens.expiresAt),
-          gt(apiTokens.expiresAt, new Date())
-        )
-      )
-    )
+    .where(eq(apiTokens.id, id))
     .limit(1);
 
   if (result.length === 0) {
@@ -46,6 +64,21 @@ export async function validateToken(token: string): Promise<AuthContext | null> 
   }
 
   const apiToken = result[0];
+
+  // Verify the secret hash matches
+  if (apiToken.tokenHash !== secretHash) {
+    return null;
+  }
+
+  // Check if revoked
+  if (apiToken.revokedAt) {
+    return null;
+  }
+
+  // Check if expired
+  if (apiToken.expiresAt && apiToken.expiresAt < new Date()) {
+    return null;
+  }
 
   // Update last used timestamp
   await db
