@@ -18,7 +18,7 @@ interface Props {
 export default async function CasesPage({ searchParams }: Props) {
   const session = await getSessionWithOrg();
   if (!session) {
-    redirect("/api/auth/signin");
+    redirect("/signin");
   }
 
   const { organizationId } = session.user;

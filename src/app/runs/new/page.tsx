@@ -21,7 +21,7 @@ export default async function NewRunPage({ searchParams }: Props) {
     : [];
   const session = await getSessionWithOrg();
   if (!session) {
-    redirect("/api/auth/signin");
+    redirect("/signin");
   }
 
   const { organizationId } = session.user;

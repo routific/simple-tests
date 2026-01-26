@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 export default async function RunsPage() {
   const session = await getSessionWithOrg();
   if (!session) {
-    redirect("/api/auth/signin");
+    redirect("/signin");
   }
 
   const { organizationId } = session.user;

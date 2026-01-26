@@ -14,7 +14,7 @@ interface Props {
 export default async function RunDetailPage({ params }: Props) {
   const session = await getSessionWithOrg();
   if (!session) {
-    redirect("/api/auth/signin");
+    redirect("/signin");
   }
 
   const { organizationId } = session.user;

@@ -72,7 +72,7 @@ async function getStats(organizationId: string) {
 export default async function Dashboard() {
   const session = await getSessionWithOrg();
   if (!session) {
-    redirect("/api/auth/signin");
+    redirect("/signin");
   }
 
   const stats = await getStats(session.user.organizationId);
