@@ -80,10 +80,10 @@ export function ConnectInstructions({ baseUrl }: ConnectInstructionsProps) {
               </div>
             </div>
             <div className="flex-1">
-              <h3 className="font-medium text-foreground mb-2">Open Claude Desktop Settings</h3>
+              <h3 className="font-medium text-foreground mb-2">Add the MCP Server</h3>
               <p className="text-sm text-muted-foreground mb-3">
-                In Claude Desktop, click on your profile icon and select <strong>Settings</strong>,
-                then navigate to the <strong>Developer</strong> tab and click <strong>Edit Config</strong>.
+                In Claude Desktop, go to <strong>Settings</strong> &rarr; <strong>Connections</strong> and click <strong>Add MCP Server</strong>.
+                Paste the URL above when prompted.
               </p>
             </div>
           </div>
@@ -96,22 +96,11 @@ export function ConnectInstructions({ baseUrl }: ConnectInstructionsProps) {
               </div>
             </div>
             <div className="flex-1">
-              <h3 className="font-medium text-foreground mb-2">Add the MCP Server Configuration</h3>
+              <h3 className="font-medium text-foreground mb-2">Sign in with Linear</h3>
               <p className="text-sm text-muted-foreground mb-3">
-                Add the following to your <code className="bg-muted px-1.5 py-0.5 rounded text-xs">claude_desktop_config.json</code> file:
+                Claude will open a browser window for you to sign in with your Linear account.
+                This uses OAuth to securely authenticate without sharing passwords.
               </p>
-              <CodeBlock
-                code={`{
-  "mcpServers": {
-    "simple-tests": {
-      "url": "${mcpUrl}"
-    }
-  }
-}`}
-                language="json"
-                onCopy={(code) => copyToClipboard(code, "config")}
-                copied={copiedSection === "config"}
-              />
             </div>
           </div>
 
@@ -123,25 +112,10 @@ export function ConnectInstructions({ baseUrl }: ConnectInstructionsProps) {
               </div>
             </div>
             <div className="flex-1">
-              <h3 className="font-medium text-foreground mb-2">Restart Claude Desktop</h3>
+              <h3 className="font-medium text-foreground mb-2">Start using SimpleTests</h3>
               <p className="text-sm text-muted-foreground mb-3">
-                Close and reopen Claude Desktop for the changes to take effect.
-              </p>
-            </div>
-          </div>
-
-          {/* Step 4 */}
-          <div className="flex gap-4">
-            <div className="shrink-0">
-              <div className="w-8 h-8 rounded-full bg-brand-500 text-white flex items-center justify-center text-sm font-medium">
-                4
-              </div>
-            </div>
-            <div className="flex-1">
-              <h3 className="font-medium text-foreground mb-2">Authenticate</h3>
-              <p className="text-sm text-muted-foreground mb-3">
-                When Claude tries to use SimpleTests, you&apos;ll be prompted to authenticate via Linear OAuth.
-                This securely connects your Linear account to the MCP session.
+                Once connected, you can ask Claude to create test cases, search for existing tests,
+                manage test runs, and more. Claude will use the MCP tools automatically.
               </p>
             </div>
           </div>
@@ -226,43 +200,11 @@ export function ConnectInstructions({ baseUrl }: ConnectInstructionsProps) {
           If you&apos;re having trouble connecting, make sure:
         </p>
         <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
-          <li>You&apos;re signed into SimpleTests with your Linear account</li>
+          <li>You have a Linear account with access to your organization</li>
           <li>Claude Desktop is using the latest version</li>
-          <li>The MCP server URL is correct and accessible</li>
-          <li>You&apos;ve restarted Claude Desktop after editing the config</li>
+          <li>You complete the OAuth sign-in when prompted</li>
         </ul>
       </div>
-    </div>
-  );
-}
-
-function CodeBlock({
-  code,
-  language,
-  onCopy,
-  copied,
-}: {
-  code: string;
-  language: string;
-  onCopy: (code: string) => void;
-  copied: boolean;
-}) {
-  return (
-    <div className="relative">
-      <pre className="bg-slate-900 text-slate-100 rounded-lg p-4 overflow-x-auto text-sm">
-        <code>{code}</code>
-      </pre>
-      <button
-        onClick={() => onCopy(code)}
-        className="absolute top-2 right-2 p-2 rounded-md bg-slate-800 hover:bg-slate-700 transition-colors"
-        title="Copy code"
-      >
-        {copied ? (
-          <CheckIcon className="w-4 h-4 text-green-400" />
-        ) : (
-          <CopyIcon className="w-4 h-4 text-slate-400" />
-        )}
-      </button>
     </div>
   );
 }
