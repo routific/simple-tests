@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
+import { useState, useTransition, useMemo, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -9,6 +9,25 @@ import { ReleasePicker } from "./release-picker";
 import { Input } from "./ui/input";
 import { updateTestResult, completeTestRun, deleteTestRun, updateTestRun, addScenariosToRun, removeScenariosFromRun } from "@/app/runs/actions";
 import type { TestRun } from "@/lib/db/schema";
+
+interface LinearProject {
+  id: string;
+  name: string;
+  state: string;
+}
+
+interface LinearMilestone {
+  id: string;
+  name: string;
+  targetDate?: string;
+}
+
+interface LinearIssue {
+  id: string;
+  identifier: string;
+  title: string;
+  state: { name: string; color: string };
+}
 
 interface Result {
   id: number;
@@ -63,6 +82,30 @@ export function RunExecutor({ run, results, releases: initialReleases, available
   const [selectedToAdd, setSelectedToAdd] = useState<Set<number>>(new Set());
   const [selectedToRemove, setSelectedToRemove] = useState<Set<number>>(new Set());
 
+  // Linear edit state
+  const [projects, setProjects] = useState<LinearProject[]>([]);
+  const [milestones, setMilestones] = useState<LinearMilestone[]>([]);
+  const [issues, setIssues] = useState<LinearIssue[]>([]);
+  const [editProject, setEditProject] = useState<LinearProject | null>(
+    run.linearProjectId && run.linearProjectName
+      ? { id: run.linearProjectId, name: run.linearProjectName, state: "" }
+      : null
+  );
+  const [editMilestone, setEditMilestone] = useState<LinearMilestone | null>(
+    run.linearMilestoneId && run.linearMilestoneName
+      ? { id: run.linearMilestoneId, name: run.linearMilestoneName }
+      : null
+  );
+  const [editIssue, setEditIssue] = useState<LinearIssue | null>(
+    run.linearIssueId && run.linearIssueIdentifier
+      ? { id: run.linearIssueId, identifier: run.linearIssueIdentifier, title: run.linearIssueTitle || "", state: { name: "", color: "" } }
+      : null
+  );
+  const [issueSearch, setIssueSearch] = useState("");
+  const [loadingProjects, setLoadingProjects] = useState(false);
+  const [loadingMilestones, setLoadingMilestones] = useState(false);
+  const [loadingIssues, setLoadingIssues] = useState(false);
+
   // Get scenario IDs already in this run
   const existingScenarioIds = useMemo(() => new Set(results.map(r => r.scenarioId)), [results]);
 
@@ -89,6 +132,78 @@ export function RunExecutor({ run, results, releases: initialReleases, available
   };
 
   const passRate = stats.total > 0 ? Math.round((stats.passed / stats.total) * 100) : 0;
+
+  // Fetch Linear projects when entering edit mode
+  useEffect(() => {
+    if (!isEditing) return;
+    async function fetchProjects() {
+      setLoadingProjects(true);
+      try {
+        const res = await fetch("/api/linear/projects");
+        if (res.ok) {
+          const data = await res.json();
+          setProjects(data);
+        }
+      } catch (e) {
+        console.error("Failed to fetch projects:", e);
+      } finally {
+        setLoadingProjects(false);
+      }
+    }
+    fetchProjects();
+  }, [isEditing]);
+
+  // Fetch milestones when project changes
+  useEffect(() => {
+    if (!isEditing) return;
+    async function fetchMilestones() {
+      if (!editProject) {
+        setMilestones([]);
+        return;
+      }
+      setLoadingMilestones(true);
+      try {
+        const res = await fetch(`/api/linear/milestones?projectId=${editProject.id}`);
+        if (res.ok) {
+          const data = await res.json();
+          setMilestones(data);
+        }
+      } catch (e) {
+        console.error("Failed to fetch milestones:", e);
+      } finally {
+        setLoadingMilestones(false);
+      }
+    }
+    fetchMilestones();
+  }, [isEditing, editProject]);
+
+  // Debounced issue search
+  const searchIssues = useCallback(async (search: string) => {
+    if (!search.trim()) {
+      setIssues([]);
+      return;
+    }
+    setLoadingIssues(true);
+    try {
+      const res = await fetch(`/api/linear/issues?q=${encodeURIComponent(search)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setIssues(data);
+      }
+    } catch (e) {
+      console.error("Failed to fetch issues:", e);
+    } finally {
+      setLoadingIssues(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isEditing || editIssue) return;
+    const timer = setTimeout(() => {
+      searchIssues(issueSearch);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [issueSearch, searchIssues, isEditing, editIssue]);
 
   const handleStatusUpdate = (status: "passed" | "failed" | "blocked" | "skipped") => {
     if (!selectedResult) return;
@@ -136,6 +251,13 @@ export function RunExecutor({ run, results, releases: initialReleases, available
         runId: run.id,
         name: editName.trim(),
         releaseId: editReleaseId,
+        linearProjectId: editProject?.id || null,
+        linearProjectName: editProject?.name || null,
+        linearMilestoneId: editMilestone?.id || null,
+        linearMilestoneName: editMilestone?.name || null,
+        linearIssueId: editIssue?.id || null,
+        linearIssueIdentifier: editIssue?.identifier || null,
+        linearIssueTitle: editIssue?.title || null,
       });
       setIsEditing(false);
       router.refresh();
@@ -145,6 +267,22 @@ export function RunExecutor({ run, results, releases: initialReleases, available
   const handleCancelEdit = () => {
     setEditName(run.name);
     setEditReleaseId(run.releaseId);
+    setEditProject(
+      run.linearProjectId && run.linearProjectName
+        ? { id: run.linearProjectId, name: run.linearProjectName, state: "" }
+        : null
+    );
+    setEditMilestone(
+      run.linearMilestoneId && run.linearMilestoneName
+        ? { id: run.linearMilestoneId, name: run.linearMilestoneName }
+        : null
+    );
+    setEditIssue(
+      run.linearIssueId && run.linearIssueIdentifier
+        ? { id: run.linearIssueId, identifier: run.linearIssueIdentifier, title: run.linearIssueTitle || "", state: { name: "", color: "" } }
+        : null
+    );
+    setIssueSearch("");
     setIsEditing(false);
   };
 
@@ -218,38 +356,125 @@ export function RunExecutor({ run, results, releases: initialReleases, available
             <BackIcon className="w-5 h-5" />
           </Link>
           {isEditing ? (
-            <div className="flex items-center gap-3">
-              <Input
-                type="text"
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                className="w-64"
-                placeholder="Run name"
-              />
-              <ReleasePicker
-                releases={releases}
-                value={editReleaseId}
-                onChange={setEditReleaseId}
-                onReleaseCreated={(newRelease) => {
-                  setReleases(prev => [...prev, newRelease]);
-                }}
-                placeholder="No release"
-                className="w-48"
-              />
-              <button
-                onClick={handleSaveEdit}
-                disabled={isPending || !editName.trim()}
-                className="px-3 py-1.5 text-sm font-medium text-white bg-brand-500 rounded-md hover:bg-brand-600 disabled:opacity-50"
-              >
-                Save
-              </button>
-              <button
-                onClick={handleCancelEdit}
-                disabled={isPending}
-                className="px-3 py-1.5 text-sm font-medium text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
-              >
-                Cancel
-              </button>
+            <div className="flex flex-col gap-3 flex-1">
+              <div className="flex items-center gap-3">
+                <Input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-64"
+                  placeholder="Run name"
+                />
+                <ReleasePicker
+                  releases={releases}
+                  value={editReleaseId}
+                  onChange={setEditReleaseId}
+                  onReleaseCreated={(newRelease) => {
+                    setReleases(prev => [...prev, newRelease]);
+                  }}
+                  placeholder="No release"
+                  className="w-48"
+                />
+                <button
+                  onClick={handleSaveEdit}
+                  disabled={isPending || !editName.trim()}
+                  className="px-3 py-1.5 text-sm font-medium text-white bg-brand-500 rounded-md hover:bg-brand-600 disabled:opacity-50"
+                >
+                  Save
+                </button>
+                <button
+                  onClick={handleCancelEdit}
+                  disabled={isPending}
+                  className="px-3 py-1.5 text-sm font-medium text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+                >
+                  Cancel
+                </button>
+              </div>
+              <div className="flex items-center gap-3 text-sm">
+                <div className="flex items-center gap-2">
+                  <label className="text-[hsl(var(--muted-foreground))]">Project:</label>
+                  <select
+                    value={editProject?.id || ""}
+                    onChange={(e) => {
+                      const proj = projects.find(p => p.id === e.target.value);
+                      setEditProject(proj || null);
+                      setEditMilestone(null);
+                    }}
+                    disabled={loadingProjects}
+                    className="px-2 py-1 border border-[hsl(var(--border))] rounded text-sm bg-[hsl(var(--background))]"
+                  >
+                    <option value="">None</option>
+                    {projects.map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-[hsl(var(--muted-foreground))]">Milestone:</label>
+                  <select
+                    value={editMilestone?.id || ""}
+                    onChange={(e) => {
+                      const ms = milestones.find(m => m.id === e.target.value);
+                      setEditMilestone(ms || null);
+                    }}
+                    disabled={!editProject || loadingMilestones}
+                    className="px-2 py-1 border border-[hsl(var(--border))] rounded text-sm bg-[hsl(var(--background))] disabled:opacity-50"
+                  >
+                    <option value="">None</option>
+                    {milestones.map(m => (
+                      <option key={m.id} value={m.id}>{m.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-center gap-2 relative">
+                  <label className="text-[hsl(var(--muted-foreground))]">Issue:</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={editIssue ? `${editIssue.identifier}: ${editIssue.title}` : issueSearch}
+                      onChange={(e) => {
+                        if (editIssue) {
+                          setEditIssue(null);
+                          setIssueSearch(e.target.value);
+                        } else {
+                          setIssueSearch(e.target.value);
+                        }
+                      }}
+                      placeholder="Search issues..."
+                      className="px-2 py-1 border border-[hsl(var(--border))] rounded text-sm bg-[hsl(var(--background))] w-48"
+                    />
+                    {editIssue && (
+                      <button
+                        onClick={() => {
+                          setEditIssue(null);
+                          setIssueSearch("");
+                        }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+                      >
+                        ×
+                      </button>
+                    )}
+                    {!editIssue && issueSearch && issues.length > 0 && (
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-[hsl(var(--background))] border border-[hsl(var(--border))] rounded shadow-lg z-10 max-h-48 overflow-auto">
+                        {issues.map(issue => (
+                          <button
+                            key={issue.id}
+                            onClick={() => {
+                              setEditIssue(issue);
+                              setIssueSearch("");
+                              setIssues([]);
+                            }}
+                            className="w-full text-left px-3 py-2 hover:bg-[hsl(var(--muted))] text-sm"
+                          >
+                            <span className="font-medium">{issue.identifier}</span>
+                            <span className="text-[hsl(var(--muted-foreground))]"> {issue.title}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           ) : (
             <div>

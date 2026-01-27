@@ -187,6 +187,13 @@ interface UpdateRunInput {
   runId: number;
   name?: string;
   releaseId?: number | null;
+  linearProjectId?: string | null;
+  linearProjectName?: string | null;
+  linearMilestoneId?: string | null;
+  linearMilestoneName?: string | null;
+  linearIssueId?: string | null;
+  linearIssueIdentifier?: string | null;
+  linearIssueTitle?: string | null;
 }
 
 export async function updateTestRun(input: UpdateRunInput) {
@@ -214,6 +221,13 @@ export async function updateTestRun(input: UpdateRunInput) {
     const updates: Partial<typeof testRuns.$inferInsert> = {};
     if (input.name !== undefined) updates.name = input.name;
     if (input.releaseId !== undefined) updates.releaseId = input.releaseId;
+    if (input.linearProjectId !== undefined) updates.linearProjectId = input.linearProjectId;
+    if (input.linearProjectName !== undefined) updates.linearProjectName = input.linearProjectName;
+    if (input.linearMilestoneId !== undefined) updates.linearMilestoneId = input.linearMilestoneId;
+    if (input.linearMilestoneName !== undefined) updates.linearMilestoneName = input.linearMilestoneName;
+    if (input.linearIssueId !== undefined) updates.linearIssueId = input.linearIssueId;
+    if (input.linearIssueIdentifier !== undefined) updates.linearIssueIdentifier = input.linearIssueIdentifier;
+    if (input.linearIssueTitle !== undefined) updates.linearIssueTitle = input.linearIssueTitle;
 
     await db
       .update(testRuns)
