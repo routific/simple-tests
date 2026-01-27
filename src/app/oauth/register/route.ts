@@ -127,5 +127,3 @@ export async function OPTIONS() {
   });
 }
 
-// Export for use by other modules
-export { registeredClients };
