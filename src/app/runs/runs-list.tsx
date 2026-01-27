@@ -17,6 +17,8 @@ interface RunWithStats {
   linearIssueIdentifier: string | null;
   linearProjectId: string | null;
   linearProjectName: string | null;
+  linearMilestoneId: string | null;
+  linearMilestoneName: string | null;
   stats: Record<string, number>;
   total: number;
 }
@@ -316,6 +318,21 @@ function RunRow({ run, linearWorkspace }: { run: RunWithStats; linearWorkspace?:
               </a>
             </>
           )}
+          {run.linearMilestoneName && run.linearMilestoneId && run.linearProjectId && linearWorkspace && (
+            <>
+              <span className="text-border">·</span>
+              <a
+                href={`https://linear.app/${linearWorkspace}/project/${run.linearProjectId}#projectTab=milestones`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="inline-flex items-center gap-1 hover:text-foreground hover:underline transition-colors"
+              >
+                <MilestoneIcon className="w-3.5 h-3.5" />
+                {run.linearMilestoneName}
+              </a>
+            </>
+          )}
         </div>
       </div>
 
@@ -415,6 +432,14 @@ function ProjectIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
+    </svg>
+  );
+}
+
+function MilestoneIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v1.5M3 21v-6m0 0l2.77-.693a9 9 0 016.208.682l.108.054a9 9 0 006.086.71l3.114-.732a48.524 48.524 0 01-.005-10.499l-3.11.732a9 9 0 01-6.085-.711l-.108-.054a9 9 0 00-6.208-.682L3 4.5M3 15V4.5" />
     </svg>
   );
 }

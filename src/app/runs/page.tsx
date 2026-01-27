@@ -64,6 +64,8 @@ export default async function RunsPage() {
         linearIssueIdentifier: run.linearIssueIdentifier,
         linearProjectId: run.linearProjectId,
         linearProjectName: run.linearProjectName,
+        linearMilestoneId: run.linearMilestoneId,
+        linearMilestoneName: run.linearMilestoneName,
         stats,
         total,
       };

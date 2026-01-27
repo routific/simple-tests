@@ -390,88 +390,120 @@ export function RunExecutor({ run, results, releases: initialReleases, available
                   Cancel
                 </button>
               </div>
-              <div className="flex items-center gap-3 text-sm">
-                <div className="flex items-center gap-2">
-                  <label className="text-[hsl(var(--muted-foreground))]">Project:</label>
-                  <select
-                    value={editProject?.id || ""}
-                    onChange={(e) => {
-                      const proj = projects.find(p => p.id === e.target.value);
-                      setEditProject(proj || null);
-                      setEditMilestone(null);
-                    }}
-                    disabled={loadingProjects}
-                    className="px-2 py-1 border border-[hsl(var(--border))] rounded text-sm bg-[hsl(var(--background))]"
-                  >
-                    <option value="">None</option>
-                    {projects.map(p => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
+              {/* Linear Integration */}
+              <div className="border border-[hsl(var(--border))] rounded-lg p-3 bg-[hsl(var(--muted))]/30">
+                <div className="flex items-center gap-2 mb-3">
+                  <LinearIcon className="w-4 h-4 text-brand-600" />
+                  <span className="text-sm font-medium">Linear Integration</span>
+                  <span className="text-xs text-[hsl(var(--muted-foreground))]">(optional)</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <label className="text-[hsl(var(--muted-foreground))]">Milestone:</label>
-                  <select
-                    value={editMilestone?.id || ""}
-                    onChange={(e) => {
-                      const ms = milestones.find(m => m.id === e.target.value);
-                      setEditMilestone(ms || null);
-                    }}
-                    disabled={!editProject || loadingMilestones}
-                    className="px-2 py-1 border border-[hsl(var(--border))] rounded text-sm bg-[hsl(var(--background))] disabled:opacity-50"
-                  >
-                    <option value="">None</option>
-                    {milestones.map(m => (
-                      <option key={m.id} value={m.id}>{m.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex items-center gap-2 relative">
-                  <label className="text-[hsl(var(--muted-foreground))]">Issue:</label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={editIssue ? `${editIssue.identifier}: ${editIssue.title}` : issueSearch}
+
+                <div className="grid grid-cols-3 gap-4">
+                  {/* Project Selector */}
+                  <div>
+                    <label className="block text-sm text-[hsl(var(--muted-foreground))] mb-1.5">
+                      Project
+                    </label>
+                    <select
+                      value={editProject?.id || ""}
                       onChange={(e) => {
-                        if (editIssue) {
-                          setEditIssue(null);
-                          setIssueSearch(e.target.value);
-                        } else {
-                          setIssueSearch(e.target.value);
-                        }
+                        const proj = projects.find(p => p.id === e.target.value);
+                        setEditProject(proj || null);
+                        setEditMilestone(null);
                       }}
-                      placeholder="Search issues..."
-                      className="px-2 py-1 border border-[hsl(var(--border))] rounded text-sm bg-[hsl(var(--background))] w-48"
-                    />
-                    {editIssue && (
-                      <button
-                        onClick={() => {
-                          setEditIssue(null);
-                          setIssueSearch("");
+                      disabled={loadingProjects}
+                      className="w-full px-3 py-2 text-sm border border-[hsl(var(--border))] rounded-lg bg-[hsl(var(--background))] focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors disabled:opacity-50"
+                    >
+                      <option value="">None</option>
+                      {projects.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Milestone Selector */}
+                  <div>
+                    <label className="block text-sm text-[hsl(var(--muted-foreground))] mb-1.5">
+                      Milestone
+                    </label>
+                    <select
+                      value={editMilestone?.id || ""}
+                      onChange={(e) => {
+                        const ms = milestones.find(m => m.id === e.target.value);
+                        setEditMilestone(ms || null);
+                      }}
+                      disabled={!editProject || loadingMilestones}
+                      className="w-full px-3 py-2 text-sm border border-[hsl(var(--border))] rounded-lg bg-[hsl(var(--background))] focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors disabled:opacity-50"
+                    >
+                      <option value="">None</option>
+                      {milestones.map(m => (
+                        <option key={m.id} value={m.id}>{m.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Issue Selector with Search */}
+                  <div>
+                    <label className="block text-sm text-[hsl(var(--muted-foreground))] mb-1.5">
+                      Link to Issue
+                    </label>
+                    <div className="relative">
+                      <Input
+                        type="text"
+                        value={editIssue ? `${editIssue.identifier}: ${editIssue.title}` : issueSearch}
+                        onChange={(e) => {
+                          if (editIssue) {
+                            setEditIssue(null);
+                            setIssueSearch(e.target.value);
+                          } else {
+                            setIssueSearch(e.target.value);
+                          }
                         }}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
-                      >
-                        ×
-                      </button>
-                    )}
-                    {!editIssue && issueSearch && issues.length > 0 && (
-                      <div className="absolute top-full left-0 right-0 mt-1 bg-[hsl(var(--background))] border border-[hsl(var(--border))] rounded shadow-lg z-10 max-h-48 overflow-auto">
-                        {issues.map(issue => (
-                          <button
-                            key={issue.id}
-                            onClick={() => {
-                              setEditIssue(issue);
-                              setIssueSearch("");
-                              setIssues([]);
-                            }}
-                            className="w-full text-left px-3 py-2 hover:bg-[hsl(var(--muted))] text-sm"
-                          >
-                            <span className="font-medium">{issue.identifier}</span>
-                            <span className="text-[hsl(var(--muted-foreground))]"> {issue.title}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                        placeholder="Search issues..."
+                        className="pr-8"
+                      />
+                      {editIssue && (
+                        <button
+                          onClick={() => {
+                            setEditIssue(null);
+                            setIssueSearch("");
+                          }}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+                        >
+                          <CloseIcon className="w-4 h-4" />
+                        </button>
+                      )}
+                      {loadingIssues && (
+                        <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                          <LoadingIcon className="w-4 h-4 animate-spin text-[hsl(var(--muted-foreground))]" />
+                        </div>
+                      )}
+                      {/* Issue dropdown */}
+                      {!editIssue && issueSearch && issues.length > 0 && (
+                        <div className="absolute z-10 mt-1 w-full bg-[hsl(var(--background))] border border-[hsl(var(--border))] rounded-lg shadow-lg max-h-48 overflow-auto">
+                          {issues.map(issue => (
+                            <button
+                              key={issue.id}
+                              onClick={() => {
+                                setEditIssue(issue);
+                                setIssueSearch("");
+                                setIssues([]);
+                              }}
+                              className="w-full px-3 py-2 text-left hover:bg-[hsl(var(--muted))] transition-colors flex items-center gap-2"
+                            >
+                              <span
+                                className="w-2 h-2 rounded-full shrink-0"
+                                style={{ backgroundColor: issue.state.color }}
+                              />
+                              <span className="font-medium text-sm">{issue.identifier}</span>
+                              <span className="text-sm text-[hsl(var(--muted-foreground))] truncate">
+                                {issue.title}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -512,6 +544,20 @@ export function RunExecutor({ run, results, releases: initialReleases, available
                     >
                       <ProjectIcon className="w-3.5 h-3.5" />
                       {run.linearProjectName}
+                    </a>
+                  </>
+                )}
+                {run.linearMilestoneName && run.linearMilestoneId && run.linearProjectId && linearWorkspace && (
+                  <>
+                    <span className="text-border">·</span>
+                    <a
+                      href={`https://linear.app/${linearWorkspace}/project/${run.linearProjectId}#projectTab=milestones`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 hover:text-[hsl(var(--foreground))] hover:underline transition-colors"
+                    >
+                      <MilestoneIcon className="w-3.5 h-3.5" />
+                      {run.linearMilestoneName}
                     </a>
                   </>
                 )}
@@ -926,6 +972,23 @@ function ProjectIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
+    </svg>
+  );
+}
+
+function LoadingIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+    </svg>
+  );
+}
+
+function MilestoneIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v1.5M3 21v-6m0 0l2.77-.693a9 9 0 016.208.682l.108.054a9 9 0 006.086.71l3.114-.732a48.524 48.524 0 01-.005-10.499l-3.11.732a9 9 0 01-6.085-.711l-.108-.054a9 9 0 00-6.208-.682L3 4.5M3 15V4.5" />
     </svg>
   );
 }
