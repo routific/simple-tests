@@ -1,11 +1,11 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { testRuns, testRunResults } from "@/lib/db/schema";
+import { testRuns, testRunResults, releases } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getSessionWithOrg } from "@/lib/auth";
-import { createIssueAttachment } from "@/lib/linear";
+import { createIssueAttachment, deleteAttachmentByUrl } from "@/lib/linear";
 
 interface CreateRunInput {
   name: string;
@@ -233,6 +233,58 @@ export async function updateTestRun(input: UpdateRunInput) {
       .update(testRuns)
       .set(updates)
       .where(eq(testRuns.id, input.runId));
+
+    // Handle Linear attachment changes if the issue changed
+    const oldIssueId = run.linearIssueId;
+    const newIssueId = input.linearIssueId;
+    const issueChanged = input.linearIssueId !== undefined && oldIssueId !== newIssueId;
+
+    if (issueChanged) {
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://simple-tests.routific.com";
+      const runUrl = `${baseUrl}/runs/${input.runId}`;
+
+      // Delete attachment from old issue if there was one
+      if (oldIssueId) {
+        await deleteAttachmentByUrl(runUrl);
+      }
+
+      // Create attachment on new issue if there is one
+      if (newIssueId) {
+        // Get scenario count for subtitle
+        const results = await db
+          .select()
+          .from(testRunResults)
+          .where(eq(testRunResults.testRunId, input.runId));
+
+        const scenarioCount = results.length;
+        const runName = input.name ?? run.name;
+
+        // Get release name for title (use updated value if provided, otherwise fetch from db)
+        let releaseName: string | null = null;
+        const releaseId = input.releaseId !== undefined ? input.releaseId : run.releaseId;
+        if (releaseId) {
+          const release = await db
+            .select({ name: releases.name })
+            .from(releases)
+            .where(eq(releases.id, releaseId))
+            .get();
+          releaseName = release?.name ?? null;
+        }
+
+        const titleParts = ["Test Run"];
+        if (releaseName) {
+          titleParts.push(`[${releaseName}]`);
+        }
+        titleParts.push(runName);
+
+        await createIssueAttachment({
+          issueId: newIssueId,
+          title: titleParts.join(" "),
+          url: runUrl,
+          subtitle: `${scenarioCount} test case${scenarioCount !== 1 ? "s" : ""}`,
+        });
+      }
+    }
 
     revalidatePath("/runs");
     revalidatePath(`/runs/${input.runId}`);

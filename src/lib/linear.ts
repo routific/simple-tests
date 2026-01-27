@@ -142,3 +142,25 @@ export async function createIssueAttachment(input: CreateAttachmentInput): Promi
     return false;
   }
 }
+
+export async function deleteAttachmentByUrl(url: string): Promise<boolean> {
+  try {
+    const client = await getLinearClient();
+    // Find attachments matching this URL
+    const attachments = await client.attachmentsForURL(url);
+
+    if (attachments.nodes.length === 0) {
+      return true; // No attachment to delete
+    }
+
+    // Delete all matching attachments
+    for (const attachment of attachments.nodes) {
+      await client.deleteAttachment(attachment.id);
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Failed to delete Linear attachment:", error);
+    return false;
+  }
+}
