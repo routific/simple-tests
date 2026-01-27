@@ -438,28 +438,46 @@ function RunRow({ run, linearWorkspace, onDuplicate }: { run: RunWithStats; line
           {run.linearIssueIdentifier && linearWorkspace && (
             <>
               <span className="text-border">·</span>
-              <span className="inline-flex items-center gap-1">
+              <a
+                href={`https://linear.app/${linearWorkspace}/issue/${run.linearIssueIdentifier}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
+              >
                 <LinearIcon className="w-3.5 h-3.5" />
                 {run.linearIssueIdentifier}
-              </span>
+              </a>
             </>
           )}
-          {run.linearProjectName && (
+          {run.linearProjectName && run.linearProjectId && linearWorkspace && (
             <>
               <span className="text-border">·</span>
-              <span className="inline-flex items-center gap-1">
+              <a
+                href={`https://linear.app/${linearWorkspace}/project/${run.linearProjectId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
+              >
                 <ProjectIcon className="w-3.5 h-3.5" />
                 {run.linearProjectName}
-              </span>
+              </a>
             </>
           )}
-          {run.linearMilestoneName && (
+          {run.linearMilestoneName && run.linearProjectId && linearWorkspace && (
             <>
               <span className="text-border">·</span>
-              <span className="inline-flex items-center gap-1">
+              <a
+                href={`https://linear.app/${linearWorkspace}/project/${run.linearProjectId}#projectTab=milestones`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
+              >
                 <MilestoneIcon className="w-3.5 h-3.5" />
                 {run.linearMilestoneName}
-              </span>
+              </a>
             </>
           )}
         </div>
