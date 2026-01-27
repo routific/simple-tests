@@ -1,4 +1,4 @@
-import { eq, and, inArray, like, or, isNull } from "drizzle-orm";
+import { eq, and, inArray, like, or, isNull, desc } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   folders,
@@ -146,12 +146,12 @@ export function registerTools(auth: AuthContext): Tool[] {
       // Test case tools
       {
         name: "create_test_case",
-        description: "Create a new test case with a scenario",
+        description: "Create a new test case with one or more scenarios. Use 'scenarios' array for multiple scenarios, or 'gherkin'/'scenarioTitle' for a single scenario.",
         inputSchema: {
           type: "object",
           properties: {
             title: { type: "string", description: "Title of the test case" },
-            gherkin: { type: "string", description: "Gherkin content for the scenario" },
+            gherkin: { type: "string", description: "Gherkin content for a single scenario (use 'scenarios' array for multiple)" },
             folderId: { type: "number", description: "Folder ID (optional)" },
             state: {
               type: "string",
@@ -163,9 +163,34 @@ export function registerTools(auth: AuthContext): Tool[] {
               enum: ["normal", "high", "critical"],
               description: "Priority of the test case",
             },
-            scenarioTitle: { type: "string", description: "Title for the scenario (defaults to test case title)" },
+            scenarioTitle: { type: "string", description: "Title for single scenario (defaults to test case title)" },
+            scenarios: {
+              type: "array",
+              description: "Array of scenarios (use this for multiple scenarios)",
+              items: {
+                type: "object",
+                properties: {
+                  title: { type: "string", description: "Scenario title" },
+                  gherkin: { type: "string", description: "Gherkin content" },
+                },
+                required: ["title", "gherkin"],
+              },
+            },
           },
-          required: ["title", "gherkin"],
+          required: ["title"],
+        },
+      },
+      {
+        name: "add_scenario",
+        description: "Add a new scenario to an existing test case",
+        inputSchema: {
+          type: "object",
+          properties: {
+            testCaseId: { type: "number", description: "Test case ID to add scenario to" },
+            title: { type: "string", description: "Scenario title" },
+            gherkin: { type: "string", description: "Gherkin content" },
+          },
+          required: ["testCaseId", "title", "gherkin"],
         },
       },
       {
@@ -266,6 +291,8 @@ export async function handleToolCall(
       return createFolder(args, auth, auditCtx);
     case "create_test_case":
       return createTestCase(args, auth, auditCtx);
+    case "add_scenario":
+      return addScenario(args, auth, auditCtx);
     case "update_test_case":
       return updateTestCase(args, auth, auditCtx);
     case "create_test_run":
@@ -874,25 +901,37 @@ async function createTestCase(
   auth: AuthContext,
   ctx: McpCallContext
 ): Promise<CallToolResult> {
-  const { title, gherkin, folderId, state, priority, scenarioTitle } = args as {
+  const { title, gherkin, folderId, state, priority, scenarioTitle, scenarios: scenariosInput } = args as {
     title: string;
-    gherkin: string;
+    gherkin?: string;
     folderId?: number;
     state?: "active" | "draft" | "retired" | "rejected";
     priority?: "normal" | "high" | "critical";
     scenarioTitle?: string;
+    scenarios?: Array<{ title: string; gherkin: string }>;
   };
 
-  if (!title || !gherkin) {
+  // Build scenarios array from either format
+  let scenariosToCreate: Array<{ title: string; gherkin: string }> = [];
+
+  if (scenariosInput && Array.isArray(scenariosInput) && scenariosInput.length > 0) {
+    // Use scenarios array
+    scenariosToCreate = scenariosInput;
+  } else if (gherkin) {
+    // Use single scenario format
+    scenariosToCreate = [{ title: scenarioTitle || title, gherkin }];
+  }
+
+  if (!title || scenariosToCreate.length === 0) {
     await logMcpWriteOperation(ctx, {
       toolName: "create_test_case",
       toolArgs: args,
       entityType: "test_case",
       status: "failed",
-      errorMessage: "title and gherkin are required",
+      errorMessage: "title is required, and either 'gherkin' or 'scenarios' array must be provided",
     });
     return {
-      content: [{ type: "text", text: "Error: title and gherkin are required" }],
+      content: [{ type: "text", text: "Error: title is required, and either 'gherkin' or 'scenarios' array must be provided" }],
       isError: true,
     };
   }
@@ -945,33 +984,36 @@ async function createTestCase(
 
   const testCase = testCaseResult[0];
 
-  // Create scenario
-  const scenarioResult = await db
-    .insert(scenarios)
-    .values({
-      testCaseId: testCase.id,
-      title: scenarioTitle || title,
-      gherkin,
-      order: 0,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .returning();
-
-  const scenario = scenarioResult[0];
+  // Create scenarios
+  const createdScenarios = [];
+  for (let i = 0; i < scenariosToCreate.length; i++) {
+    const s = scenariosToCreate[i];
+    const scenarioResult = await db
+      .insert(scenarios)
+      .values({
+        testCaseId: testCase.id,
+        title: s.title,
+        gherkin: s.gherkin,
+        order: i,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning();
+    createdScenarios.push(scenarioResult[0]);
+  }
 
   // Create audit log (existing)
   await db.insert(testCaseAuditLog).values({
     testCaseId: testCase.id,
     userId: auth.userId,
     action: "created",
-    changes: JSON.stringify(["title", "state", "priority", "folderId", "scenario"]),
+    changes: JSON.stringify(["title", "state", "priority", "folderId", "scenarios"]),
     newValues: JSON.stringify({
       title,
       state: testCase.state,
       priority: testCase.priority,
       folderId: testCase.folderId,
-      scenario: { title: scenario.title, gherkin },
+      scenarios: createdScenarios.map((s) => ({ title: s.title, gherkin: s.gherkin })),
     }),
     createdAt: now,
   });
@@ -982,12 +1024,110 @@ async function createTestCase(
     toolArgs: args,
     entityType: "test_case",
     entityId: testCase.id,
-    afterState: { ...testCase, scenarios: [scenario] },
+    afterState: { ...testCase, scenarios: createdScenarios },
     status: "success",
   });
 
   return {
-    content: [{ type: "text", text: JSON.stringify({ success: true, testCase, scenario }, null, 2) }],
+    content: [{ type: "text", text: JSON.stringify({ success: true, testCase, scenarios: createdScenarios }, null, 2) }],
+  };
+}
+
+async function addScenario(
+  args: Record<string, unknown>,
+  auth: AuthContext,
+  ctx: McpCallContext
+): Promise<CallToolResult> {
+  const { testCaseId, title, gherkin } = args as {
+    testCaseId: number;
+    title: string;
+    gherkin: string;
+  };
+
+  if (!testCaseId || !title || !gherkin) {
+    await logMcpWriteOperation(ctx, {
+      toolName: "add_scenario",
+      toolArgs: args,
+      entityType: "scenario",
+      status: "failed",
+      errorMessage: "testCaseId, title, and gherkin are required",
+    });
+    return {
+      content: [{ type: "text", text: "Error: testCaseId, title, and gherkin are required" }],
+      isError: true,
+    };
+  }
+
+  // Verify test case exists and belongs to org
+  const testCase = await db
+    .select()
+    .from(testCases)
+    .where(
+      and(
+        eq(testCases.id, testCaseId),
+        eq(testCases.organizationId, auth.organizationId)
+      )
+    )
+    .limit(1);
+
+  if (testCase.length === 0) {
+    await logMcpWriteOperation(ctx, {
+      toolName: "add_scenario",
+      toolArgs: args,
+      entityType: "scenario",
+      status: "failed",
+      errorMessage: `Test case not found: ${testCaseId}`,
+    });
+    return {
+      content: [{ type: "text", text: `Error: Test case not found: ${testCaseId}` }],
+      isError: true,
+    };
+  }
+
+  // Get max order for existing scenarios
+  const existingScenarios = await db
+    .select({ order: scenarios.order })
+    .from(scenarios)
+    .where(eq(scenarios.testCaseId, testCaseId))
+    .orderBy(desc(scenarios.order))
+    .limit(1);
+
+  const nextOrder = existingScenarios.length > 0 ? existingScenarios[0].order + 1 : 0;
+  const now = new Date();
+
+  // Create scenario
+  const scenarioResult = await db
+    .insert(scenarios)
+    .values({
+      testCaseId,
+      title,
+      gherkin,
+      order: nextOrder,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning();
+
+  const scenario = scenarioResult[0];
+
+  // Update test case updatedAt
+  await db
+    .update(testCases)
+    .set({ updatedAt: now, updatedBy: auth.userId })
+    .where(eq(testCases.id, testCaseId));
+
+  // Log to MCP write log
+  await logMcpWriteOperation(ctx, {
+    toolName: "add_scenario",
+    toolArgs: args,
+    entityType: "scenario",
+    entityId: scenario.id,
+    afterState: scenario,
+    status: "success",
+  });
+
+  return {
+    content: [{ type: "text", text: JSON.stringify({ success: true, scenario }, null, 2) }],
   };
 }
 
