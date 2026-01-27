@@ -1,4 +1,4 @@
-import { eq, and, inArray, like, or } from "drizzle-orm";
+import { eq, and, inArray, like, or, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   folders,
@@ -270,451 +270,510 @@ async function listFolders(
   args: Record<string, unknown>,
   auth: AuthContext
 ): Promise<CallToolResult> {
-  const { parentId } = args as { parentId?: number };
+  try {
+    const { parentId } = args as { parentId?: number | null };
 
-  const conditions = [eq(folders.organizationId, auth.organizationId)];
+    const conditions = [eq(folders.organizationId, auth.organizationId)];
 
-  if (parentId !== undefined) {
-    conditions.push(eq(folders.parentId, parentId));
+    // Handle parentId filter - null means root folders, undefined means all folders
+    if (parentId === null) {
+      conditions.push(isNull(folders.parentId));
+    } else if (parentId !== undefined) {
+      conditions.push(eq(folders.parentId, parentId));
+    }
+
+    const result = await db
+      .select()
+      .from(folders)
+      .where(and(...conditions))
+      .orderBy(folders.order, folders.name);
+
+    return {
+      content: [{ type: "text", text: JSON.stringify({ folders: result }, null, 2) }],
+    };
+  } catch (error) {
+    console.error("[MCP Tools] listFolders error:", error);
+    return {
+      content: [{ type: "text", text: `Error listing folders: ${error instanceof Error ? error.message : String(error)}` }],
+      isError: true,
+    };
   }
-
-  const result = await db
-    .select()
-    .from(folders)
-    .where(and(...conditions))
-    .orderBy(folders.order, folders.name);
-
-  return {
-    content: [{ type: "text", text: JSON.stringify({ folders: result }, null, 2) }],
-  };
 }
 
 async function getFolder(
   args: Record<string, unknown>,
   auth: AuthContext
 ): Promise<CallToolResult> {
-  const { id } = args as { id: number };
+  try {
+    const { id } = args as { id: number };
 
-  if (!id) {
+    if (!id) {
+      return {
+        content: [{ type: "text", text: "Error: id is required" }],
+        isError: true,
+      };
+    }
+
+    const folder = await db
+      .select()
+      .from(folders)
+      .where(
+        and(
+          eq(folders.id, id),
+          eq(folders.organizationId, auth.organizationId)
+        )
+      )
+      .limit(1);
+
+    if (folder.length === 0) {
+      return {
+        content: [{ type: "text", text: `Error: Folder not found: ${id}` }],
+        isError: true,
+      };
+    }
+
+    // Get test cases in this folder
+    const folderTestCases = await db
+      .select()
+      .from(testCases)
+      .where(
+        and(
+          eq(testCases.folderId, id),
+          eq(testCases.organizationId, auth.organizationId)
+        )
+      )
+      .orderBy(testCases.order, testCases.title);
+
+    // Get child folders
+    const childFolders = await db
+      .select()
+      .from(folders)
+      .where(
+        and(
+          eq(folders.parentId, id),
+          eq(folders.organizationId, auth.organizationId)
+        )
+      )
+      .orderBy(folders.order, folders.name);
+
     return {
-      content: [{ type: "text", text: "Error: id is required" }],
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(
+            {
+              folder: folder[0],
+              testCases: folderTestCases,
+              childFolders,
+            },
+            null,
+            2
+          ),
+        },
+      ],
+    };
+  } catch (error) {
+    console.error("[MCP Tools] getFolder error:", error);
+    return {
+      content: [{ type: "text", text: `Error getting folder: ${error instanceof Error ? error.message : String(error)}` }],
       isError: true,
     };
   }
-
-  const folder = await db
-    .select()
-    .from(folders)
-    .where(
-      and(
-        eq(folders.id, id),
-        eq(folders.organizationId, auth.organizationId)
-      )
-    )
-    .limit(1);
-
-  if (folder.length === 0) {
-    return {
-      content: [{ type: "text", text: `Error: Folder not found: ${id}` }],
-      isError: true,
-    };
-  }
-
-  // Get test cases in this folder
-  const folderTestCases = await db
-    .select()
-    .from(testCases)
-    .where(
-      and(
-        eq(testCases.folderId, id),
-        eq(testCases.organizationId, auth.organizationId)
-      )
-    )
-    .orderBy(testCases.order, testCases.title);
-
-  // Get child folders
-  const childFolders = await db
-    .select()
-    .from(folders)
-    .where(
-      and(
-        eq(folders.parentId, id),
-        eq(folders.organizationId, auth.organizationId)
-      )
-    )
-    .orderBy(folders.order, folders.name);
-
-  return {
-    content: [
-      {
-        type: "text",
-        text: JSON.stringify(
-          {
-            folder: folder[0],
-            testCases: folderTestCases,
-            childFolders,
-          },
-          null,
-          2
-        ),
-      },
-    ],
-  };
 }
 
 async function listTestCases(
   args: Record<string, unknown>,
   auth: AuthContext
 ): Promise<CallToolResult> {
-  const { folderId, state, priority, limit = 50, offset = 0 } = args as {
-    folderId?: number;
-    state?: "active" | "draft" | "retired" | "rejected";
-    priority?: "normal" | "high" | "critical";
-    limit?: number;
-    offset?: number;
-  };
+  try {
+    const { folderId, state, priority, limit = 50, offset = 0 } = args as {
+      folderId?: number;
+      state?: "active" | "draft" | "retired" | "rejected";
+      priority?: "normal" | "high" | "critical";
+      limit?: number;
+      offset?: number;
+    };
 
-  const conditions = [eq(testCases.organizationId, auth.organizationId)];
+    const conditions = [eq(testCases.organizationId, auth.organizationId)];
 
-  if (folderId !== undefined) {
-    conditions.push(eq(testCases.folderId, folderId));
-  }
-  if (state) {
-    conditions.push(eq(testCases.state, state));
-  }
-  if (priority) {
-    conditions.push(eq(testCases.priority, priority));
-  }
+    if (folderId !== undefined) {
+      conditions.push(eq(testCases.folderId, folderId));
+    }
+    if (state) {
+      conditions.push(eq(testCases.state, state));
+    }
+    if (priority) {
+      conditions.push(eq(testCases.priority, priority));
+    }
 
-  const result = await db
-    .select()
-    .from(testCases)
-    .where(and(...conditions))
-    .orderBy(testCases.order, testCases.title)
-    .limit(Math.min(limit, 100))
-    .offset(offset);
+    const result = await db
+      .select()
+      .from(testCases)
+      .where(and(...conditions))
+      .orderBy(testCases.order, testCases.title)
+      .limit(Math.min(limit, 100))
+      .offset(offset);
 
-  // Get total count for pagination info
-  const allMatching = await db
-    .select({ id: testCases.id })
-    .from(testCases)
-    .where(and(...conditions));
+    // Get total count for pagination info
+    const allMatching = await db
+      .select({ id: testCases.id })
+      .from(testCases)
+      .where(and(...conditions));
 
-  return {
-    content: [
-      {
-        type: "text",
-        text: JSON.stringify(
-          {
-            testCases: result,
-            pagination: {
-              total: allMatching.length,
-              limit: Math.min(limit, 100),
-              offset,
-              hasMore: offset + result.length < allMatching.length,
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(
+            {
+              testCases: result,
+              pagination: {
+                total: allMatching.length,
+                limit: Math.min(limit, 100),
+                offset,
+                hasMore: offset + result.length < allMatching.length,
+              },
             },
-          },
-          null,
-          2
-        ),
-      },
-    ],
-  };
+            null,
+            2
+          ),
+        },
+      ],
+    };
+  } catch (error) {
+    console.error("[MCP Tools] listTestCases error:", error);
+    return {
+      content: [{ type: "text", text: `Error listing test cases: ${error instanceof Error ? error.message : String(error)}` }],
+      isError: true,
+    };
+  }
 }
 
 async function getTestCase(
   args: Record<string, unknown>,
   auth: AuthContext
 ): Promise<CallToolResult> {
-  const { id } = args as { id: number };
+  try {
+    const { id } = args as { id: number };
 
-  if (!id) {
-    return {
-      content: [{ type: "text", text: "Error: id is required" }],
-      isError: true,
-    };
-  }
-
-  const testCase = await db
-    .select()
-    .from(testCases)
-    .where(
-      and(
-        eq(testCases.id, id),
-        eq(testCases.organizationId, auth.organizationId)
-      )
-    )
-    .limit(1);
-
-  if (testCase.length === 0) {
-    return {
-      content: [{ type: "text", text: `Error: Test case not found: ${id}` }],
-      isError: true,
-    };
-  }
-
-  // Get all scenarios for this test case
-  const testCaseScenarios = await db
-    .select()
-    .from(scenarios)
-    .where(eq(scenarios.testCaseId, id))
-    .orderBy(scenarios.order);
-
-  // Get folder info if in a folder
-  let folder = null;
-  if (testCase[0].folderId) {
-    const folderResult = await db
-      .select()
-      .from(folders)
-      .where(eq(folders.id, testCase[0].folderId))
-      .limit(1);
-    if (folderResult.length > 0) {
-      folder = folderResult[0];
+    if (!id) {
+      return {
+        content: [{ type: "text", text: "Error: id is required" }],
+        isError: true,
+      };
     }
-  }
 
-  return {
-    content: [
-      {
-        type: "text",
-        text: JSON.stringify(
-          {
-            testCase: testCase[0],
-            scenarios: testCaseScenarios,
-            folder,
-          },
-          null,
-          2
-        ),
-      },
-    ],
-  };
+    const testCase = await db
+      .select()
+      .from(testCases)
+      .where(
+        and(
+          eq(testCases.id, id),
+          eq(testCases.organizationId, auth.organizationId)
+        )
+      )
+      .limit(1);
+
+    if (testCase.length === 0) {
+      return {
+        content: [{ type: "text", text: `Error: Test case not found: ${id}` }],
+        isError: true,
+      };
+    }
+
+    // Get all scenarios for this test case
+    const testCaseScenarios = await db
+      .select()
+      .from(scenarios)
+      .where(eq(scenarios.testCaseId, id))
+      .orderBy(scenarios.order);
+
+    // Get folder info if in a folder
+    let folder = null;
+    if (testCase[0].folderId) {
+      const folderResult = await db
+        .select()
+        .from(folders)
+        .where(eq(folders.id, testCase[0].folderId))
+        .limit(1);
+      if (folderResult.length > 0) {
+        folder = folderResult[0];
+      }
+    }
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(
+            {
+              testCase: testCase[0],
+              scenarios: testCaseScenarios,
+              folder,
+            },
+            null,
+            2
+          ),
+        },
+      ],
+    };
+  } catch (error) {
+    console.error("[MCP Tools] getTestCase error:", error);
+    return {
+      content: [{ type: "text", text: `Error getting test case: ${error instanceof Error ? error.message : String(error)}` }],
+      isError: true,
+    };
+  }
 }
 
 async function searchTestCases(
   args: Record<string, unknown>,
   auth: AuthContext
 ): Promise<CallToolResult> {
-  const { query, state, limit = 20 } = args as {
-    query: string;
-    state?: "active" | "draft" | "retired" | "rejected";
-    limit?: number;
-  };
+  try {
+    const { query, state, limit = 20 } = args as {
+      query: string;
+      state?: "active" | "draft" | "retired" | "rejected";
+      limit?: number;
+    };
 
-  if (!query) {
+    if (!query) {
+      return {
+        content: [{ type: "text", text: "Error: query is required" }],
+        isError: true,
+      };
+    }
+
+    const searchPattern = `%${query}%`;
+
+    // Search in test case titles
+    const titleConditions = [
+      eq(testCases.organizationId, auth.organizationId),
+      like(testCases.title, searchPattern),
+    ];
+    if (state) {
+      titleConditions.push(eq(testCases.state, state));
+    }
+
+    const titleMatches = await db
+      .select()
+      .from(testCases)
+      .where(and(...titleConditions))
+      .limit(Math.min(limit, 50));
+
+    // Search in scenario gherkin content
+    const scenarioMatches = await db
+      .select({
+        testCase: testCases,
+        scenario: scenarios,
+      })
+      .from(scenarios)
+      .innerJoin(testCases, eq(scenarios.testCaseId, testCases.id))
+      .where(
+        and(
+          eq(testCases.organizationId, auth.organizationId),
+          or(
+            like(scenarios.title, searchPattern),
+            like(scenarios.gherkin, searchPattern)
+          ),
+          ...(state ? [eq(testCases.state, state)] : [])
+        )
+      )
+      .limit(Math.min(limit, 50));
+
+    // Combine and deduplicate results
+    const seenIds = new Set<number>();
+    const results: Array<{
+      testCase: typeof testCases.$inferSelect;
+      matchedIn: string[];
+      scenarioMatch?: typeof scenarios.$inferSelect;
+    }> = [];
+
+    for (const tc of titleMatches) {
+      if (!seenIds.has(tc.id)) {
+        seenIds.add(tc.id);
+        results.push({ testCase: tc, matchedIn: ["title"] });
+      }
+    }
+
+    for (const match of scenarioMatches) {
+      if (!seenIds.has(match.testCase.id)) {
+        seenIds.add(match.testCase.id);
+        results.push({
+          testCase: match.testCase,
+          matchedIn: ["scenario"],
+          scenarioMatch: match.scenario,
+        });
+      } else {
+        const existing = results.find((r) => r.testCase.id === match.testCase.id);
+        if (existing && !existing.matchedIn.includes("scenario")) {
+          existing.matchedIn.push("scenario");
+        }
+      }
+    }
+
     return {
-      content: [{ type: "text", text: "Error: query is required" }],
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(
+            {
+              query,
+              results: results.slice(0, Math.min(limit, 50)),
+              total: results.length,
+            },
+            null,
+            2
+          ),
+        },
+      ],
+    };
+  } catch (error) {
+    console.error("[MCP Tools] searchTestCases error:", error);
+    return {
+      content: [{ type: "text", text: `Error searching test cases: ${error instanceof Error ? error.message : String(error)}` }],
       isError: true,
     };
   }
-
-  const searchPattern = `%${query}%`;
-
-  // Search in test case titles
-  const titleConditions = [
-    eq(testCases.organizationId, auth.organizationId),
-    like(testCases.title, searchPattern),
-  ];
-  if (state) {
-    titleConditions.push(eq(testCases.state, state));
-  }
-
-  const titleMatches = await db
-    .select()
-    .from(testCases)
-    .where(and(...titleConditions))
-    .limit(Math.min(limit, 50));
-
-  // Search in scenario gherkin content
-  const scenarioMatches = await db
-    .select({
-      testCase: testCases,
-      scenario: scenarios,
-    })
-    .from(scenarios)
-    .innerJoin(testCases, eq(scenarios.testCaseId, testCases.id))
-    .where(
-      and(
-        eq(testCases.organizationId, auth.organizationId),
-        or(
-          like(scenarios.title, searchPattern),
-          like(scenarios.gherkin, searchPattern)
-        ),
-        ...(state ? [eq(testCases.state, state)] : [])
-      )
-    )
-    .limit(Math.min(limit, 50));
-
-  // Combine and deduplicate results
-  const seenIds = new Set<number>();
-  const results: Array<{
-    testCase: typeof testCases.$inferSelect;
-    matchedIn: string[];
-    scenarioMatch?: typeof scenarios.$inferSelect;
-  }> = [];
-
-  for (const tc of titleMatches) {
-    if (!seenIds.has(tc.id)) {
-      seenIds.add(tc.id);
-      results.push({ testCase: tc, matchedIn: ["title"] });
-    }
-  }
-
-  for (const match of scenarioMatches) {
-    if (!seenIds.has(match.testCase.id)) {
-      seenIds.add(match.testCase.id);
-      results.push({
-        testCase: match.testCase,
-        matchedIn: ["scenario"],
-        scenarioMatch: match.scenario,
-      });
-    } else {
-      const existing = results.find((r) => r.testCase.id === match.testCase.id);
-      if (existing && !existing.matchedIn.includes("scenario")) {
-        existing.matchedIn.push("scenario");
-      }
-    }
-  }
-
-  return {
-    content: [
-      {
-        type: "text",
-        text: JSON.stringify(
-          {
-            query,
-            results: results.slice(0, Math.min(limit, 50)),
-            total: results.length,
-          },
-          null,
-          2
-        ),
-      },
-    ],
-  };
 }
 
 async function listTestRuns(
   args: Record<string, unknown>,
   auth: AuthContext
 ): Promise<CallToolResult> {
-  const { status, limit = 20 } = args as {
-    status?: "in_progress" | "completed";
-    limit?: number;
-  };
+  try {
+    const { status, limit = 20 } = args as {
+      status?: "in_progress" | "completed";
+      limit?: number;
+    };
 
-  const conditions = [eq(testRuns.organizationId, auth.organizationId)];
+    const conditions = [eq(testRuns.organizationId, auth.organizationId)];
 
-  if (status) {
-    conditions.push(eq(testRuns.status, status));
+    if (status) {
+      conditions.push(eq(testRuns.status, status));
+    }
+
+    const result = await db
+      .select()
+      .from(testRuns)
+      .where(and(...conditions))
+      .orderBy(testRuns.createdAt)
+      .limit(Math.min(limit, 50));
+
+    // Get result summaries for each test run
+    const runsWithSummaries = await Promise.all(
+      result.map(async (run) => {
+        const results = await db
+          .select({ status: testRunResults.status })
+          .from(testRunResults)
+          .where(eq(testRunResults.testRunId, run.id));
+
+        const summary = {
+          total: results.length,
+          passed: results.filter((r) => r.status === "passed").length,
+          failed: results.filter((r) => r.status === "failed").length,
+          pending: results.filter((r) => r.status === "pending").length,
+          blocked: results.filter((r) => r.status === "blocked").length,
+          skipped: results.filter((r) => r.status === "skipped").length,
+        };
+
+        return { ...run, summary };
+      })
+    );
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ testRuns: runsWithSummaries }, null, 2),
+        },
+      ],
+    };
+  } catch (error) {
+    console.error("[MCP Tools] listTestRuns error:", error);
+    return {
+      content: [{ type: "text", text: `Error listing test runs: ${error instanceof Error ? error.message : String(error)}` }],
+      isError: true,
+    };
   }
-
-  const result = await db
-    .select()
-    .from(testRuns)
-    .where(and(...conditions))
-    .orderBy(testRuns.createdAt)
-    .limit(Math.min(limit, 50));
-
-  // Get result summaries for each test run
-  const runsWithSummaries = await Promise.all(
-    result.map(async (run) => {
-      const results = await db
-        .select({ status: testRunResults.status })
-        .from(testRunResults)
-        .where(eq(testRunResults.testRunId, run.id));
-
-      const summary = {
-        total: results.length,
-        passed: results.filter((r) => r.status === "passed").length,
-        failed: results.filter((r) => r.status === "failed").length,
-        pending: results.filter((r) => r.status === "pending").length,
-        blocked: results.filter((r) => r.status === "blocked").length,
-        skipped: results.filter((r) => r.status === "skipped").length,
-      };
-
-      return { ...run, summary };
-    })
-  );
-
-  return {
-    content: [
-      {
-        type: "text",
-        text: JSON.stringify({ testRuns: runsWithSummaries }, null, 2),
-      },
-    ],
-  };
 }
 
 async function getTestRun(
   args: Record<string, unknown>,
   auth: AuthContext
 ): Promise<CallToolResult> {
-  const { id } = args as { id: number };
+  try {
+    const { id } = args as { id: number };
 
-  if (!id) {
-    return {
-      content: [{ type: "text", text: "Error: id is required" }],
-      isError: true,
-    };
-  }
+    if (!id) {
+      return {
+        content: [{ type: "text", text: "Error: id is required" }],
+        isError: true,
+      };
+    }
 
-  const testRun = await db
-    .select()
-    .from(testRuns)
-    .where(
-      and(
-        eq(testRuns.id, id),
-        eq(testRuns.organizationId, auth.organizationId)
+    const testRun = await db
+      .select()
+      .from(testRuns)
+      .where(
+        and(
+          eq(testRuns.id, id),
+          eq(testRuns.organizationId, auth.organizationId)
+        )
       )
-    )
-    .limit(1);
+      .limit(1);
 
-  if (testRun.length === 0) {
+    if (testRun.length === 0) {
+      return {
+        content: [{ type: "text", text: `Error: Test run not found: ${id}` }],
+        isError: true,
+      };
+    }
+
+    // Get all results with scenario and test case info
+    const results = await db
+      .select({
+        result: testRunResults,
+        scenario: scenarios,
+        testCase: testCases,
+      })
+      .from(testRunResults)
+      .innerJoin(scenarios, eq(testRunResults.scenarioId, scenarios.id))
+      .innerJoin(testCases, eq(scenarios.testCaseId, testCases.id))
+      .where(eq(testRunResults.testRunId, id));
+
+    const summary = {
+      total: results.length,
+      passed: results.filter((r) => r.result.status === "passed").length,
+      failed: results.filter((r) => r.result.status === "failed").length,
+      pending: results.filter((r) => r.result.status === "pending").length,
+      blocked: results.filter((r) => r.result.status === "blocked").length,
+      skipped: results.filter((r) => r.result.status === "skipped").length,
+    };
+
     return {
-      content: [{ type: "text", text: `Error: Test run not found: ${id}` }],
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(
+            {
+              testRun: testRun[0],
+              results,
+              summary,
+            },
+            null,
+            2
+          ),
+        },
+      ],
+    };
+  } catch (error) {
+    console.error("[MCP Tools] getTestRun error:", error);
+    return {
+      content: [{ type: "text", text: `Error getting test run: ${error instanceof Error ? error.message : String(error)}` }],
       isError: true,
     };
   }
-
-  // Get all results with scenario and test case info
-  const results = await db
-    .select({
-      result: testRunResults,
-      scenario: scenarios,
-      testCase: testCases,
-    })
-    .from(testRunResults)
-    .innerJoin(scenarios, eq(testRunResults.scenarioId, scenarios.id))
-    .innerJoin(testCases, eq(scenarios.testCaseId, testCases.id))
-    .where(eq(testRunResults.testRunId, id));
-
-  const summary = {
-    total: results.length,
-    passed: results.filter((r) => r.result.status === "passed").length,
-    failed: results.filter((r) => r.result.status === "failed").length,
-    pending: results.filter((r) => r.result.status === "pending").length,
-    blocked: results.filter((r) => r.result.status === "blocked").length,
-    skipped: results.filter((r) => r.result.status === "skipped").length,
-  };
-
-  return {
-    content: [
-      {
-        type: "text",
-        text: JSON.stringify(
-          {
-            testRun: testRun[0],
-            results,
-            summary,
-          },
-          null,
-          2
-        ),
-      },
-    ],
-  };
 }
 
 // Tool implementations - Write operations
