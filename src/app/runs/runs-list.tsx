@@ -417,8 +417,11 @@ function RunRow({ run, linearWorkspace, onDuplicate }: { run: RunWithStats; line
     : 0;
 
   return (
-    <div className="flex items-center justify-between p-4 pl-12 hover:bg-muted/50 transition-colors group">
-      <Link href={`/runs/${run.id}`} className="flex-1 min-w-0">
+    <Link
+      href={`/runs/${run.id}`}
+      className="flex items-center justify-between p-4 pl-12 hover:bg-muted/50 transition-colors group"
+    >
+      <div className="flex-1 min-w-0">
         <div className="font-medium text-foreground group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
           {run.name}
         </div>
@@ -460,7 +463,7 @@ function RunRow({ run, linearWorkspace, onDuplicate }: { run: RunWithStats; line
             </>
           )}
         </div>
-      </Link>
+      </div>
 
       <div className="flex items-center gap-5">
         {/* Progress Bar */}
@@ -529,7 +532,7 @@ function RunRow({ run, linearWorkspace, onDuplicate }: { run: RunWithStats; line
 
         <ChevronRightIcon className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
       </div>
-    </div>
+    </Link>
   );
 }
 

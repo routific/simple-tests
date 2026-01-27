@@ -114,6 +114,7 @@ export function Sidebar() {
       >
         {collapsed ? (
           <div className="flex flex-col items-center gap-2">
+            <ThemeToggle compact />
             <button
               onClick={() => setShowHelp(true)}
               className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
@@ -121,7 +122,6 @@ export function Sidebar() {
             >
               <KeyboardIcon className="w-4 h-4" />
             </button>
-            <ThemeToggle compact />
           </div>
         ) : (
           <div className="space-y-2">
