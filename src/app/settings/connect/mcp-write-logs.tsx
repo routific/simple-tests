@@ -147,7 +147,7 @@ export function McpWriteLogs({ initialLogs, total }: McpWriteLogsProps) {
   const getChangedFields = (before: Record<string, unknown> | null, after: Record<string, unknown> | null): string[] => {
     if (!before || !after) return [];
     const changed: string[] = [];
-    const allKeys = new Set([...Object.keys(before), ...Object.keys(after)]);
+    const allKeys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]));
     for (const key of allKeys) {
       if (JSON.stringify(before[key]) !== JSON.stringify(after[key])) {
         changed.push(key);
