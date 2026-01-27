@@ -27,7 +27,7 @@ function LinearProvider(): OAuthConfig<LinearProfile> {
     authorization: {
       url: "https://linear.app/oauth/authorize",
       params: {
-        scope: "read",
+        scope: "read,write",
         response_type: "code",
         actor: "user",
       },
