@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useMemo, useEffect, useCallback } from "react";
+import { useState, useTransition, useMemo, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -204,6 +204,118 @@ export function RunExecutor({ run, results, releases: initialReleases, available
     }, 300);
     return () => clearTimeout(timer);
   }, [issueSearch, searchIssues, isEditing, editIssue]);
+
+  // Ref for notes textarea to enable focus shortcut
+  const notesRef = useRef<HTMLTextAreaElement>(null);
+
+  // Keyboard shortcuts for test execution
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      // Don't trigger when typing in inputs (except for navigation keys)
+      const target = e.target as HTMLElement;
+      const isInput = target.tagName === "INPUT" ||
+                      target.tagName === "TEXTAREA" ||
+                      target.tagName === "SELECT" ||
+                      target.isContentEditable;
+
+      // Navigation shortcuts work even in inputs
+      if (e.key === "Escape") {
+        if (showAddScenarios) {
+          setShowAddScenarios(false);
+          setSelectedToAdd(new Set());
+          setScenarioSearch("");
+          e.preventDefault();
+          return;
+        }
+        if (isEditing) {
+          handleCancelEdit();
+          e.preventDefault();
+          return;
+        }
+        // Blur any focused input
+        if (isInput) {
+          (target as HTMLElement).blur();
+          e.preventDefault();
+          return;
+        }
+      }
+
+      // Don't process other shortcuts when typing
+      if (isInput) return;
+
+      // Only enable execution shortcuts when run is in progress and not editing
+      if (run.status !== "in_progress" || isEditing || showAddScenarios) return;
+
+      switch (e.key.toLowerCase()) {
+        case "p":
+          e.preventDefault();
+          if (selectedResult && !isPending) {
+            handleStatusUpdate("passed");
+          }
+          break;
+
+        case "f":
+          e.preventDefault();
+          if (selectedResult && !isPending) {
+            handleStatusUpdate("failed");
+          }
+          break;
+
+        case "b":
+          e.preventDefault();
+          if (selectedResult && !isPending) {
+            handleStatusUpdate("blocked");
+          }
+          break;
+
+        case "s":
+          e.preventDefault();
+          if (selectedResult && !isPending) {
+            handleStatusUpdate("skipped");
+          }
+          break;
+
+        case "j":
+        case "arrowdown":
+          e.preventDefault();
+          if (selectedResult) {
+            const currentIndex = results.findIndex(r => r.id === selectedResult.id);
+            if (currentIndex < results.length - 1) {
+              const next = results[currentIndex + 1];
+              setSelectedResult(next);
+              setNotes(next.notes || "");
+            }
+          }
+          break;
+
+        case "k":
+        case "arrowup":
+          e.preventDefault();
+          if (selectedResult) {
+            const currentIndex = results.findIndex(r => r.id === selectedResult.id);
+            if (currentIndex > 0) {
+              const prev = results[currentIndex - 1];
+              setSelectedResult(prev);
+              setNotes(prev.notes || "");
+            }
+          }
+          break;
+
+        case "n":
+          e.preventDefault();
+          notesRef.current?.focus();
+          break;
+
+        case "e":
+          e.preventDefault();
+          setIsEditing(true);
+          break;
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [run.status, isEditing, showAddScenarios, selectedResult, results, isPending]);
 
   const handleStatusUpdate = (status: "passed" | "failed" | "blocked" | "skipped") => {
     if (!selectedResult) return;
@@ -741,6 +853,7 @@ export function RunExecutor({ run, results, releases: initialReleases, available
                   <div>
                     <label className="text-sm font-medium mb-1 block">Notes (optional)</label>
                     <textarea
+                      ref={notesRef}
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
                       placeholder="Add any notes about this test..."
@@ -752,30 +865,34 @@ export function RunExecutor({ run, results, releases: initialReleases, available
                     <button
                       onClick={() => handleStatusUpdate("passed")}
                       disabled={isPending}
-                      className="flex-1 px-4 py-2 text-sm font-medium text-white bg-emerald-500 rounded-md hover:opacity-90 disabled:opacity-50"
+                      className="flex-1 px-4 py-2 text-sm font-medium text-white bg-emerald-500 rounded-md hover:opacity-90 disabled:opacity-50 inline-flex items-center justify-center gap-2"
                     >
                       Pass
+                      <kbd className="text-[10px] px-1.5 py-0.5 bg-emerald-600/50 rounded opacity-70">P</kbd>
                     </button>
                     <button
                       onClick={() => handleStatusUpdate("failed")}
                       disabled={isPending}
-                      className="flex-1 px-4 py-2 text-sm font-medium text-white bg-rose-500 rounded-md hover:opacity-90 disabled:opacity-50"
+                      className="flex-1 px-4 py-2 text-sm font-medium text-white bg-rose-500 rounded-md hover:opacity-90 disabled:opacity-50 inline-flex items-center justify-center gap-2"
                     >
                       Fail
+                      <kbd className="text-[10px] px-1.5 py-0.5 bg-rose-600/50 rounded opacity-70">F</kbd>
                     </button>
                     <button
                       onClick={() => handleStatusUpdate("blocked")}
                       disabled={isPending}
-                      className="px-4 py-2 text-sm font-medium text-orange-600 border border-orange-600 rounded-md hover:bg-orange-50 disabled:opacity-50"
+                      className="px-4 py-2 text-sm font-medium text-orange-600 border border-orange-600 rounded-md hover:bg-orange-50 dark:hover:bg-orange-900/20 disabled:opacity-50 inline-flex items-center justify-center gap-2"
                     >
                       Blocked
+                      <kbd className="text-[10px] px-1.5 py-0.5 bg-orange-100 dark:bg-orange-900/50 rounded opacity-70">B</kbd>
                     </button>
                     <button
                       onClick={() => handleStatusUpdate("skipped")}
                       disabled={isPending}
-                      className="px-4 py-2 text-sm font-medium text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
+                      className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 inline-flex items-center justify-center gap-2"
                     >
                       Skip
+                      <kbd className="text-[10px] px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded opacity-70">S</kbd>
                     </button>
                   </div>
                 </div>

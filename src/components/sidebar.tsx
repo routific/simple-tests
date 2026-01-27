@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession, signIn, signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Button } from "@/components/ui/button";
+import { useKeyboardShortcuts } from "@/components/keyboard-shortcuts-provider";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: HomeIcon },
@@ -18,22 +19,7 @@ const navItems = [
 export function Sidebar() {
   const pathname = usePathname();
   const { data: session, status } = useSession();
-  const [collapsed, setCollapsed] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-    const stored = localStorage.getItem("sidebar-collapsed");
-    if (stored === "true") {
-      setCollapsed(true);
-    }
-  }, []);
-
-  const toggleCollapsed = () => {
-    const next = !collapsed;
-    setCollapsed(next);
-    localStorage.setItem("sidebar-collapsed", String(next));
-  };
+  const { sidebarCollapsed: collapsed, toggleSidebar: toggleCollapsed, setShowHelp } = useKeyboardShortcuts();
 
   return (
     <div
@@ -119,7 +105,7 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Theme Toggle */}
+      {/* Theme Toggle & Shortcuts */}
       <div
         className={cn(
           "border-t border-border",
@@ -127,15 +113,32 @@ export function Sidebar() {
         )}
       >
         {collapsed ? (
-          <div className="flex justify-center">
+          <div className="flex flex-col items-center gap-2">
+            <button
+              onClick={() => setShowHelp(true)}
+              className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              title="Keyboard shortcuts (?)"
+            >
+              <KeyboardIcon className="w-4 h-4" />
+            </button>
             <ThemeToggle compact />
           </div>
         ) : (
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground font-medium">
-              Theme
-            </span>
-            <ThemeToggle />
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground font-medium">
+                Theme
+              </span>
+              <ThemeToggle />
+            </div>
+            <button
+              onClick={() => setShowHelp(true)}
+              className="flex items-center gap-2 w-full text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <KeyboardIcon className="w-3.5 h-3.5" />
+              <span>Keyboard shortcuts</span>
+              <kbd className="ml-auto px-1.5 py-0.5 text-[10px] bg-muted border border-border rounded">?</kbd>
+            </button>
           </div>
         )}
       </div>
@@ -339,6 +342,14 @@ function PlugIcon({ className }: { className?: string }) {
         strokeLinejoin="round"
         d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244"
       />
+    </svg>
+  );
+}
+
+function KeyboardIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
     </svg>
   );
 }

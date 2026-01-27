@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Sidebar } from "@/components/sidebar";
 import { AuthProvider } from "@/components/auth-provider";
+import { KeyboardShortcutsProvider } from "@/components/keyboard-shortcuts-provider";
 
 export const metadata: Metadata = {
   title: "SimpleTests",
@@ -36,10 +37,12 @@ export default function RootLayout({
       </head>
       <body className="font-sans">
         <AuthProvider>
-          <div className="flex h-screen bg-background">
-            <Sidebar />
-            <main className="flex-1 overflow-auto">{children}</main>
-          </div>
+          <KeyboardShortcutsProvider>
+            <div className="flex h-screen bg-background">
+              <Sidebar />
+              <main className="flex-1 overflow-auto">{children}</main>
+            </div>
+          </KeyboardShortcutsProvider>
         </AuthProvider>
       </body>
     </html>
