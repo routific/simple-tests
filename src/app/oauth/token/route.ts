@@ -21,12 +21,22 @@ export async function POST(request: NextRequest) {
   // Parse body - support both JSON and form-urlencoded
   const contentType = request.headers.get("content-type") || "";
 
-  if (contentType.includes("application/json")) {
-    body = await request.json();
-  } else {
-    const formData = await request.formData();
-    body = Object.fromEntries(formData.entries()) as Record<string, string>;
+  try {
+    if (contentType.includes("application/json")) {
+      body = await request.json();
+    } else if (contentType.includes("application/x-www-form-urlencoded")) {
+      const text = await request.text();
+      body = Object.fromEntries(new URLSearchParams(text).entries());
+    } else {
+      const formData = await request.formData();
+      body = Object.fromEntries(formData.entries()) as Record<string, string>;
+    }
+  } catch (error) {
+    console.error("[OAuth Token] Error parsing request body:", error);
+    return errorResponse("invalid_request", "Failed to parse request body");
   }
+
+  console.log("[OAuth Token] Request body:", JSON.stringify(body));
 
   const grantType = body.grant_type;
   const clientId = body.client_id;
@@ -57,6 +67,8 @@ async function handleAuthorizationCodeGrant(
   const code = body.code;
   const redirectUri = body.redirect_uri;
   const codeVerifier = body.code_verifier;
+
+  console.log("[OAuth Token] Authorization code grant - code:", code ? "present" : "missing", "redirectUri:", redirectUri, "codeVerifier:", codeVerifier ? "present" : "missing");
 
   if (!code) {
     return errorResponse("invalid_request", "code is required");
