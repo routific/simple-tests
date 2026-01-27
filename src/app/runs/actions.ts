@@ -10,6 +10,7 @@ import { createIssueAttachment } from "@/lib/linear";
 interface CreateRunInput {
   name: string;
   releaseId: number | null;
+  releaseName: string | null;
   scenarioIds: number[];
   linearProjectId: string | null;
   linearProjectName: string | null;
@@ -62,10 +63,15 @@ export async function createTestRun(input: CreateRunInput) {
     if (input.linearIssueId) {
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://simple-tests.routific.com";
       const runUrl = `${baseUrl}/runs/${runId}`;
+      const titleParts = ["Test Run"];
+      if (input.releaseName) {
+        titleParts.push(`[${input.releaseName}]`);
+      }
+      titleParts.push(input.name);
 
       await createIssueAttachment({
         issueId: input.linearIssueId,
-        title: `Test Run: ${input.name}`,
+        title: titleParts.join(" "),
         url: runUrl,
         subtitle: `${input.scenarioIds.length} test case${input.scenarioIds.length !== 1 ? "s" : ""}`,
       });

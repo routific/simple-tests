@@ -280,9 +280,11 @@ export function CreateRunForm({ folders, cases, caseCounts, releases: initialRel
     setError(null);
     startTransition(async () => {
       try {
+        const selectedRelease = releases.find(r => r.id === selectedReleaseId);
         const result = await createTestRun({
           name: name.trim(),
           releaseId: selectedReleaseId,
+          releaseName: selectedRelease?.name || null,
           scenarioIds,
           linearProjectId: selectedProject?.id || null,
           linearProjectName: selectedProject?.name || null,
