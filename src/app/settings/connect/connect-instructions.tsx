@@ -64,6 +64,36 @@ export function ConnectInstructions({ baseUrl }: ConnectInstructionsProps) {
         </div>
       </div>
 
+      {/* Claude Code Instructions */}
+      <div className="space-y-4">
+        <h2 className="text-lg font-medium text-foreground flex items-center gap-2">
+          <TerminalIcon className="w-5 h-5" />
+          Connect with Claude Code (CLI)
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Run this command in your terminal:
+        </p>
+        <div className="relative">
+          <div className="bg-slate-900 text-slate-100 rounded-lg p-4 font-mono text-sm">
+            claude mcp add simple-tests {mcpUrl}
+          </div>
+          <button
+            onClick={() => copyToClipboard(`claude mcp add simple-tests ${mcpUrl}`, "cli")}
+            className="absolute top-2 right-2 p-2 rounded-md bg-slate-800 hover:bg-slate-700 transition-colors"
+            title="Copy command"
+          >
+            {copiedSection === "cli" ? (
+              <CheckIcon className="w-4 h-4 text-green-400" />
+            ) : (
+              <CopyIcon className="w-4 h-4 text-slate-400" />
+            )}
+          </button>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          When you first use the MCP server, Claude Code will open a browser for you to sign in with Linear.
+        </p>
+      </div>
+
       {/* Claude Desktop Instructions */}
       <div className="space-y-4">
         <h2 className="text-lg font-medium text-foreground flex items-center gap-2">
@@ -266,6 +296,14 @@ function ClaudeIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor">
       <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15h-2v-2h2v2zm0-4h-2V7h2v6zm4 4h-2v-2h2v2zm0-4h-2V7h2v6z" />
+    </svg>
+  );
+}
+
+function TerminalIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z" />
     </svg>
   );
 }
