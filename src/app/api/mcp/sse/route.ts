@@ -1,12 +1,19 @@
 import { NextRequest } from "next/server";
-import { validateToken, extractBearerToken } from "@/lib/mcp/auth";
 import { createMcpServer } from "@/lib/mcp/server";
 import { createSession, deleteSession, setSessionTransport, type McpTransport } from "@/lib/mcp/session-store";
+import { validateAccessToken } from "@/lib/oauth/utils";
+import { validateToken, extractBearerToken } from "@/lib/mcp/auth";
 import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
 
 // Custom transport for Next.js SSE
 class NextJsSSETransport implements McpTransport {
@@ -60,12 +67,6 @@ class NextJsSSETransport implements McpTransport {
   }
 }
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-};
-
 export async function OPTIONS() {
   return new Response(null, {
     status: 204,
@@ -74,33 +75,63 @@ export async function OPTIONS() {
 }
 
 export async function GET(request: NextRequest) {
-  // Extract token from Authorization header or query parameter
-  let token = extractBearerToken(request.headers.get("authorization"));
+  const host = request.headers.get("host") || "localhost:3000";
+  const protocol = host.includes("localhost") ? "http" : "https";
+  const baseUrl = `${protocol}://${host}`;
 
-  // Fallback to query parameter for clients that don't support custom headers
-  if (!token) {
-    token = request.nextUrl.searchParams.get("token");
-  }
+  // Extract Bearer token from Authorization header
+  const token = extractBearerToken(request.headers.get("authorization"));
 
   if (!token) {
-    return new Response(JSON.stringify({ error: "Authorization required. Use Bearer token header or ?token= query parameter" }), {
+    // Return 401 with WWW-Authenticate header per RFC 9728
+    return new Response(JSON.stringify({ error: "Authorization required" }), {
       status: 401,
-      headers: { "Content-Type": "application/json", ...corsHeaders },
+      headers: {
+        "Content-Type": "application/json",
+        "WWW-Authenticate": `Bearer resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`,
+        ...corsHeaders,
+      },
     });
   }
 
-  const auth = await validateToken(token);
+  // Try to validate as OAuth access token first
+  let auth = await validateAccessToken(token);
+
+  // Fall back to API token validation for backward compatibility
+  if (!auth) {
+    const apiAuth = await validateToken(token);
+    if (apiAuth) {
+      auth = {
+        userId: apiAuth.userId,
+        organizationId: apiAuth.organizationId,
+        clientId: "api_token",
+        scope: apiAuth.permissions === "admin" ? "mcp:admin" : apiAuth.permissions === "write" ? "mcp:write" : "mcp:read",
+      };
+    }
+  }
 
   if (!auth) {
-    return new Response(JSON.stringify({ error: "Invalid or expired API token" }), {
+    return new Response(JSON.stringify({ error: "Invalid or expired access token" }), {
       status: 401,
-      headers: { "Content-Type": "application/json", ...corsHeaders },
+      headers: {
+        "Content-Type": "application/json",
+        "WWW-Authenticate": `Bearer error="invalid_token", resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`,
+        ...corsHeaders,
+      },
     });
   }
+
+  // Create auth context for MCP server
+  const mcpAuth = {
+    token: null as any, // Not used for OAuth tokens
+    organizationId: auth.organizationId,
+    userId: auth.userId,
+    permissions: parseScope(auth.scope) as "read" | "write" | "admin",
+  };
 
   // Create session
   const sessionId = crypto.randomUUID();
-  const server = createMcpServer(auth);
+  const server = createMcpServer(mcpAuth);
 
   // Create SSE stream
   const { readable, writable } = new TransformStream();
@@ -110,7 +141,7 @@ export async function GET(request: NextRequest) {
   const transport = new NextJsSSETransport(writer, sessionId);
 
   // Store session with transport
-  createSession(sessionId, server, auth);
+  createSession(sessionId, server, mcpAuth);
   setSessionTransport(sessionId, transport);
 
   // Connect server to transport (cast to Transport for SDK compatibility)
@@ -132,4 +163,11 @@ export async function GET(request: NextRequest) {
       ...corsHeaders,
     },
   });
+}
+
+function parseScope(scope: string | null): string {
+  if (!scope) return "read";
+  if (scope.includes("admin")) return "admin";
+  if (scope.includes("write")) return "write";
+  return "read";
 }

@@ -264,3 +264,70 @@ export type TestRun = typeof testRuns.$inferSelect;
 export type TestRunResult = typeof testRunResults.$inferSelect;
 export type UndoStackEntry = typeof undoStack.$inferSelect;
 export type ApiToken = typeof apiTokens.$inferSelect;
+
+// OAuth authorization codes for MCP OAuth flow
+export const oauthAuthorizationCodes = sqliteTable(
+  "oauth_authorization_codes",
+  {
+    code: text("code").primaryKey(),
+    clientId: text("client_id").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    redirectUri: text("redirect_uri").notNull(),
+    codeChallenge: text("code_challenge").notNull(),
+    codeChallengeMethod: text("code_challenge_method").notNull().default("S256"),
+    scope: text("scope"),
+    expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  }
+);
+
+// OAuth access tokens for MCP
+export const oauthAccessTokens = sqliteTable(
+  "oauth_access_tokens",
+  {
+    id: text("id").primaryKey(),
+    tokenHash: text("token_hash").notNull(),
+    clientId: text("client_id").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    scope: text("scope"),
+    expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    revokedAt: integer("revoked_at", { mode: "timestamp" }),
+  },
+  (table) => [index("oauth_tokens_user_idx").on(table.userId)]
+);
+
+// OAuth refresh tokens for MCP
+export const oauthRefreshTokens = sqliteTable(
+  "oauth_refresh_tokens",
+  {
+    id: text("id").primaryKey(),
+    tokenHash: text("token_hash").notNull(),
+    accessTokenId: text("access_token_id")
+      .notNull()
+      .references(() => oauthAccessTokens.id),
+    expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    revokedAt: integer("revoked_at", { mode: "timestamp" }),
+  }
+);
+
+export type OAuthAuthorizationCode = typeof oauthAuthorizationCodes.$inferSelect;
+export type OAuthAccessToken = typeof oauthAccessTokens.$inferSelect;
+export type OAuthRefreshToken = typeof oauthRefreshTokens.$inferSelect;
