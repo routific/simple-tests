@@ -93,23 +93,21 @@ export function ResizablePanel({
     >
       {children}
 
-      {/* Resize Handle */}
+      {/* Resize Handle - wider hit area for easier clicking */}
       <div
         onMouseDown={handleMouseDown}
         className={cn(
-          "absolute top-0 right-0 w-1 h-full cursor-col-resize group",
-          "hover:bg-brand-500/20 active:bg-brand-500/30",
-          "transition-colors duration-150",
-          isResizing && "bg-brand-500/30",
+          "absolute top-0 -right-2 w-4 h-full cursor-col-resize group z-10",
+          "flex items-center justify-center",
           handleClassName
         )}
       >
-        {/* Visual indicator on hover */}
+        {/* Visible divider line */}
         <div
           className={cn(
-            "absolute top-1/2 -translate-y-1/2 right-0 w-1 h-8 rounded-full",
-            "bg-transparent group-hover:bg-brand-500/50 transition-colors",
-            isResizing && "bg-brand-500/50"
+            "w-0.5 h-full transition-colors duration-150",
+            "bg-transparent group-hover:bg-brand-500/50",
+            isResizing && "bg-brand-500"
           )}
         />
       </div>

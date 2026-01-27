@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { GherkinDisplay } from "./gherkin-editor";
 import { ReleasePicker } from "./release-picker";
 import { Input } from "./ui/input";
+import { ResizablePanel } from "./ui/resizable-panel";
 import { updateTestResult, completeTestRun, deleteTestRun, updateTestRun, addScenariosToRun, removeScenariosFromRun } from "@/app/runs/actions";
 import type { TestRun } from "@/lib/db/schema";
 
@@ -740,7 +741,13 @@ export function RunExecutor({ run, results, releases: initialReleases, available
 
       <div className="flex-1 flex overflow-hidden">
         {/* Scenario list */}
-        <div className="w-80 border-r border-[hsl(var(--border))] overflow-auto flex flex-col">
+        <ResizablePanel
+          defaultWidth={320}
+          minWidth={240}
+          maxWidth={600}
+          storageKey="run-scenario-panel-width"
+          className="border-r border-[hsl(var(--border))] overflow-auto flex flex-col h-full"
+        >
           {/* List header with actions */}
           {run.status === "in_progress" && (
             <div className="p-2 border-b border-[hsl(var(--border))] bg-[hsl(var(--muted))] flex items-center justify-between gap-2">
@@ -817,7 +824,7 @@ export function RunExecutor({ run, results, releases: initialReleases, available
               </div>
             ))}
           </div>
-        </div>
+        </ResizablePanel>
 
         {/* Detail panel */}
         <div className="flex-1 overflow-auto p-4">
