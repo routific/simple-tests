@@ -156,6 +156,7 @@ export const testRuns = sqliteTable(
     linearIssueId: text("linear_issue_id"),
     linearIssueIdentifier: text("linear_issue_identifier"), // e.g., "ENG-123"
     linearIssueTitle: text("linear_issue_title"),
+    environment: text("environment", { enum: ["sandbox", "dev", "staging", "prod"] }),
     createdAt: integer("created_at", { mode: "timestamp" })
       .notNull()
       .$defaultFn(() => new Date()),

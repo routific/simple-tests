@@ -89,6 +89,7 @@ export function CreateRunForm({ folders, cases, caseCounts, releases: initialRel
   const [isPending, startTransition] = useTransition();
   const [name, setName] = useState("");
   const [selectedReleaseId, setSelectedReleaseId] = useState<number | null>(null);
+  const [selectedEnvironment, setSelectedEnvironment] = useState<"sandbox" | "dev" | "staging" | "prod" | null>(null);
   const [releases, setReleases] = useState<Release[]>(initialReleases);
   const [selectedCases, setSelectedCases] = useState<Set<number>>(
     () => new Set(initialSelectedCaseIds)
@@ -286,6 +287,7 @@ export function CreateRunForm({ folders, cases, caseCounts, releases: initialRel
           releaseId: selectedReleaseId,
           releaseName: selectedRelease?.name || null,
           scenarioIds,
+          environment: selectedEnvironment,
           linearProjectId: selectedProject?.id || null,
           linearProjectName: selectedProject?.name || null,
           linearMilestoneId: selectedMilestone?.id || null,
@@ -377,6 +379,36 @@ export function CreateRunForm({ folders, cases, caseCounts, releases: initialRel
                   }}
                   placeholder="No release"
                 />
+              </div>
+            </div>
+
+            {/* Environment Selector */}
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Environment <span className="text-muted-foreground font-normal">(optional)</span>
+              </label>
+              <div className="flex gap-2">
+                {(["sandbox", "dev", "staging", "prod"] as const).map((env) => (
+                  <button
+                    key={env}
+                    type="button"
+                    onClick={() => setSelectedEnvironment(selectedEnvironment === env ? null : env)}
+                    className={cn(
+                      "px-3 py-1.5 text-sm font-medium rounded-full border transition-colors",
+                      selectedEnvironment === env
+                        ? env === "prod"
+                          ? "bg-green-100 border-green-300 text-green-700 dark:bg-green-900/30 dark:border-green-700 dark:text-green-400"
+                          : env === "staging"
+                          ? "bg-yellow-100 border-yellow-300 text-yellow-700 dark:bg-yellow-900/30 dark:border-yellow-700 dark:text-yellow-400"
+                          : env === "dev"
+                          ? "bg-blue-100 border-blue-300 text-blue-700 dark:bg-blue-900/30 dark:border-blue-700 dark:text-blue-400"
+                          : "bg-gray-100 border-gray-300 text-gray-700 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300"
+                        : "bg-background border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+                    )}
+                  >
+                    {env.charAt(0).toUpperCase() + env.slice(1)}
+                  </button>
+                ))}
               </div>
             </div>
 

@@ -60,6 +60,7 @@ export default async function RunsPage() {
         name: run.name,
         releaseId: run.releaseId,
         status: run.status,
+        environment: run.environment,
         createdAt: run.createdAt,
         linearIssueIdentifier: run.linearIssueIdentifier,
         linearProjectId: run.linearProjectId,

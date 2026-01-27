@@ -13,6 +13,7 @@ interface RunWithStats {
   name: string;
   releaseId: number | null;
   status: "in_progress" | "completed";
+  environment: "sandbox" | "dev" | "staging" | "prod" | null;
   createdAt: Date | null;
   linearIssueIdentifier: string | null;
   linearProjectId: string | null;
@@ -367,6 +368,24 @@ function RunRow({ run, linearWorkspace }: { run: RunWithStats; linearWorkspace?:
             <Badge variant="secondary">{run.stats.pending}</Badge>
           )}
         </div>
+
+        {/* Environment */}
+        {run.environment && (
+          <span
+            className={cn(
+              "px-2 py-0.5 text-xs font-medium rounded-full",
+              run.environment === "prod"
+                ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                : run.environment === "staging"
+                ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+                : run.environment === "dev"
+                ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"
+            )}
+          >
+            {run.environment.charAt(0).toUpperCase() + run.environment.slice(1)}
+          </span>
+        )}
 
         {/* Run Status */}
         <Badge variant={run.status === "completed" ? "default" : "warning"}>

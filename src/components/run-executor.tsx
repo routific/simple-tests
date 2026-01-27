@@ -77,6 +77,7 @@ export function RunExecutor({ run, results, releases: initialReleases, available
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(run.name);
   const [editReleaseId, setEditReleaseId] = useState<number | null>(run.releaseId);
+  const [editEnvironment, setEditEnvironment] = useState<"sandbox" | "dev" | "staging" | "prod" | null>(run.environment);
   const [releases, setReleases] = useState<Release[]>(initialReleases);
   const [showAddScenarios, setShowAddScenarios] = useState(false);
   const [scenarioSearch, setScenarioSearch] = useState("");
@@ -364,6 +365,7 @@ export function RunExecutor({ run, results, releases: initialReleases, available
         runId: run.id,
         name: editName.trim(),
         releaseId: editReleaseId,
+        environment: editEnvironment,
         linearProjectId: editProject?.id || null,
         linearProjectName: editProject?.name || null,
         linearMilestoneId: editMilestone?.id || null,
@@ -380,6 +382,7 @@ export function RunExecutor({ run, results, releases: initialReleases, available
   const handleCancelEdit = () => {
     setEditName(run.name);
     setEditReleaseId(run.releaseId);
+    setEditEnvironment(run.environment);
     setEditProject(
       run.linearProjectId && run.linearProjectName
         ? { id: run.linearProjectId, name: run.linearProjectName, state: "" }
@@ -488,6 +491,30 @@ export function RunExecutor({ run, results, releases: initialReleases, available
                   placeholder="No release"
                   className="w-48"
                 />
+                {/* Environment Selector */}
+                <div className="flex items-center gap-1">
+                  {(["sandbox", "dev", "staging", "prod"] as const).map((env) => (
+                    <button
+                      key={env}
+                      type="button"
+                      onClick={() => setEditEnvironment(editEnvironment === env ? null : env)}
+                      className={cn(
+                        "px-2.5 py-1.5 text-xs font-medium rounded-full border transition-colors",
+                        editEnvironment === env
+                          ? env === "prod"
+                            ? "bg-green-100 border-green-300 text-green-700 dark:bg-green-900/30 dark:border-green-700 dark:text-green-400"
+                            : env === "staging"
+                            ? "bg-yellow-100 border-yellow-300 text-yellow-700 dark:bg-yellow-900/30 dark:border-yellow-700 dark:text-yellow-400"
+                            : env === "dev"
+                            ? "bg-blue-100 border-blue-300 text-blue-700 dark:bg-blue-900/30 dark:border-blue-700 dark:text-blue-400"
+                            : "bg-gray-100 border-gray-300 text-gray-700 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300"
+                          : "bg-background border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+                      )}
+                    >
+                      {env.charAt(0).toUpperCase() + env.slice(1)}
+                    </button>
+                  ))}
+                </div>
                 <button
                   onClick={handleSaveEdit}
                   disabled={isPending || !editName.trim()}
@@ -630,6 +657,25 @@ export function RunExecutor({ run, results, releases: initialReleases, available
                   <>
                     <span className="text-border">·</span>
                     <span>{selectedRelease.name}</span>
+                  </>
+                )}
+                {run.environment && (
+                  <>
+                    <span className="text-border">·</span>
+                    <span
+                      className={cn(
+                        "px-2 py-0.5 text-xs font-medium rounded-full",
+                        run.environment === "prod"
+                          ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                          : run.environment === "staging"
+                          ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+                          : run.environment === "dev"
+                          ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                          : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"
+                      )}
+                    >
+                      {run.environment.charAt(0).toUpperCase() + run.environment.slice(1)}
+                    </span>
                   </>
                 )}
                 {run.linearIssueIdentifier && linearWorkspace && (

@@ -12,6 +12,7 @@ interface CreateRunInput {
   releaseId: number | null;
   releaseName: string | null;
   scenarioIds: number[];
+  environment: "sandbox" | "dev" | "staging" | "prod" | null;
   linearProjectId: string | null;
   linearProjectName: string | null;
   linearMilestoneId: string | null;
@@ -39,6 +40,7 @@ export async function createTestRun(input: CreateRunInput) {
         organizationId,
         createdBy: userId,
         status: "in_progress",
+        environment: input.environment,
         linearProjectId: input.linearProjectId,
         linearProjectName: input.linearProjectName,
         linearMilestoneId: input.linearMilestoneId,
@@ -187,6 +189,7 @@ interface UpdateRunInput {
   runId: number;
   name?: string;
   releaseId?: number | null;
+  environment?: "sandbox" | "dev" | "staging" | "prod" | null;
   linearProjectId?: string | null;
   linearProjectName?: string | null;
   linearMilestoneId?: string | null;
@@ -221,6 +224,7 @@ export async function updateTestRun(input: UpdateRunInput) {
     const updates: Partial<typeof testRuns.$inferInsert> = {};
     if (input.name !== undefined) updates.name = input.name;
     if (input.releaseId !== undefined) updates.releaseId = input.releaseId;
+    if (input.environment !== undefined) updates.environment = input.environment;
     if (input.linearProjectId !== undefined) updates.linearProjectId = input.linearProjectId;
     if (input.linearProjectName !== undefined) updates.linearProjectName = input.linearProjectName;
     if (input.linearMilestoneId !== undefined) updates.linearMilestoneId = input.linearMilestoneId;
