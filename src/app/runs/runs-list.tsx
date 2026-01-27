@@ -50,6 +50,9 @@ export function RunsList({ runs, releases, linearWorkspace }: RunsListProps) {
   const [isPending, startTransition] = useTransition();
   const [optimisticReleases, setOptimisticReleases] = useState(releases);
 
+  // Search state for completed releases
+  const [searchQuery, setSearchQuery] = useState("");
+
   // Duplicate modal state
   const [duplicateRun, setDuplicateRun] = useState<RunWithStats | null>(null);
   const [duplicateName, setDuplicateName] = useState("");
@@ -246,7 +249,12 @@ export function RunsList({ runs, releases, linearWorkspace }: RunsListProps) {
     );
   };
 
-  const currentReleases = activeTab === "active" ? activeReleases : completedReleases;
+  // Filter completed releases by search query
+  const filteredCompletedReleases = searchQuery
+    ? completedReleases.filter(r => r.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    : completedReleases;
+
+  const currentReleases = activeTab === "active" ? activeReleases : filteredCompletedReleases;
   const unassignedRuns = runsByRelease.get("unassigned") || [];
 
   return (
@@ -286,9 +294,23 @@ export function RunsList({ runs, releases, linearWorkspace }: RunsListProps) {
       {/* Content */}
       <Card>
         <CardHeader className="pb-0">
-          <CardTitle className="text-base font-medium">
-            {activeTab === "active" ? "Active Releases" : "Completed Releases"}
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base font-medium">
+              {activeTab === "active" ? "Active Releases" : "Completed Releases"}
+            </CardTitle>
+            {activeTab === "completed" && (
+              <div className="relative">
+                <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Search releases..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9 pr-3 py-1.5 text-sm bg-muted/50 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 w-48"
+                />
+              </div>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="p-0 mt-4">
           {currentReleases.length === 0 && (activeTab === "completed" || unassignedRuns.length === 0) ? (
@@ -566,6 +588,14 @@ function ChevronRightIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+    </svg>
+  );
+}
+
+function SearchIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
     </svg>
   );
 }
