@@ -90,7 +90,10 @@ export async function getIssues(search?: string): Promise<LinearIssue[]> {
       first: 50,
       ...(search && {
         filter: {
-          title: { containsIgnoreCase: search },
+          or: [
+            { title: { containsIgnoreCase: search } },
+            { identifier: { containsIgnoreCase: search } },
+          ],
         },
       }),
     });
