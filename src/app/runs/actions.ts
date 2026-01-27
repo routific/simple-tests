@@ -1,11 +1,11 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { testRuns, testRunResults, releases } from "@/lib/db/schema";
+import { testRuns, testRunResults, releases, scenarios, testCases } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getSessionWithOrg } from "@/lib/auth";
-import { createIssueAttachment, deleteAttachmentByUrl } from "@/lib/linear";
+import { createIssueAttachment, deleteAttachmentByUrl, createIssueComment } from "@/lib/linear";
 
 interface CreateRunInput {
   name: string;
@@ -123,6 +123,80 @@ export async function updateTestResult(input: UpdateResultInput) {
   }
 }
 
+interface ResultWithDetails {
+  status: "pending" | "passed" | "failed" | "blocked" | "skipped";
+  notes: string | null;
+  scenarioTitle: string;
+  testCaseTitle: string;
+}
+
+function buildLinearCommentMarkdown(
+  runId: number,
+  environment: string | null,
+  results: ResultWithDetails[]
+): string {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://simple-tests.routific.com";
+
+  // Count statuses
+  const counts = {
+    passed: 0,
+    failed: 0,
+    blocked: 0,
+    skipped: 0,
+    pending: 0,
+  };
+
+  for (const result of results) {
+    counts[result.status]++;
+  }
+
+  const total = results.length;
+
+  // Build markdown
+  const lines: string[] = [];
+
+  lines.push("## Test Run Completed");
+  lines.push("");
+
+  if (environment) {
+    const envDisplay = environment.charAt(0).toUpperCase() + environment.slice(1);
+    lines.push(`**Environment:** ${envDisplay}`);
+    lines.push("");
+  }
+
+  lines.push("### Results Summary");
+  lines.push("");
+  lines.push("| Status | Count |");
+  lines.push("|--------|-------|");
+  lines.push(`| Passed | ${counts.passed} |`);
+  lines.push(`| Failed | ${counts.failed} |`);
+  lines.push(`| Blocked | ${counts.blocked} |`);
+  lines.push(`| Skipped | ${counts.skipped} |`);
+  lines.push(`| Pending | ${counts.pending} |`);
+  lines.push(`| **Total** | **${total}** |`);
+
+  // Collect notes from results that have them
+  const resultsWithNotes = results.filter((r) => r.notes && r.notes.trim());
+
+  if (resultsWithNotes.length > 0) {
+    lines.push("");
+    lines.push("### Notes");
+
+    for (const result of resultsWithNotes) {
+      const statusLabel = result.status.charAt(0).toUpperCase() + result.status.slice(1);
+      lines.push("");
+      lines.push(`**${statusLabel}: ${result.testCaseTitle} > ${result.scenarioTitle}**`);
+      lines.push(`> ${result.notes}`);
+    }
+  }
+
+  lines.push("");
+  lines.push("---");
+  lines.push(`[View full test run](${baseUrl}/runs/${runId})`);
+
+  return lines.join("\n");
+}
+
 export async function completeTestRun(runId: number) {
   const session = await getSessionWithOrg();
   if (!session) {
@@ -132,12 +206,57 @@ export async function completeTestRun(runId: number) {
   const { organizationId } = session.user;
 
   try {
+    // Fetch run data to check for Linear issue
+    const run = await db
+      .select()
+      .from(testRuns)
+      .where(
+        and(eq(testRuns.id, runId), eq(testRuns.organizationId, organizationId))
+      )
+      .get();
+
+    if (!run) {
+      return { error: "Test run not found" };
+    }
+
     await db
       .update(testRuns)
       .set({ status: "completed" })
       .where(
         and(eq(testRuns.id, runId), eq(testRuns.organizationId, organizationId))
       );
+
+    // Post comment to Linear if linked to an issue
+    if (run.linearIssueId) {
+      try {
+        // Fetch results with scenario and test case titles
+        const resultsData = await db
+          .select({
+            status: testRunResults.status,
+            notes: testRunResults.notes,
+            scenarioTitle: scenarios.title,
+            testCaseTitle: testCases.title,
+          })
+          .from(testRunResults)
+          .innerJoin(scenarios, eq(testRunResults.scenarioId, scenarios.id))
+          .innerJoin(testCases, eq(scenarios.testCaseId, testCases.id))
+          .where(eq(testRunResults.testRunId, runId));
+
+        const markdown = buildLinearCommentMarkdown(
+          runId,
+          run.environment,
+          resultsData
+        );
+
+        await createIssueComment({
+          issueId: run.linearIssueId,
+          body: markdown,
+        });
+      } catch (linearError) {
+        // Log but don't fail the completion
+        console.error("Failed to post Linear comment:", linearError);
+      }
+    }
 
     revalidatePath("/runs");
     revalidatePath(`/runs/${runId}`);
@@ -355,6 +474,91 @@ export async function addScenariosToRun(input: AddScenariosInput) {
   } catch (error) {
     console.error("Failed to add scenarios to run:", error);
     return { error: "Failed to add scenarios to run" };
+  }
+}
+
+interface DuplicateRunInput {
+  sourceRunId: number;
+  name: string;
+  releaseId: number | null;
+  releaseName: string | null;
+  environment: "sandbox" | "dev" | "staging" | "prod" | null;
+}
+
+export async function duplicateTestRun(input: DuplicateRunInput) {
+  const session = await getSessionWithOrg();
+  if (!session) {
+    return { error: "Unauthorized" };
+  }
+
+  const { organizationId } = session.user;
+  const userId = session.user.id;
+
+  try {
+    // Verify the source run belongs to the organization
+    const sourceRun = await db
+      .select()
+      .from(testRuns)
+      .where(
+        and(eq(testRuns.id, input.sourceRunId), eq(testRuns.organizationId, organizationId))
+      )
+      .get();
+
+    if (!sourceRun) {
+      return { error: "Source test run not found" };
+    }
+
+    // Get scenario IDs from the source run
+    const sourceResults = await db
+      .select({ scenarioId: testRunResults.scenarioId })
+      .from(testRunResults)
+      .where(eq(testRunResults.testRunId, input.sourceRunId));
+
+    const scenarioIds = sourceResults.map((r) => r.scenarioId);
+
+    if (scenarioIds.length === 0) {
+      return { error: "Source run has no scenarios" };
+    }
+
+    // Create the new run
+    const result = await db
+      .insert(testRuns)
+      .values({
+        name: input.name,
+        releaseId: input.releaseId,
+        organizationId,
+        createdBy: userId,
+        status: "in_progress",
+        environment: input.environment,
+        // Copy Linear project/milestone but not issue (user may want different issue)
+        linearProjectId: sourceRun.linearProjectId,
+        linearProjectName: sourceRun.linearProjectName,
+        linearMilestoneId: sourceRun.linearMilestoneId,
+        linearMilestoneName: sourceRun.linearMilestoneName,
+        linearIssueId: null,
+        linearIssueIdentifier: null,
+        linearIssueTitle: null,
+      })
+      .returning({ id: testRuns.id });
+
+    const newRunId = result[0].id;
+
+    // Create pending results for all scenarios
+    await db.insert(testRunResults).values(
+      scenarioIds.map((scenarioId) => ({
+        testRunId: newRunId,
+        scenarioId,
+        status: "pending" as const,
+      }))
+    );
+
+    revalidatePath("/runs");
+    revalidatePath("/");
+
+    return { success: true, id: newRunId };
+  } catch (error) {
+    console.error("Failed to duplicate test run:", error);
+    return { error: "Failed to duplicate test run" };
   }
 }
 

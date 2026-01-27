@@ -167,3 +167,22 @@ export async function deleteAttachmentByUrl(url: string): Promise<boolean> {
     return false;
   }
 }
+
+export interface CreateCommentInput {
+  issueId: string;
+  body: string;
+}
+
+export async function createIssueComment(input: CreateCommentInput): Promise<boolean> {
+  try {
+    const client = await getLinearClient();
+    const result = await client.createComment({
+      issueId: input.issueId,
+      body: input.body,
+    });
+    return result.success;
+  } catch (error) {
+    console.error("Failed to create Linear comment:", error);
+    return false;
+  }
+}
