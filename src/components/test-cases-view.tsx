@@ -75,6 +75,8 @@ interface TestCasesViewProps {
   currentOffset: number;
   /** When viewing a folder, this contains all descendant folder IDs (including the selected one) */
   selectedFolderIds?: number[] | null;
+  /** Initial case ID from URL for deep-linking */
+  initialSelectedCaseId?: number | null;
 }
 
 export function TestCasesView({
@@ -88,11 +90,13 @@ export function TestCasesView({
   hasMore,
   currentOffset,
   selectedFolderIds,
+  initialSelectedCaseId,
 }: TestCasesViewProps) {
   const router = useRouter();
   const [isNewCaseModalOpen, setIsNewCaseModalOpen] = useState(false);
   const [selectedCase, setSelectedCase] = useState<TestCase | null>(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const initializedRef = useRef(false);
   const [selectedCases, setSelectedCases] = useState<Set<number>>(new Set());
   const lastSelectedIndexRef = useRef<number | null>(null);
   const [isExporting, setIsExporting] = useState(false);
@@ -140,6 +144,19 @@ export function TestCasesView({
   useEffect(() => {
     refreshUndoRedo();
   }, [cases]); // Refresh when cases change
+
+  // Handle deep-link: open panel for initial case ID from URL
+  useEffect(() => {
+    if (initializedRef.current) return;
+    if (initialSelectedCaseId && cases.length > 0) {
+      const testCase = cases.find((c) => c.id === initialSelectedCaseId);
+      if (testCase) {
+        setSelectedCase(testCase);
+        setIsPanelOpen(true);
+        initializedRef.current = true;
+      }
+    }
+  }, [initialSelectedCaseId, cases]);
 
   const handleUndo = async () => {
     if (isUndoing || !lastUndoAction) return;
@@ -286,6 +303,10 @@ export function TestCasesView({
   const handleCaseClick = (testCase: TestCase) => {
     setSelectedCase(testCase);
     setIsPanelOpen(true);
+    // Update URL with case ID for deep-linking
+    const params = new URLSearchParams(window.location.search);
+    params.set("case", String(testCase.id));
+    router.replace(`/cases?${params.toString()}`, { scroll: false });
   };
 
   const toggleCaseSelection = (id: number, e: React.MouseEvent) => {
@@ -325,6 +346,11 @@ export function TestCasesView({
   const handleClosePanel = () => {
     setIsPanelOpen(false);
     setTimeout(() => setSelectedCase(null), 300); // Clear after animation
+    // Remove case ID from URL
+    const params = new URLSearchParams(window.location.search);
+    params.delete("case");
+    const newUrl = params.toString() ? `/cases?${params.toString()}` : "/cases";
+    router.replace(newUrl, { scroll: false });
   };
 
   const handleCaseSaved = () => {

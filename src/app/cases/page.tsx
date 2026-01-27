@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 const PAGE_SIZE = 100;
 
 interface Props {
-  searchParams: Promise<{ folder?: string; q?: string; state?: string; offset?: string }>;
+  searchParams: Promise<{ folder?: string; q?: string; state?: string; offset?: string; case?: string }>;
 }
 
 export default async function CasesPage({ searchParams }: Props) {
@@ -28,6 +28,7 @@ export default async function CasesPage({ searchParams }: Props) {
   const search = params.q || "";
   const stateFilter = params.state || "";
   const offset = params.offset ? parseInt(params.offset) : 0;
+  const selectedCaseId = params.case ? parseInt(params.case) : null;
 
   // Get all folders for this organization with case counts
   const allFolders = await db
@@ -162,6 +163,7 @@ export default async function CasesPage({ searchParams }: Props) {
           hasMore={cases.length < totalCount}
           currentOffset={offset}
           selectedFolderIds={selectedFolderIds}
+          initialSelectedCaseId={selectedCaseId}
         />
       </div>
     </div>
