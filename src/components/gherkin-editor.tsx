@@ -201,7 +201,7 @@ export function GherkinEditor({ value, onChange, readOnly }: Props) {
   const lines = value.split("\n");
 
   return (
-    <div className="relative rounded-lg border border-border bg-[#1e1e2e] dark:bg-[#0d1117] overflow-hidden">
+    <div className="relative rounded-lg border border-border bg-[#f8f8f8] dark:bg-[#0d1117] overflow-hidden">
       {/* Highlighted background layer */}
       <div
         ref={highlightRef}
@@ -228,9 +228,8 @@ Scenario: Successful login with valid credentials
   When the user enters valid credentials
   And clicks the login button
   Then the user should be redirected to the dashboard`}
-        className="relative w-full h-96 font-mono text-sm p-3 pl-[3.5rem] leading-6 resize-none bg-transparent text-transparent caret-white selection:bg-blue-500/30 focus:outline-none focus:ring-2 focus:ring-brand-500/30 placeholder:text-gray-600"
+        className="relative w-full h-96 font-mono text-sm p-3 pl-[3.5rem] leading-6 resize-none bg-transparent text-transparent caret-gray-800 dark:caret-white selection:bg-blue-500/30 focus:outline-none focus:ring-2 focus:ring-brand-500/30 placeholder:text-gray-400 dark:placeholder:text-gray-600"
         spellCheck={false}
-        style={{ caretColor: "white" }}
       />
     </div>
   );
@@ -248,7 +247,7 @@ export function GherkinDisplay({ text }: { text: string }) {
   const lines = text.split("\n");
 
   return (
-    <div className="rounded-lg border border-border bg-[#1e1e2e] dark:bg-[#0d1117] overflow-auto p-3">
+    <div className="rounded-lg border border-border bg-[#f8f8f8] dark:bg-[#0d1117] overflow-auto p-3">
       <div className="whitespace-pre font-mono text-sm">
         {lines.map((line, i) => (
           <HighlightedLine key={i} line={line} lineNumber={i + 1} />

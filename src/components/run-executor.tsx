@@ -744,7 +744,7 @@ export function RunExecutor({ run, results, releases: initialReleases, available
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
                       placeholder="Add any notes about this test..."
-                      className="w-full px-3 py-2 border border-[hsl(var(--border))] rounded-md text-sm h-24 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-[hsl(var(--border))] rounded-md text-sm h-24 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 bg-[hsl(var(--background))]"
                     />
                   </div>
 
