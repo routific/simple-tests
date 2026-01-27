@@ -313,8 +313,8 @@ export function RunsList({ runs, releases, linearWorkspace }: RunsListProps) {
 
       {/* Duplicate Run Modal */}
       {duplicateRun && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-background rounded-lg shadow-xl w-full max-w-md">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-background rounded-xl shadow-2xl w-full max-w-md border border-border ring-1 ring-black/5 dark:ring-white/10 animate-in fade-in zoom-in-95 duration-200">
             <div className="p-4 border-b border-border flex items-center justify-between">
               <h2 className="text-lg font-semibold">Duplicate Run</h2>
               <button
