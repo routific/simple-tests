@@ -123,7 +123,7 @@ export function RunsList({ runs, releases, linearWorkspace }: RunsListProps) {
 
   const handleOpenDuplicate = (run: RunWithStats) => {
     setDuplicateRun(run);
-    setDuplicateName(`${run.name} (copy)`);
+    setDuplicateName(run.name);
     setDuplicateReleaseId(run.releaseId);
     setDuplicateEnvironment(run.environment);
   };
