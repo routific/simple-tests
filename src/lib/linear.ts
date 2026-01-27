@@ -86,12 +86,15 @@ export async function getIssues(search?: string): Promise<LinearIssue[]> {
   try {
     const client = await getLinearClient();
 
+    // Check if search looks like an issue identifier (e.g., "ENG-123")
+    const identifierMatch = search?.match(/^[A-Z]+-(\d+)$/i);
+
     const issues = await client.issues({
       first: 50,
       ...(search && {
-        filter: {
-          title: { containsIgnoreCase: search },
-        },
+        filter: identifierMatch
+          ? { number: { eq: parseInt(identifierMatch[1], 10) } }
+          : { title: { containsIgnoreCase: search } },
       }),
     });
 
