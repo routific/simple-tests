@@ -138,61 +138,45 @@ function buildLinearCommentMarkdown(
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://simple-tests.routific.com";
 
   // Count statuses
-  const counts = {
-    passed: 0,
-    failed: 0,
-    blocked: 0,
-    skipped: 0,
-    pending: 0,
-  };
-
+  const counts = { passed: 0, failed: 0, blocked: 0, skipped: 0, pending: 0 };
   for (const result of results) {
     counts[result.status]++;
   }
 
-  const total = results.length;
+  // Build concise summary line with only non-zero counts
+  const statusParts: string[] = [];
+  if (counts.passed > 0) statusParts.push(`✅ ${counts.passed} passed`);
+  if (counts.failed > 0) statusParts.push(`❌ ${counts.failed} failed`);
+  if (counts.blocked > 0) statusParts.push(`⏸️ ${counts.blocked} blocked`);
+  if (counts.skipped > 0) statusParts.push(`⏭️ ${counts.skipped} skipped`);
+  if (counts.pending > 0) statusParts.push(`⏳ ${counts.pending} pending`);
 
-  // Build markdown
   const lines: string[] = [];
-
   lines.push("## Test Run Completed");
   lines.push("");
 
+  // Environment + results on one line if env exists
   if (environment) {
     const envDisplay = environment.charAt(0).toUpperCase() + environment.slice(1);
-    lines.push(`**Environment:** ${envDisplay}`);
-    lines.push("");
+    lines.push(`**${envDisplay}** · ${statusParts.join(" · ")}`);
+  } else {
+    lines.push(statusParts.join(" · "));
   }
 
-  lines.push("### Results Summary");
-  lines.push("");
-  lines.push("| Status | Count |");
-  lines.push("|--------|-------|");
-  lines.push(`| Passed | ${counts.passed} |`);
-  lines.push(`| Failed | ${counts.failed} |`);
-  lines.push(`| Blocked | ${counts.blocked} |`);
-  lines.push(`| Skipped | ${counts.skipped} |`);
-  lines.push(`| Pending | ${counts.pending} |`);
-  lines.push(`| **Total** | **${total}** |`);
-
-  // Collect notes from results that have them
+  // Notes section - only for results with notes
   const resultsWithNotes = results.filter((r) => r.notes && r.notes.trim());
-
   if (resultsWithNotes.length > 0) {
     lines.push("");
     lines.push("### Notes");
-
     for (const result of resultsWithNotes) {
-      const statusLabel = result.status.charAt(0).toUpperCase() + result.status.slice(1);
       lines.push("");
-      lines.push(`**${statusLabel}: ${result.testCaseTitle} > ${result.scenarioTitle}**`);
+      lines.push(`**${result.testCaseTitle} > ${result.scenarioTitle}**`);
       lines.push(`> ${result.notes}`);
     }
   }
 
   lines.push("");
-  lines.push("---");
-  lines.push(`[View full test run](${baseUrl}/runs/${runId})`);
+  lines.push(`[View test run →](${baseUrl}/runs/${runId})`);
 
   return lines.join("\n");
 }
@@ -520,7 +504,7 @@ export async function duplicateTestRun(input: DuplicateRunInput) {
       return { error: "Source run has no scenarios" };
     }
 
-    // Create the new run
+    // Create the new run (copy all Linear data)
     const result = await db
       .insert(testRuns)
       .values({
@@ -530,14 +514,13 @@ export async function duplicateTestRun(input: DuplicateRunInput) {
         createdBy: userId,
         status: "in_progress",
         environment: input.environment,
-        // Copy Linear project/milestone but not issue (user may want different issue)
         linearProjectId: sourceRun.linearProjectId,
         linearProjectName: sourceRun.linearProjectName,
         linearMilestoneId: sourceRun.linearMilestoneId,
         linearMilestoneName: sourceRun.linearMilestoneName,
-        linearIssueId: null,
-        linearIssueIdentifier: null,
-        linearIssueTitle: null,
+        linearIssueId: sourceRun.linearIssueId,
+        linearIssueIdentifier: sourceRun.linearIssueIdentifier,
+        linearIssueTitle: sourceRun.linearIssueTitle,
       })
       .returning({ id: testRuns.id });
 
@@ -551,6 +534,24 @@ export async function duplicateTestRun(input: DuplicateRunInput) {
         status: "pending" as const,
       }))
     );
+
+    // Create attachment on Linear issue if one is linked
+    if (sourceRun.linearIssueId) {
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://simple-tests.routific.com";
+      const runUrl = `${baseUrl}/runs/${newRunId}`;
+      const titleParts = ["Test Run"];
+      if (input.releaseName) {
+        titleParts.push(`[${input.releaseName}]`);
+      }
+      titleParts.push(input.name);
+
+      await createIssueAttachment({
+        issueId: sourceRun.linearIssueId,
+        title: titleParts.join(" "),
+        url: runUrl,
+        subtitle: `${scenarioIds.length} test case${scenarioIds.length !== 1 ? "s" : ""}`,
+      });
+    }
 
     revalidatePath("/runs");
     revalidatePath("/");
