@@ -1096,6 +1096,21 @@ function GroupedTestCaseList({
   onDragLeave: (e: React.DragEvent) => void;
   onDrop: (e: React.DragEvent) => void;
 }) {
+  // Track collapsed folder groups
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<number | null>>(new Set());
+
+  const toggleGroupCollapse = (folderId: number | null) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(folderId)) {
+        next.delete(folderId);
+      } else {
+        next.add(folderId);
+      }
+      return next;
+    });
+  };
+
   // Check if we're showing cases from multiple folders (parent + children)
   const showFolderGroups = selectedFolderIds && selectedFolderIds.length > 1;
 
@@ -1160,11 +1175,23 @@ function GroupedTestCaseList({
 
   return (
     <div>
-      {groupedCases.map((group, groupIndex) => (
+      {groupedCases.map((group, groupIndex) => {
+        const isCollapsed = collapsedGroups.has(group.folderId);
+
+        return (
         <div key={group.folderId ?? "root"}>
           {/* Folder subsection divider */}
           {showFolderGroups && group.folderName && (
-            <div className="flex items-center gap-2 px-4 py-2 bg-muted/50 border-y border-border">
+            <button
+              onClick={() => toggleGroupCollapse(group.folderId)}
+              className="w-full flex items-center gap-2 pl-6 pr-4 py-2.5 bg-muted/70 dark:bg-muted/40 border-y border-border hover:bg-muted transition-colors text-left"
+            >
+              <ChevronIcon
+                className={cn(
+                  "w-3.5 h-3.5 text-muted-foreground transition-transform",
+                  !isCollapsed && "rotate-90"
+                )}
+              />
               <SubfolderIcon className="w-4 h-4 text-muted-foreground" />
               <span className="text-sm font-medium text-muted-foreground">
                 {group.folderName}
@@ -1172,9 +1199,10 @@ function GroupedTestCaseList({
               <span className="text-xs text-muted-foreground/60">
                 ({group.cases.length})
               </span>
-            </div>
+            </button>
           )}
-          <div className="divide-y divide-border">
+          {!isCollapsed && (
+          <div className={cn("divide-y divide-border", showFolderGroups && group.folderName && "ml-4 border-l-2 border-muted")}>
             {group.cases.map((testCase) => (
               <div key={testCase.id} className="relative">
                 {/* Drop indicator line - before */}
@@ -1225,7 +1253,7 @@ function GroupedTestCaseList({
                       />
                     </div>
                     <DragHandleIcon className="w-4 h-4 text-muted-foreground/50 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
-                    <span className="font-medium text-foreground truncate group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
+                    <span className="text-foreground truncate group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
                       {testCase.title}
                     </span>
                   </div>
@@ -1285,8 +1313,10 @@ function GroupedTestCaseList({
               </div>
             ))}
           </div>
+          )}
         </div>
-      ))}
+      );
+      })}
     </div>
   );
 }
@@ -1306,6 +1336,15 @@ function SubfolderIcon({ className }: { className?: string }) {
         strokeLinejoin="round"
         d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
       />
+    </svg>
+  );
+}
+
+// Chevron icon for collapsible sections
+function ChevronIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
     </svg>
   );
 }
