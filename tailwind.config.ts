@@ -21,6 +21,15 @@ const config: Config = {
         'Arial',
         'sans-serif',
       ],
+      mono: [
+        'ui-monospace',
+        'SFMono-Regular',
+        'SF Mono',
+        'Menlo',
+        'Consolas',
+        'Liberation Mono',
+        'monospace',
+      ],
     },
     extend: {
       colors: {
