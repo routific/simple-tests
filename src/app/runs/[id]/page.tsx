@@ -80,6 +80,7 @@ export default async function RunDetailPage({ params }: Props) {
         results={results}
         releases={allReleases as { id: number; name: string; status: "active" | "completed" }[]}
         availableScenarios={availableScenarios}
+        linearWorkspace={session.user.organizationUrlKey}
       />
     </div>
   );

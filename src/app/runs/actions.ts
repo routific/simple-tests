@@ -5,6 +5,7 @@ import { testRuns, testRunResults } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getSessionWithOrg } from "@/lib/auth";
+import { createIssueAttachment } from "@/lib/linear";
 
 interface CreateRunInput {
   name: string;
@@ -56,6 +57,19 @@ export async function createTestRun(input: CreateRunInput) {
         status: "pending" as const,
       }))
     );
+
+    // Create attachment on Linear issue if one is linked
+    if (input.linearIssueId) {
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://simple-tests.routific.com";
+      const runUrl = `${baseUrl}/runs/${runId}`;
+
+      await createIssueAttachment({
+        issueId: input.linearIssueId,
+        title: `Test Run: ${input.name}`,
+        url: runUrl,
+        subtitle: `${input.scenarioIds.length} test case${input.scenarioIds.length !== 1 ? "s" : ""}`,
+      });
+    }
 
     revalidatePath("/runs");
     revalidatePath("/");

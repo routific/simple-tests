@@ -15,6 +15,7 @@ interface RunWithStats {
   status: "in_progress" | "completed";
   createdAt: Date | null;
   linearIssueIdentifier: string | null;
+  linearProjectId: string | null;
   linearProjectName: string | null;
   stats: Record<string, number>;
   total: number;
@@ -29,9 +30,10 @@ interface Release {
 interface RunsListProps {
   runs: RunWithStats[];
   releases: Release[];
+  linearWorkspace?: string;
 }
 
-export function RunsList({ runs, releases }: RunsListProps) {
+export function RunsList({ runs, releases, linearWorkspace }: RunsListProps) {
   const [activeTab, setActiveTab] = useState<"active" | "completed">("active");
   const [expandedReleases, setExpandedReleases] = useState<Set<number | "unassigned">>(() => {
     const ids: (number | "unassigned")[] = ["unassigned", ...releases.filter(r => r.status === "active").map(r => r.id)];
@@ -182,7 +184,7 @@ export function RunsList({ runs, releases }: RunsListProps) {
             ) : (
               <div className="divide-y divide-border">
                 {releaseRuns.map((run) => (
-                  <RunRow key={run.id} run={run} />
+                  <RunRow key={run.id} run={run} linearWorkspace={linearWorkspace} />
                 ))}
               </div>
             )}
@@ -260,7 +262,7 @@ export function RunsList({ runs, releases }: RunsListProps) {
   );
 }
 
-function RunRow({ run }: { run: RunWithStats }) {
+function RunRow({ run, linearWorkspace }: { run: RunWithStats; linearWorkspace?: string }) {
   const passRate = run.total > 0
     ? Math.round(((run.stats.passed || 0) / run.total) * 100)
     : 0;
@@ -284,19 +286,34 @@ function RunRow({ run }: { run: RunWithStats }) {
           </span>
           <span className="text-border">·</span>
           <span>{run.total} cases</span>
-          {run.linearIssueIdentifier && (
+          {run.linearIssueIdentifier && linearWorkspace && (
             <>
               <span className="text-border">·</span>
-              <span className="inline-flex items-center gap-1">
+              <a
+                href={`https://linear.app/${linearWorkspace}/issue/${run.linearIssueIdentifier}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="inline-flex items-center gap-1 hover:text-foreground hover:underline transition-colors"
+              >
                 <LinearIcon className="w-3.5 h-3.5" />
                 {run.linearIssueIdentifier}
-              </span>
+              </a>
             </>
           )}
-          {run.linearProjectName && (
+          {run.linearProjectName && run.linearProjectId && linearWorkspace && (
             <>
               <span className="text-border">·</span>
-              <span>{run.linearProjectName}</span>
+              <a
+                href={`https://linear.app/${linearWorkspace}/project/${run.linearProjectId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="inline-flex items-center gap-1 hover:text-foreground hover:underline transition-colors"
+              >
+                <ProjectIcon className="w-3.5 h-3.5" />
+                {run.linearProjectName}
+              </a>
             </>
           )}
         </div>
@@ -390,6 +407,14 @@ function LinearIcon({ className }: { className?: string }) {
       <path d="M98.7746 38.4772c.2225.9485-.9075 1.5459-1.5964.857L60.6658 2.82181c-.6889-.68886-.0915-1.8189.857-1.59639C82.9884 6.42347 96.9423 20.6477 98.7746 38.4772Z" />
       <path d="M38.4772 1.22541c.9485-.2225 1.5459.90748.857 1.59638L2.82181 39.3342c-.68886.6889-1.8189.0915-1.59639-.857C6.42347 17.0116 20.6477 3.05765 38.4772 1.22541Z" />
       <path d="M61.5228 98.7746c-.9485.2225-1.5459-.9075-.857-1.5964l36.5125-36.5124c.6889-.6889 1.8189-.0915 1.5964.857-5.1981 21.4608-19.4223 35.4146-37.2519 37.2518Z" />
+    </svg>
+  );
+}
+
+function ProjectIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
     </svg>
   );
 }

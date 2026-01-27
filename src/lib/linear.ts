@@ -120,3 +120,25 @@ export async function getIssues(search?: string): Promise<LinearIssue[]> {
     return [];
   }
 }
+
+export interface CreateAttachmentInput {
+  issueId: string;
+  title: string;
+  url: string;
+  subtitle?: string;
+}
+
+export async function createIssueAttachment(input: CreateAttachmentInput): Promise<boolean> {
+  try {
+    const client = await getLinearClient();
+    // The Linear SDK uses attachmentLinkURL for creating URL attachments
+    // It takes issueId and url as positional args, with optional title
+    const result = await client.attachmentLinkURL(input.issueId, input.url, {
+      title: input.subtitle ? `${input.title} - ${input.subtitle}` : input.title,
+    });
+    return result.success;
+  } catch (error) {
+    console.error("Failed to create Linear attachment:", error);
+    return false;
+  }
+}

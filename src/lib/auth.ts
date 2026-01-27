@@ -14,6 +14,7 @@ interface LinearProfile {
   organization: {
     id: string;
     name: string;
+    urlKey: string;
     logoUrl?: string;
   };
 }
@@ -50,6 +51,7 @@ function LinearProvider(): OAuthConfig<LinearProfile> {
           organization: {
             id: org.id,
             name: org.name,
+            urlKey: org.urlKey,
             logoUrl: org.logoUrl,
           },
         };
@@ -78,6 +80,7 @@ declare module "next-auth" {
       linearUsername: string;
       organizationId: string;
       organizationName: string;
+      organizationUrlKey: string;
     };
     accessToken?: string;
   }
@@ -97,6 +100,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.linearUsername = linearProfile.name;
         token.organizationId = linearProfile.organization.id;
         token.organizationName = linearProfile.organization.name;
+        token.organizationUrlKey = linearProfile.organization.urlKey;
         token.organizationLogo = linearProfile.organization.logoUrl;
       }
       return token;
@@ -117,6 +121,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         await db.insert(organizations).values({
           id: linearProfile.organization.id,
           name: linearProfile.organization.name,
+          urlKey: linearProfile.organization.urlKey,
           logoUrl: linearProfile.organization.logoUrl,
         });
       } else {
@@ -124,6 +129,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           .update(organizations)
           .set({
             name: linearProfile.organization.name,
+            urlKey: linearProfile.organization.urlKey,
             logoUrl: linearProfile.organization.logoUrl,
           })
           .where(eq(organizations.id, linearProfile.organization.id));
@@ -166,6 +172,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.user.linearUsername = token.linearUsername as string;
         session.user.organizationId = token.organizationId as string;
         session.user.organizationName = token.organizationName as string;
+        session.user.organizationUrlKey = token.organizationUrlKey as string;
         session.accessToken = token.accessToken as string;
       }
       return session;

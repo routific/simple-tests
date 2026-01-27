@@ -42,9 +42,10 @@ interface Props {
   results: Result[];
   releases: Release[];
   availableScenarios: AvailableScenario[];
+  linearWorkspace?: string;
 }
 
-export function RunExecutor({ run, results, releases: initialReleases, availableScenarios }: Props) {
+export function RunExecutor({ run, results, releases: initialReleases, availableScenarios, linearWorkspace }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [selectedResult, setSelectedResult] = useState<Result | null>(
@@ -253,12 +254,40 @@ export function RunExecutor({ run, results, releases: initialReleases, available
           ) : (
             <div>
               <h1 className="text-xl font-semibold">{run.name}</h1>
-              <div className="text-sm text-[hsl(var(--muted-foreground))] flex items-center gap-3">
+              <div className="text-sm text-[hsl(var(--muted-foreground))] flex items-center gap-3 flex-wrap">
                 <span>{run.createdAt?.toLocaleDateString()}</span>
                 {selectedRelease && (
                   <>
                     <span className="text-border">·</span>
                     <span>{selectedRelease.name}</span>
+                  </>
+                )}
+                {run.linearIssueIdentifier && linearWorkspace && (
+                  <>
+                    <span className="text-border">·</span>
+                    <a
+                      href={`https://linear.app/${linearWorkspace}/issue/${run.linearIssueIdentifier}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 hover:text-[hsl(var(--foreground))] hover:underline transition-colors"
+                    >
+                      <LinearIcon className="w-3.5 h-3.5" />
+                      {run.linearIssueIdentifier}
+                    </a>
+                  </>
+                )}
+                {run.linearProjectName && run.linearProjectId && linearWorkspace && (
+                  <>
+                    <span className="text-border">·</span>
+                    <a
+                      href={`https://linear.app/${linearWorkspace}/project/${run.linearProjectId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 hover:text-[hsl(var(--foreground))] hover:underline transition-colors"
+                    >
+                      <ProjectIcon className="w-3.5 h-3.5" />
+                      {run.linearProjectName}
+                    </a>
                   </>
                 )}
                 <span
@@ -378,7 +407,7 @@ export function RunExecutor({ run, results, releases: initialReleases, available
                   selectedResult?.id === result.id && "bg-[hsl(var(--muted))]"
                 )}
               >
-                {run.status === "in_progress" && (
+                {run.status === "in_progress" && isEditing && (
                   <input
                     type="checkbox"
                     checked={selectedToRemove.has(result.id)}
@@ -653,6 +682,25 @@ function TrashIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+    </svg>
+  );
+}
+
+function LinearIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 100 100" fill="currentColor">
+      <path d="M1.22541 61.5228c-.2225-.9485.90748-1.5459 1.59638-.857L39.3342 97.1782c.6889.6889.0915 1.8189-.857 1.5964C17.0116 93.5765 3.05765 79.3523 1.22541 61.5228Z" />
+      <path d="M98.7746 38.4772c.2225.9485-.9075 1.5459-1.5964.857L60.6658 2.82181c-.6889-.68886-.0915-1.8189.857-1.59639C82.9884 6.42347 96.9423 20.6477 98.7746 38.4772Z" />
+      <path d="M38.4772 1.22541c.9485-.2225 1.5459.90748.857 1.59638L2.82181 39.3342c-.68886.6889-1.8189.0915-1.59639-.857C6.42347 17.0116 20.6477 3.05765 38.4772 1.22541Z" />
+      <path d="M61.5228 98.7746c-.9485.2225-1.5459-.9075-.857-1.5964l36.5125-36.5124c.6889-.6889 1.8189-.0915 1.5964.857-5.1981 21.4608-19.4223 35.4146-37.2519 37.2518Z" />
+    </svg>
+  );
+}
+
+function ProjectIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
     </svg>
   );
 }

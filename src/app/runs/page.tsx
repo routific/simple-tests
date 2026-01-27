@@ -62,6 +62,7 @@ export default async function RunsPage() {
         status: run.status,
         createdAt: run.createdAt,
         linearIssueIdentifier: run.linearIssueIdentifier,
+        linearProjectId: run.linearProjectId,
         linearProjectName: run.linearProjectName,
         stats,
         total,
@@ -114,6 +115,7 @@ export default async function RunsPage() {
         <RunsList
           runs={runStats}
           releases={allReleases as { id: number; name: string; status: "active" | "completed" }[]}
+          linearWorkspace={session.user.organizationUrlKey}
         />
       )}
     </div>

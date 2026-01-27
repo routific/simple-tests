@@ -6,6 +6,7 @@ import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
 export const organizations = sqliteTable("organizations", {
   id: text("id").primaryKey(), // Linear organization ID
   name: text("name").notNull(),
+  urlKey: text("url_key"), // Linear workspace slug for deep links
   logoUrl: text("logo_url"),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
