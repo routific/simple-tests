@@ -75,10 +75,10 @@ export function ConnectInstructions({ baseUrl }: ConnectInstructionsProps) {
         </p>
         <div className="relative">
           <div className="bg-slate-900 text-slate-100 rounded-lg p-4 font-mono text-sm">
-            claude mcp add simple-tests {mcpUrl}
+            claude mcp add --transport sse simple-tests {mcpUrl}
           </div>
           <button
-            onClick={() => copyToClipboard(`claude mcp add simple-tests ${mcpUrl}`, "cli")}
+            onClick={() => copyToClipboard(`claude mcp add --transport sse simple-tests ${mcpUrl}`, "cli")}
             className="absolute top-2 right-2 p-2 rounded-md bg-slate-800 hover:bg-slate-700 transition-colors"
             title="Copy command"
           >
