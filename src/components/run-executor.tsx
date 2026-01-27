@@ -881,7 +881,25 @@ export function RunExecutor({ run, results, releases: initialReleases, available
                   <div className="text-sm text-[hsl(var(--muted-foreground))] mb-1">
                     {selectedResult.testCaseTitle}
                   </div>
-                  <h2 className="text-lg font-medium">{selectedResult.scenarioTitle}</h2>
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-lg font-medium">{selectedResult.scenarioTitle}</h2>
+                    {selectedResult.status !== "pending" && (
+                      <span
+                        className={cn(
+                          "px-2.5 py-1 text-xs font-medium rounded-full",
+                          selectedResult.status === "passed"
+                            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                            : selectedResult.status === "failed"
+                            ? "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
+                            : selectedResult.status === "blocked"
+                            ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
+                            : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400"
+                        )}
+                      >
+                        {selectedResult.status.charAt(0).toUpperCase() + selectedResult.status.slice(1)}
+                      </span>
+                    )}
+                  </div>
                   {selectedResult.folderName && (
                     <div className="text-sm text-[hsl(var(--muted-foreground))]">
                       {selectedResult.folderName}
@@ -1055,7 +1073,8 @@ export function RunExecutor({ run, results, releases: initialReleases, available
           </div>
         </div>
       )}
-    </>
+
+</>
   );
 }
 

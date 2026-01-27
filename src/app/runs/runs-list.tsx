@@ -2,11 +2,15 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { ReleasePicker } from "@/components/release-picker";
 import { completeRelease, reopenRelease } from "@/app/releases/actions";
+import { duplicateTestRun } from "@/app/runs/actions";
 
 interface RunWithStats {
   id: number;
@@ -37,6 +41,7 @@ interface RunsListProps {
 }
 
 export function RunsList({ runs, releases, linearWorkspace }: RunsListProps) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<"active" | "completed">("active");
   const [expandedReleases, setExpandedReleases] = useState<Set<number | "unassigned">>(() => {
     const ids: (number | "unassigned")[] = ["unassigned", ...releases.filter(r => r.status === "active").map(r => r.id)];
@@ -44,6 +49,12 @@ export function RunsList({ runs, releases, linearWorkspace }: RunsListProps) {
   });
   const [isPending, startTransition] = useTransition();
   const [optimisticReleases, setOptimisticReleases] = useState(releases);
+
+  // Duplicate modal state
+  const [duplicateRun, setDuplicateRun] = useState<RunWithStats | null>(null);
+  const [duplicateName, setDuplicateName] = useState("");
+  const [duplicateReleaseId, setDuplicateReleaseId] = useState<number | null>(null);
+  const [duplicateEnvironment, setDuplicateEnvironment] = useState<"sandbox" | "dev" | "staging" | "prod" | null>(null);
 
   // Group runs by release
   const runsByRelease = new Map<number | "unassigned", RunWithStats[]>();
@@ -106,6 +117,41 @@ export function RunsList({ runs, releases, linearWorkspace }: RunsListProps) {
         setOptimisticReleases(prev => prev.map(r =>
           r.id === releaseId ? { ...r, status: "completed" as const } : r
         ));
+      }
+    });
+  };
+
+  const handleOpenDuplicate = (run: RunWithStats) => {
+    setDuplicateRun(run);
+    setDuplicateName(`${run.name} (copy)`);
+    setDuplicateReleaseId(run.releaseId);
+    setDuplicateEnvironment(run.environment);
+  };
+
+  const handleCloseDuplicate = () => {
+    setDuplicateRun(null);
+    setDuplicateName("");
+    setDuplicateReleaseId(null);
+    setDuplicateEnvironment(null);
+  };
+
+  const handleDuplicate = () => {
+    if (!duplicateRun || !duplicateName.trim()) return;
+
+    const selectedReleaseName = optimisticReleases.find(r => r.id === duplicateReleaseId)?.name || null;
+
+    startTransition(async () => {
+      const result = await duplicateTestRun({
+        sourceRunId: duplicateRun.id,
+        name: duplicateName.trim(),
+        releaseId: duplicateReleaseId,
+        releaseName: selectedReleaseName,
+        environment: duplicateEnvironment,
+      });
+
+      if (result.success) {
+        handleCloseDuplicate();
+        router.refresh();
       }
     });
   };
@@ -190,7 +236,7 @@ export function RunsList({ runs, releases, linearWorkspace }: RunsListProps) {
             ) : (
               <div className="divide-y divide-border">
                 {releaseRuns.map((run) => (
-                  <RunRow key={run.id} run={run} linearWorkspace={linearWorkspace} />
+                  <RunRow key={run.id} run={run} linearWorkspace={linearWorkspace} onDuplicate={() => handleOpenDuplicate(run)} />
                 ))}
               </div>
             )}
@@ -264,21 +310,115 @@ export function RunsList({ runs, releases, linearWorkspace }: RunsListProps) {
           )}
         </CardContent>
       </Card>
+
+      {/* Duplicate Run Modal */}
+      {duplicateRun && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-background rounded-lg shadow-xl w-full max-w-md">
+            <div className="p-4 border-b border-border flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Duplicate Run</h2>
+              <button
+                onClick={handleCloseDuplicate}
+                className="p-1 text-muted-foreground hover:text-foreground"
+              >
+                <CloseIcon className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Create a new run with the same {duplicateRun.total} scenario{duplicateRun.total !== 1 ? "s" : ""}, all reset to pending status.
+              </p>
+
+              {/* Name */}
+              <div>
+                <label className="block text-sm font-medium mb-1.5">Name</label>
+                <Input
+                  type="text"
+                  value={duplicateName}
+                  onChange={(e) => setDuplicateName(e.target.value)}
+                  placeholder="Run name"
+                />
+              </div>
+
+              {/* Release */}
+              <div>
+                <label className="block text-sm font-medium mb-1.5">
+                  Release <span className="text-muted-foreground font-normal">(optional)</span>
+                </label>
+                <ReleasePicker
+                  releases={optimisticReleases}
+                  value={duplicateReleaseId}
+                  onChange={setDuplicateReleaseId}
+                  onReleaseCreated={(newRelease) => {
+                    setOptimisticReleases(prev => [...prev, newRelease]);
+                  }}
+                  placeholder="No release"
+                  className="w-full"
+                />
+              </div>
+
+              {/* Environment */}
+              <div>
+                <label className="block text-sm font-medium mb-1.5">
+                  Environment <span className="text-muted-foreground font-normal">(optional)</span>
+                </label>
+                <div className="flex gap-2">
+                  {(["sandbox", "dev", "staging", "prod"] as const).map((env) => (
+                    <button
+                      key={env}
+                      type="button"
+                      onClick={() => setDuplicateEnvironment(duplicateEnvironment === env ? null : env)}
+                      className={cn(
+                        "px-3 py-1.5 text-sm font-medium rounded-full border transition-colors",
+                        duplicateEnvironment === env
+                          ? env === "prod"
+                            ? "bg-green-100 border-green-300 text-green-700 dark:bg-green-900/30 dark:border-green-700 dark:text-green-400"
+                            : env === "staging"
+                            ? "bg-yellow-100 border-yellow-300 text-yellow-700 dark:bg-yellow-900/30 dark:border-yellow-700 dark:text-yellow-400"
+                            : env === "dev"
+                            ? "bg-blue-100 border-blue-300 text-blue-700 dark:bg-blue-900/30 dark:border-blue-700 dark:text-blue-400"
+                            : "bg-gray-100 border-gray-300 text-gray-700 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300"
+                          : "bg-background border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+                      )}
+                    >
+                      {env.charAt(0).toUpperCase() + env.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-border flex items-center justify-end gap-2">
+              <button
+                onClick={handleCloseDuplicate}
+                className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDuplicate}
+                disabled={isPending || !duplicateName.trim()}
+                className="px-4 py-2 text-sm font-medium text-white bg-brand-500 rounded-md hover:bg-brand-600 disabled:opacity-50"
+              >
+                {isPending ? "Creating..." : "Create Duplicate"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
 
-function RunRow({ run, linearWorkspace }: { run: RunWithStats; linearWorkspace?: string }) {
+function RunRow({ run, linearWorkspace, onDuplicate }: { run: RunWithStats; linearWorkspace?: string; onDuplicate: () => void }) {
   const passRate = run.total > 0
     ? Math.round(((run.stats.passed || 0) / run.total) * 100)
     : 0;
 
   return (
-    <Link
-      href={`/runs/${run.id}`}
-      className="flex items-center justify-between p-4 pl-12 hover:bg-muted/50 transition-colors group"
-    >
-      <div className="min-w-0">
+    <div className="flex items-center justify-between p-4 pl-12 hover:bg-muted/50 transition-colors group">
+      <Link href={`/runs/${run.id}`} className="flex-1 min-w-0">
         <div className="font-medium text-foreground group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
           {run.name}
         </div>
@@ -295,50 +435,32 @@ function RunRow({ run, linearWorkspace }: { run: RunWithStats; linearWorkspace?:
           {run.linearIssueIdentifier && linearWorkspace && (
             <>
               <span className="text-border">·</span>
-              <a
-                href={`https://linear.app/${linearWorkspace}/issue/${run.linearIssueIdentifier}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="inline-flex items-center gap-1 hover:text-foreground hover:underline transition-colors"
-              >
+              <span className="inline-flex items-center gap-1">
                 <LinearIcon className="w-3.5 h-3.5" />
                 {run.linearIssueIdentifier}
-              </a>
+              </span>
             </>
           )}
-          {run.linearProjectName && run.linearProjectId && linearWorkspace && (
+          {run.linearProjectName && (
             <>
               <span className="text-border">·</span>
-              <a
-                href={`https://linear.app/${linearWorkspace}/project/${run.linearProjectId}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="inline-flex items-center gap-1 hover:text-foreground hover:underline transition-colors"
-              >
+              <span className="inline-flex items-center gap-1">
                 <ProjectIcon className="w-3.5 h-3.5" />
                 {run.linearProjectName}
-              </a>
+              </span>
             </>
           )}
-          {run.linearMilestoneName && run.linearMilestoneId && run.linearProjectId && linearWorkspace && (
+          {run.linearMilestoneName && (
             <>
               <span className="text-border">·</span>
-              <a
-                href={`https://linear.app/${linearWorkspace}/project/${run.linearProjectId}#projectTab=milestones`}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="inline-flex items-center gap-1 hover:text-foreground hover:underline transition-colors"
-              >
+              <span className="inline-flex items-center gap-1">
                 <MilestoneIcon className="w-3.5 h-3.5" />
                 {run.linearMilestoneName}
-              </a>
+              </span>
             </>
           )}
         </div>
-      </div>
+      </Link>
 
       <div className="flex items-center gap-5">
         {/* Progress Bar */}
@@ -392,9 +514,22 @@ function RunRow({ run, linearWorkspace }: { run: RunWithStats; linearWorkspace?:
           {run.status}
         </Badge>
 
+        {/* Duplicate Button */}
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onDuplicate();
+          }}
+          className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors opacity-0 group-hover:opacity-100"
+          title="Duplicate run"
+        >
+          <DuplicateIcon className="w-4 h-4" />
+        </button>
+
         <ChevronRightIcon className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
       </div>
-    </Link>
+    </div>
   );
 }
 
@@ -435,6 +570,22 @@ function RefreshIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+    </svg>
+  );
+}
+
+function DuplicateIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" />
+    </svg>
+  );
+}
+
+function CloseIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
     </svg>
   );
 }
