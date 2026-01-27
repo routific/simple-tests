@@ -131,7 +131,10 @@ export async function GET(request: NextRequest) {
 
   // Create session
   const sessionId = crypto.randomUUID();
-  const server = createMcpServer(mcpAuth);
+  const server = createMcpServer(mcpAuth, {
+    clientId: auth.clientId,
+    sessionId,
+  });
 
   // Create SSE stream
   const { readable, writable } = new TransformStream();

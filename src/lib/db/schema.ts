@@ -331,3 +331,52 @@ export const oauthRefreshTokens = sqliteTable(
 export type OAuthAuthorizationCode = typeof oauthAuthorizationCodes.$inferSelect;
 export type OAuthAccessToken = typeof oauthAccessTokens.$inferSelect;
 export type OAuthRefreshToken = typeof oauthRefreshTokens.$inferSelect;
+
+// MCP Write Log for auditing and undo capability
+export const mcpWriteLog = sqliteTable(
+  "mcp_write_log",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    clientId: text("client_id").notNull(), // OAuth client ID or "api_token"
+    sessionId: text("session_id"), // MCP session ID
+
+    // Operation details
+    toolName: text("tool_name").notNull(),
+    toolArgs: text("tool_args").notNull(), // JSON
+
+    // Affected entity
+    entityType: text("entity_type", {
+      enum: ["folder", "test_case", "scenario", "test_run", "test_result"],
+    }).notNull(),
+    entityId: integer("entity_id"),
+
+    // State snapshots for undo
+    beforeState: text("before_state"), // JSON snapshot before (for update/delete)
+    afterState: text("after_state"), // JSON snapshot after
+
+    // Status
+    status: text("status", { enum: ["success", "failed"] }).notNull(),
+    errorMessage: text("error_message"),
+
+    // Undo tracking
+    undoneAt: integer("undone_at", { mode: "timestamp" }),
+    undoneBy: text("undone_by").references(() => users.id),
+
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [
+    index("mcp_write_log_org_idx").on(table.organizationId),
+    index("mcp_write_log_user_idx").on(table.userId),
+    index("mcp_write_log_created_idx").on(table.createdAt),
+  ]
+);
+
+export type McpWriteLog = typeof mcpWriteLog.$inferSelect;

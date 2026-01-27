@@ -9,7 +9,12 @@ import type { AuthContext } from "./auth";
 import { registerTools, handleToolCall } from "./tools";
 import { registerResources, handleResourceRead } from "./resources";
 
-export function createMcpServer(auth: AuthContext) {
+export interface McpServerContext {
+  clientId: string;
+  sessionId?: string;
+}
+
+export function createMcpServer(auth: AuthContext, context?: McpServerContext) {
   const server = new Server(
     {
       name: "simple-tests-mcp",
@@ -34,7 +39,7 @@ export function createMcpServer(auth: AuthContext) {
     const { name, arguments: args } = request.params;
 
     try {
-      return await handleToolCall(name, args || {}, auth);
+      return await handleToolCall(name, args || {}, auth, context);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error(`[MCP Server] Tool error:`, errorMessage);

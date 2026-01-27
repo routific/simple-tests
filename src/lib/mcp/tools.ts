@@ -11,6 +11,14 @@ import {
 import type { AuthContext } from "./auth";
 import { hasPermission } from "./auth";
 import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { logMcpWriteOperation, getEntityState, type EntityType } from "./audit-log";
+
+// Context for audit logging
+export interface McpCallContext {
+  auth: AuthContext;
+  clientId: string;
+  sessionId?: string;
+}
 
 export function registerTools(auth: AuthContext): Tool[] {
   const tools: Tool[] = [];
@@ -217,7 +225,8 @@ export function registerTools(auth: AuthContext): Tool[] {
 export async function handleToolCall(
   name: string,
   args: Record<string, unknown>,
-  auth: AuthContext
+  auth: AuthContext,
+  context?: { clientId?: string; sessionId?: string }
 ): Promise<CallToolResult> {
   // Read tools - available to all authenticated users
   switch (name) {
@@ -245,17 +254,24 @@ export async function handleToolCall(
     };
   }
 
+  // Create audit context for write operations
+  const auditCtx: McpCallContext = {
+    auth,
+    clientId: context?.clientId || "unknown",
+    sessionId: context?.sessionId,
+  };
+
   switch (name) {
     case "create_folder":
-      return createFolder(args, auth);
+      return createFolder(args, auth, auditCtx);
     case "create_test_case":
-      return createTestCase(args, auth);
+      return createTestCase(args, auth, auditCtx);
     case "update_test_case":
-      return updateTestCase(args, auth);
+      return updateTestCase(args, auth, auditCtx);
     case "create_test_run":
-      return createTestRun(args, auth);
+      return createTestRun(args, auth, auditCtx);
     case "update_test_result":
-      return updateTestResult(args, auth);
+      return updateTestResult(args, auth, auditCtx);
     default:
       return {
         content: [{ type: "text", text: `Unknown tool: ${name}` }],
@@ -780,11 +796,19 @@ async function getTestRun(
 
 async function createFolder(
   args: Record<string, unknown>,
-  auth: AuthContext
+  auth: AuthContext,
+  ctx: McpCallContext
 ): Promise<CallToolResult> {
   const { name, parentId } = args as { name: string; parentId?: number };
 
   if (!name) {
+    await logMcpWriteOperation(ctx, {
+      toolName: "create_folder",
+      toolArgs: args,
+      entityType: "folder",
+      status: "failed",
+      errorMessage: "name is required",
+    });
     return {
       content: [{ type: "text", text: "Error: name is required" }],
       isError: true,
@@ -805,6 +829,13 @@ async function createFolder(
       .limit(1);
 
     if (parent.length === 0) {
+      await logMcpWriteOperation(ctx, {
+        toolName: "create_folder",
+        toolArgs: args,
+        entityType: "folder",
+        status: "failed",
+        errorMessage: `Parent folder not found: ${parentId}`,
+      });
       return {
         content: [{ type: "text", text: `Error: Parent folder not found: ${parentId}` }],
         isError: true,
@@ -821,14 +852,27 @@ async function createFolder(
     })
     .returning();
 
+  const folder = result[0];
+
+  // Log successful create
+  await logMcpWriteOperation(ctx, {
+    toolName: "create_folder",
+    toolArgs: args,
+    entityType: "folder",
+    entityId: folder.id,
+    afterState: folder,
+    status: "success",
+  });
+
   return {
-    content: [{ type: "text", text: JSON.stringify({ success: true, folder: result[0] }, null, 2) }],
+    content: [{ type: "text", text: JSON.stringify({ success: true, folder }, null, 2) }],
   };
 }
 
 async function createTestCase(
   args: Record<string, unknown>,
-  auth: AuthContext
+  auth: AuthContext,
+  ctx: McpCallContext
 ): Promise<CallToolResult> {
   const { title, gherkin, folderId, state, priority, scenarioTitle } = args as {
     title: string;
@@ -840,6 +884,13 @@ async function createTestCase(
   };
 
   if (!title || !gherkin) {
+    await logMcpWriteOperation(ctx, {
+      toolName: "create_test_case",
+      toolArgs: args,
+      entityType: "test_case",
+      status: "failed",
+      errorMessage: "title and gherkin are required",
+    });
     return {
       content: [{ type: "text", text: "Error: title and gherkin are required" }],
       isError: true,
@@ -860,6 +911,13 @@ async function createTestCase(
       .limit(1);
 
     if (folder.length === 0) {
+      await logMcpWriteOperation(ctx, {
+        toolName: "create_test_case",
+        toolArgs: args,
+        entityType: "test_case",
+        status: "failed",
+        errorMessage: `Folder not found: ${folderId}`,
+      });
       return {
         content: [{ type: "text", text: `Error: Folder not found: ${folderId}` }],
         isError: true,
@@ -902,7 +960,7 @@ async function createTestCase(
 
   const scenario = scenarioResult[0];
 
-  // Create audit log
+  // Create audit log (existing)
   await db.insert(testCaseAuditLog).values({
     testCaseId: testCase.id,
     userId: auth.userId,
@@ -918,6 +976,16 @@ async function createTestCase(
     createdAt: now,
   });
 
+  // Log to MCP write log
+  await logMcpWriteOperation(ctx, {
+    toolName: "create_test_case",
+    toolArgs: args,
+    entityType: "test_case",
+    entityId: testCase.id,
+    afterState: { ...testCase, scenarios: [scenario] },
+    status: "success",
+  });
+
   return {
     content: [{ type: "text", text: JSON.stringify({ success: true, testCase, scenario }, null, 2) }],
   };
@@ -925,7 +993,8 @@ async function createTestCase(
 
 async function updateTestCase(
   args: Record<string, unknown>,
-  auth: AuthContext
+  auth: AuthContext,
+  ctx: McpCallContext
 ): Promise<CallToolResult> {
   const { id, title, folderId, state, priority } = args as {
     id: number;
@@ -936,25 +1005,31 @@ async function updateTestCase(
   };
 
   if (!id) {
+    await logMcpWriteOperation(ctx, {
+      toolName: "update_test_case",
+      toolArgs: args,
+      entityType: "test_case",
+      status: "failed",
+      errorMessage: "id is required",
+    });
     return {
       content: [{ type: "text", text: "Error: id is required" }],
       isError: true,
     };
   }
 
-  // Verify test case exists and belongs to org
-  const existing = await db
-    .select()
-    .from(testCases)
-    .where(
-      and(
-        eq(testCases.id, id),
-        eq(testCases.organizationId, auth.organizationId)
-      )
-    )
-    .limit(1);
+  // Get before state for undo capability
+  const beforeState = await getEntityState("test_case", id, auth.organizationId);
 
-  if (existing.length === 0) {
+  if (!beforeState) {
+    await logMcpWriteOperation(ctx, {
+      toolName: "update_test_case",
+      toolArgs: args,
+      entityType: "test_case",
+      entityId: id,
+      status: "failed",
+      errorMessage: `Test case not found: ${id}`,
+    });
     return {
       content: [{ type: "text", text: `Error: Test case not found: ${id}` }],
       isError: true,
@@ -977,6 +1052,19 @@ async function updateTestCase(
     .where(eq(testCases.id, id))
     .returning();
 
+  const afterState = await getEntityState("test_case", id, auth.organizationId);
+
+  // Log to MCP write log
+  await logMcpWriteOperation(ctx, {
+    toolName: "update_test_case",
+    toolArgs: args,
+    entityType: "test_case",
+    entityId: id,
+    beforeState,
+    afterState,
+    status: "success",
+  });
+
   return {
     content: [{ type: "text", text: JSON.stringify({ success: true, testCase: result[0] }, null, 2) }],
   };
@@ -984,7 +1072,8 @@ async function updateTestCase(
 
 async function createTestRun(
   args: Record<string, unknown>,
-  auth: AuthContext
+  auth: AuthContext,
+  ctx: McpCallContext
 ): Promise<CallToolResult> {
   const { name, scenarioIds } = args as {
     name: string;
@@ -992,6 +1081,13 @@ async function createTestRun(
   };
 
   if (!name || !scenarioIds || !Array.isArray(scenarioIds) || scenarioIds.length === 0) {
+    await logMcpWriteOperation(ctx, {
+      toolName: "create_test_run",
+      toolArgs: args,
+      entityType: "test_run",
+      status: "failed",
+      errorMessage: "name and non-empty scenarioIds array are required",
+    });
     return {
       content: [{ type: "text", text: "Error: name and non-empty scenarioIds array are required" }],
       isError: true,
@@ -1014,6 +1110,13 @@ async function createTestRun(
   const missingIds = scenarioIds.filter((id) => !existingIds.has(id));
 
   if (missingIds.length > 0) {
+    await logMcpWriteOperation(ctx, {
+      toolName: "create_test_run",
+      toolArgs: args,
+      entityType: "test_run",
+      status: "failed",
+      errorMessage: `Scenarios not found: ${missingIds.join(", ")}`,
+    });
     return {
       content: [{ type: "text", text: `Error: Scenarios not found: ${missingIds.join(", ")}` }],
       isError: true,
@@ -1050,6 +1153,16 @@ async function createTestRun(
     .from(testRunResults)
     .where(eq(testRunResults.testRunId, testRun.id));
 
+  // Log to MCP write log
+  await logMcpWriteOperation(ctx, {
+    toolName: "create_test_run",
+    toolArgs: args,
+    entityType: "test_run",
+    entityId: testRun.id,
+    afterState: { ...testRun, results },
+    status: "success",
+  });
+
   return {
     content: [
       {
@@ -1071,7 +1184,8 @@ async function createTestRun(
 
 async function updateTestResult(
   args: Record<string, unknown>,
-  auth: AuthContext
+  auth: AuthContext,
+  ctx: McpCallContext
 ): Promise<CallToolResult> {
   const { resultId, status, notes } = args as {
     resultId: number;
@@ -1080,11 +1194,21 @@ async function updateTestResult(
   };
 
   if (!resultId || !status) {
+    await logMcpWriteOperation(ctx, {
+      toolName: "update_test_result",
+      toolArgs: args,
+      entityType: "test_result",
+      status: "failed",
+      errorMessage: "resultId and status are required",
+    });
     return {
       content: [{ type: "text", text: "Error: resultId and status are required" }],
       isError: true,
     };
   }
+
+  // Get before state for undo capability
+  const beforeState = await getEntityState("test_result", resultId, auth.organizationId);
 
   // Verify result exists and belongs to org
   const existing = await db
@@ -1100,6 +1224,14 @@ async function updateTestResult(
     .limit(1);
 
   if (existing.length === 0) {
+    await logMcpWriteOperation(ctx, {
+      toolName: "update_test_result",
+      toolArgs: args,
+      entityType: "test_result",
+      entityId: resultId,
+      status: "failed",
+      errorMessage: `Test result not found: ${resultId}`,
+    });
     return {
       content: [{ type: "text", text: `Error: Test result not found: ${resultId}` }],
       isError: true,
@@ -1121,6 +1253,19 @@ async function updateTestResult(
     .set(updates)
     .where(eq(testRunResults.id, resultId))
     .returning();
+
+  const afterState = await getEntityState("test_result", resultId, auth.organizationId);
+
+  // Log to MCP write log
+  await logMcpWriteOperation(ctx, {
+    toolName: "update_test_result",
+    toolArgs: args,
+    entityType: "test_result",
+    entityId: resultId,
+    beforeState,
+    afterState,
+    status: "success",
+  });
 
   return {
     content: [{ type: "text", text: JSON.stringify({ success: true, result: result[0] }, null, 2) }],
