@@ -121,23 +121,26 @@ export function RunsList({ runs, releases, linearWorkspace }: RunsListProps) {
         {/* Release Header */}
         <div
           className={cn(
-            "flex items-center justify-between p-4 cursor-pointer hover:bg-muted/50 transition-colors",
-            isExpanded && "bg-muted/30"
+            "flex items-center justify-between p-4 cursor-pointer transition-colors border-l-4",
+            isUnassigned
+              ? "border-l-transparent bg-muted/40 hover:bg-muted/60"
+              : "border-l-brand-500 bg-gradient-to-r from-brand-50 to-transparent dark:from-brand-950/30 dark:to-transparent hover:from-brand-100 dark:hover:from-brand-950/50"
           )}
           onClick={() => toggleExpand(id)}
         >
           <div className="flex items-center gap-3">
             <ChevronIcon
               className={cn(
-                "w-4 h-4 text-muted-foreground transition-transform",
+                "w-4 h-4 transition-transform",
+                isUnassigned ? "text-muted-foreground" : "text-brand-600 dark:text-brand-400",
                 isExpanded && "rotate-90"
               )}
             />
             <div className="flex items-center gap-2">
-              {!isUnassigned && <ReleaseIcon className="w-4 h-4 text-muted-foreground" />}
+              {!isUnassigned && <ReleaseIcon className="w-4 h-4 text-brand-600 dark:text-brand-400" />}
               <span className={cn(
-                "font-medium",
-                isUnassigned && "text-muted-foreground"
+                "font-semibold",
+                isUnassigned ? "text-muted-foreground" : "text-foreground"
               )}>
                 {name}
               </span>
