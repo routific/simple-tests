@@ -1,4 +1,4 @@
-import { eq, and, inArray, isNull } from "drizzle-orm";
+import { eq, and, inArray, like, or } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   folders,
@@ -16,7 +16,108 @@ export function registerTools(auth: AuthContext): Tool[] {
   const tools: Tool[] = [];
 
   // Read-only tools available to all authenticated users
-  // (Resources handle read operations)
+  tools.push(
+    // Folder read tools
+    {
+      name: "list_folders",
+      description: "List all folders in the organization",
+      inputSchema: {
+        type: "object",
+        properties: {
+          parentId: { type: "number", description: "Filter by parent folder ID (null for root folders)" },
+        },
+      },
+    },
+    {
+      name: "get_folder",
+      description: "Get a specific folder with its test cases",
+      inputSchema: {
+        type: "object",
+        properties: {
+          id: { type: "number", description: "Folder ID" },
+        },
+        required: ["id"],
+      },
+    },
+    // Test case read tools
+    {
+      name: "list_test_cases",
+      description: "List test cases with optional filters",
+      inputSchema: {
+        type: "object",
+        properties: {
+          folderId: { type: "number", description: "Filter by folder ID" },
+          state: {
+            type: "string",
+            enum: ["active", "draft", "retired", "rejected"],
+            description: "Filter by state",
+          },
+          priority: {
+            type: "string",
+            enum: ["normal", "high", "critical"],
+            description: "Filter by priority",
+          },
+          limit: { type: "number", description: "Maximum number of results (default: 50)" },
+          offset: { type: "number", description: "Offset for pagination (default: 0)" },
+        },
+      },
+    },
+    {
+      name: "get_test_case",
+      description: "Get a specific test case with all its scenarios",
+      inputSchema: {
+        type: "object",
+        properties: {
+          id: { type: "number", description: "Test case ID" },
+        },
+        required: ["id"],
+      },
+    },
+    {
+      name: "search_test_cases",
+      description: "Search test cases by title or scenario content",
+      inputSchema: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Search query (searches title and gherkin content)" },
+          state: {
+            type: "string",
+            enum: ["active", "draft", "retired", "rejected"],
+            description: "Filter by state",
+          },
+          limit: { type: "number", description: "Maximum number of results (default: 20)" },
+        },
+        required: ["query"],
+      },
+    },
+    // Test run read tools
+    {
+      name: "list_test_runs",
+      description: "List test runs in the organization",
+      inputSchema: {
+        type: "object",
+        properties: {
+          status: {
+            type: "string",
+            enum: ["in_progress", "completed"],
+            description: "Filter by status",
+          },
+          limit: { type: "number", description: "Maximum number of results (default: 20)" },
+        },
+      },
+    },
+    {
+      name: "get_test_run",
+      description: "Get a specific test run with all its results",
+      inputSchema: {
+        type: "object",
+        properties: {
+          id: { type: "number", description: "Test run ID" },
+        },
+        required: ["id"],
+      },
+    }
+  );
 
   // Write tools require write permission
   if (hasPermission(auth, "write")) {
@@ -118,6 +219,25 @@ export async function handleToolCall(
   args: Record<string, unknown>,
   auth: AuthContext
 ): Promise<CallToolResult> {
+  // Read tools - available to all authenticated users
+  switch (name) {
+    case "list_folders":
+      return listFolders(args, auth);
+    case "get_folder":
+      return getFolder(args, auth);
+    case "list_test_cases":
+      return listTestCases(args, auth);
+    case "get_test_case":
+      return getTestCase(args, auth);
+    case "search_test_cases":
+      return searchTestCases(args, auth);
+    case "list_test_runs":
+      return listTestRuns(args, auth);
+    case "get_test_run":
+      return getTestRun(args, auth);
+  }
+
+  // Write tools require write permission
   if (!hasPermission(auth, "write")) {
     return {
       content: [{ type: "text", text: "Permission denied: write access required" }],
@@ -144,7 +264,460 @@ export async function handleToolCall(
   }
 }
 
-// Tool implementations
+// Tool implementations - Read operations
+
+async function listFolders(
+  args: Record<string, unknown>,
+  auth: AuthContext
+): Promise<CallToolResult> {
+  const { parentId } = args as { parentId?: number };
+
+  const conditions = [eq(folders.organizationId, auth.organizationId)];
+
+  if (parentId !== undefined) {
+    conditions.push(eq(folders.parentId, parentId));
+  }
+
+  const result = await db
+    .select()
+    .from(folders)
+    .where(and(...conditions))
+    .orderBy(folders.order, folders.name);
+
+  return {
+    content: [{ type: "text", text: JSON.stringify({ folders: result }, null, 2) }],
+  };
+}
+
+async function getFolder(
+  args: Record<string, unknown>,
+  auth: AuthContext
+): Promise<CallToolResult> {
+  const { id } = args as { id: number };
+
+  if (!id) {
+    return {
+      content: [{ type: "text", text: "Error: id is required" }],
+      isError: true,
+    };
+  }
+
+  const folder = await db
+    .select()
+    .from(folders)
+    .where(
+      and(
+        eq(folders.id, id),
+        eq(folders.organizationId, auth.organizationId)
+      )
+    )
+    .limit(1);
+
+  if (folder.length === 0) {
+    return {
+      content: [{ type: "text", text: `Error: Folder not found: ${id}` }],
+      isError: true,
+    };
+  }
+
+  // Get test cases in this folder
+  const folderTestCases = await db
+    .select()
+    .from(testCases)
+    .where(
+      and(
+        eq(testCases.folderId, id),
+        eq(testCases.organizationId, auth.organizationId)
+      )
+    )
+    .orderBy(testCases.order, testCases.title);
+
+  // Get child folders
+  const childFolders = await db
+    .select()
+    .from(folders)
+    .where(
+      and(
+        eq(folders.parentId, id),
+        eq(folders.organizationId, auth.organizationId)
+      )
+    )
+    .orderBy(folders.order, folders.name);
+
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(
+          {
+            folder: folder[0],
+            testCases: folderTestCases,
+            childFolders,
+          },
+          null,
+          2
+        ),
+      },
+    ],
+  };
+}
+
+async function listTestCases(
+  args: Record<string, unknown>,
+  auth: AuthContext
+): Promise<CallToolResult> {
+  const { folderId, state, priority, limit = 50, offset = 0 } = args as {
+    folderId?: number;
+    state?: "active" | "draft" | "retired" | "rejected";
+    priority?: "normal" | "high" | "critical";
+    limit?: number;
+    offset?: number;
+  };
+
+  const conditions = [eq(testCases.organizationId, auth.organizationId)];
+
+  if (folderId !== undefined) {
+    conditions.push(eq(testCases.folderId, folderId));
+  }
+  if (state) {
+    conditions.push(eq(testCases.state, state));
+  }
+  if (priority) {
+    conditions.push(eq(testCases.priority, priority));
+  }
+
+  const result = await db
+    .select()
+    .from(testCases)
+    .where(and(...conditions))
+    .orderBy(testCases.order, testCases.title)
+    .limit(Math.min(limit, 100))
+    .offset(offset);
+
+  // Get total count for pagination info
+  const allMatching = await db
+    .select({ id: testCases.id })
+    .from(testCases)
+    .where(and(...conditions));
+
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(
+          {
+            testCases: result,
+            pagination: {
+              total: allMatching.length,
+              limit: Math.min(limit, 100),
+              offset,
+              hasMore: offset + result.length < allMatching.length,
+            },
+          },
+          null,
+          2
+        ),
+      },
+    ],
+  };
+}
+
+async function getTestCase(
+  args: Record<string, unknown>,
+  auth: AuthContext
+): Promise<CallToolResult> {
+  const { id } = args as { id: number };
+
+  if (!id) {
+    return {
+      content: [{ type: "text", text: "Error: id is required" }],
+      isError: true,
+    };
+  }
+
+  const testCase = await db
+    .select()
+    .from(testCases)
+    .where(
+      and(
+        eq(testCases.id, id),
+        eq(testCases.organizationId, auth.organizationId)
+      )
+    )
+    .limit(1);
+
+  if (testCase.length === 0) {
+    return {
+      content: [{ type: "text", text: `Error: Test case not found: ${id}` }],
+      isError: true,
+    };
+  }
+
+  // Get all scenarios for this test case
+  const testCaseScenarios = await db
+    .select()
+    .from(scenarios)
+    .where(eq(scenarios.testCaseId, id))
+    .orderBy(scenarios.order);
+
+  // Get folder info if in a folder
+  let folder = null;
+  if (testCase[0].folderId) {
+    const folderResult = await db
+      .select()
+      .from(folders)
+      .where(eq(folders.id, testCase[0].folderId))
+      .limit(1);
+    if (folderResult.length > 0) {
+      folder = folderResult[0];
+    }
+  }
+
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(
+          {
+            testCase: testCase[0],
+            scenarios: testCaseScenarios,
+            folder,
+          },
+          null,
+          2
+        ),
+      },
+    ],
+  };
+}
+
+async function searchTestCases(
+  args: Record<string, unknown>,
+  auth: AuthContext
+): Promise<CallToolResult> {
+  const { query, state, limit = 20 } = args as {
+    query: string;
+    state?: "active" | "draft" | "retired" | "rejected";
+    limit?: number;
+  };
+
+  if (!query) {
+    return {
+      content: [{ type: "text", text: "Error: query is required" }],
+      isError: true,
+    };
+  }
+
+  const searchPattern = `%${query}%`;
+
+  // Search in test case titles
+  const titleConditions = [
+    eq(testCases.organizationId, auth.organizationId),
+    like(testCases.title, searchPattern),
+  ];
+  if (state) {
+    titleConditions.push(eq(testCases.state, state));
+  }
+
+  const titleMatches = await db
+    .select()
+    .from(testCases)
+    .where(and(...titleConditions))
+    .limit(Math.min(limit, 50));
+
+  // Search in scenario gherkin content
+  const scenarioMatches = await db
+    .select({
+      testCase: testCases,
+      scenario: scenarios,
+    })
+    .from(scenarios)
+    .innerJoin(testCases, eq(scenarios.testCaseId, testCases.id))
+    .where(
+      and(
+        eq(testCases.organizationId, auth.organizationId),
+        or(
+          like(scenarios.title, searchPattern),
+          like(scenarios.gherkin, searchPattern)
+        ),
+        ...(state ? [eq(testCases.state, state)] : [])
+      )
+    )
+    .limit(Math.min(limit, 50));
+
+  // Combine and deduplicate results
+  const seenIds = new Set<number>();
+  const results: Array<{
+    testCase: typeof testCases.$inferSelect;
+    matchedIn: string[];
+    scenarioMatch?: typeof scenarios.$inferSelect;
+  }> = [];
+
+  for (const tc of titleMatches) {
+    if (!seenIds.has(tc.id)) {
+      seenIds.add(tc.id);
+      results.push({ testCase: tc, matchedIn: ["title"] });
+    }
+  }
+
+  for (const match of scenarioMatches) {
+    if (!seenIds.has(match.testCase.id)) {
+      seenIds.add(match.testCase.id);
+      results.push({
+        testCase: match.testCase,
+        matchedIn: ["scenario"],
+        scenarioMatch: match.scenario,
+      });
+    } else {
+      const existing = results.find((r) => r.testCase.id === match.testCase.id);
+      if (existing && !existing.matchedIn.includes("scenario")) {
+        existing.matchedIn.push("scenario");
+      }
+    }
+  }
+
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(
+          {
+            query,
+            results: results.slice(0, Math.min(limit, 50)),
+            total: results.length,
+          },
+          null,
+          2
+        ),
+      },
+    ],
+  };
+}
+
+async function listTestRuns(
+  args: Record<string, unknown>,
+  auth: AuthContext
+): Promise<CallToolResult> {
+  const { status, limit = 20 } = args as {
+    status?: "in_progress" | "completed";
+    limit?: number;
+  };
+
+  const conditions = [eq(testRuns.organizationId, auth.organizationId)];
+
+  if (status) {
+    conditions.push(eq(testRuns.status, status));
+  }
+
+  const result = await db
+    .select()
+    .from(testRuns)
+    .where(and(...conditions))
+    .orderBy(testRuns.createdAt)
+    .limit(Math.min(limit, 50));
+
+  // Get result summaries for each test run
+  const runsWithSummaries = await Promise.all(
+    result.map(async (run) => {
+      const results = await db
+        .select({ status: testRunResults.status })
+        .from(testRunResults)
+        .where(eq(testRunResults.testRunId, run.id));
+
+      const summary = {
+        total: results.length,
+        passed: results.filter((r) => r.status === "passed").length,
+        failed: results.filter((r) => r.status === "failed").length,
+        pending: results.filter((r) => r.status === "pending").length,
+        blocked: results.filter((r) => r.status === "blocked").length,
+        skipped: results.filter((r) => r.status === "skipped").length,
+      };
+
+      return { ...run, summary };
+    })
+  );
+
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify({ testRuns: runsWithSummaries }, null, 2),
+      },
+    ],
+  };
+}
+
+async function getTestRun(
+  args: Record<string, unknown>,
+  auth: AuthContext
+): Promise<CallToolResult> {
+  const { id } = args as { id: number };
+
+  if (!id) {
+    return {
+      content: [{ type: "text", text: "Error: id is required" }],
+      isError: true,
+    };
+  }
+
+  const testRun = await db
+    .select()
+    .from(testRuns)
+    .where(
+      and(
+        eq(testRuns.id, id),
+        eq(testRuns.organizationId, auth.organizationId)
+      )
+    )
+    .limit(1);
+
+  if (testRun.length === 0) {
+    return {
+      content: [{ type: "text", text: `Error: Test run not found: ${id}` }],
+      isError: true,
+    };
+  }
+
+  // Get all results with scenario and test case info
+  const results = await db
+    .select({
+      result: testRunResults,
+      scenario: scenarios,
+      testCase: testCases,
+    })
+    .from(testRunResults)
+    .innerJoin(scenarios, eq(testRunResults.scenarioId, scenarios.id))
+    .innerJoin(testCases, eq(scenarios.testCaseId, testCases.id))
+    .where(eq(testRunResults.testRunId, id));
+
+  const summary = {
+    total: results.length,
+    passed: results.filter((r) => r.result.status === "passed").length,
+    failed: results.filter((r) => r.result.status === "failed").length,
+    pending: results.filter((r) => r.result.status === "pending").length,
+    blocked: results.filter((r) => r.result.status === "blocked").length,
+    skipped: results.filter((r) => r.result.status === "skipped").length,
+  };
+
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(
+          {
+            testRun: testRun[0],
+            results,
+            summary,
+          },
+          null,
+          2
+        ),
+      },
+    ],
+  };
+}
+
+// Tool implementations - Write operations
 
 async function createFolder(
   args: Record<string, unknown>,
