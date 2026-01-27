@@ -794,7 +794,7 @@ export function RunExecutor({ run, results, releases: initialReleases, available
                 key={result.id}
                 className={cn(
                   "w-full text-left p-3 border-b border-[hsl(var(--border))] hover:bg-[hsl(var(--muted))] flex items-start gap-2",
-                  selectedResult?.id === result.id && "bg-brand-50 dark:bg-brand-950/50 border-l-4 border-l-brand-500 -ml-[4px] pl-[calc(0.75rem+4px)]"
+                  selectedResult?.id === result.id && "bg-brand-50 dark:bg-brand-950/50 ring-2 ring-brand-500 ring-inset"
                 )}
               >
                 {run.status === "in_progress" && isEditing && (
