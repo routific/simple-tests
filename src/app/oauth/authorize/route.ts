@@ -79,24 +79,34 @@ export async function GET(request: NextRequest) {
   }
 
   // User is logged in, create authorization code
-  const code = await createAuthorizationCode({
-    clientId,
-    userId: session.user.id,
-    organizationId: session.user.organizationId,
-    redirectUri,
-    codeChallenge,
-    codeChallengeMethod,
-    scope: scope || undefined,
-  });
+  try {
+    const code = await createAuthorizationCode({
+      clientId,
+      userId: session.user.id,
+      organizationId: session.user.organizationId,
+      redirectUri,
+      codeChallenge,
+      codeChallengeMethod,
+      scope: scope || undefined,
+    });
 
-  // Redirect back to client with authorization code
-  const redirectUrl = new URL(redirectUri);
-  redirectUrl.searchParams.set("code", code);
-  if (state) {
-    redirectUrl.searchParams.set("state", state);
+    // Redirect back to client with authorization code
+    const redirectUrl = new URL(redirectUri);
+    redirectUrl.searchParams.set("code", code);
+    if (state) {
+      redirectUrl.searchParams.set("state", state);
+    }
+
+    return NextResponse.redirect(redirectUrl);
+  } catch (error) {
+    console.error("[OAuth Authorize] Error creating authorization code:", error);
+    return errorResponse(
+      redirectUri,
+      "server_error",
+      error instanceof Error ? error.message : "Failed to create authorization code",
+      state
+    );
   }
-
-  return NextResponse.redirect(redirectUrl);
 }
 
 function errorResponse(
