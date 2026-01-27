@@ -12,7 +12,7 @@ const navItems = [
   { href: "/", label: "Dashboard", icon: HomeIcon },
   { href: "/cases", label: "Test Cases", icon: TestCaseIcon },
   { href: "/runs", label: "Test Runs", icon: RunIcon },
-  { href: "/settings/tokens", label: "API Tokens", icon: KeyIcon },
+  { href: "/settings/connect", label: "Connect MCP", icon: PlugIcon },
 ];
 
 export function Sidebar() {
@@ -325,7 +325,7 @@ function UserIcon({ className }: { className?: string }) {
   );
 }
 
-function KeyIcon({ className }: { className?: string }) {
+function PlugIcon({ className }: { className?: string }) {
   return (
     <svg
       className={className}
@@ -337,7 +337,7 @@ function KeyIcon({ className }: { className?: string }) {
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
-        d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z"
+        d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244"
       />
     </svg>
   );
