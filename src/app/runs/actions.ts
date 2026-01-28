@@ -70,6 +70,9 @@ export async function createTestRun(input: CreateRunInput) {
         titleParts.push(`[${input.releaseName}]`);
       }
       titleParts.push(input.name);
+      if (input.environment) {
+        titleParts.push(`[${input.environment.charAt(0).toUpperCase() + input.environment.slice(1)}]`);
+      }
 
       await createIssueAttachment({
         issueId: input.linearIssueId,
@@ -383,6 +386,10 @@ export async function updateTestRun(input: UpdateRunInput) {
           titleParts.push(`[${releaseName}]`);
         }
         titleParts.push(runName);
+        const environment = input.environment !== undefined ? input.environment : run.environment;
+        if (environment) {
+          titleParts.push(`[${environment.charAt(0).toUpperCase() + environment.slice(1)}]`);
+        }
 
         await createIssueAttachment({
           issueId: newIssueId,
@@ -544,6 +551,9 @@ export async function duplicateTestRun(input: DuplicateRunInput) {
         titleParts.push(`[${input.releaseName}]`);
       }
       titleParts.push(input.name);
+      if (input.environment) {
+        titleParts.push(`[${input.environment.charAt(0).toUpperCase() + input.environment.slice(1)}]`);
+      }
 
       await createIssueAttachment({
         issueId: sourceRun.linearIssueId,
