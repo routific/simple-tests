@@ -309,6 +309,10 @@ export function RunExecutor({ run, results: initialResults, releases: initialRel
               const next = results[currentIndex + 1];
               setSelectedResult(next);
               setNotes(next.notes || "");
+              // Update URL with scenario parameter
+              const url = new URL(window.location.href);
+              url.searchParams.set("scenario", next.scenarioId.toString());
+              window.history.replaceState({}, "", url.toString());
             }
           }
           break;
@@ -322,6 +326,10 @@ export function RunExecutor({ run, results: initialResults, releases: initialRel
               const prev = results[currentIndex - 1];
               setSelectedResult(prev);
               setNotes(prev.notes || "");
+              // Update URL with scenario parameter
+              const url = new URL(window.location.href);
+              url.searchParams.set("scenario", prev.scenarioId.toString());
+              window.history.replaceState({}, "", url.toString());
             }
           }
           break;
@@ -539,7 +547,7 @@ export function RunExecutor({ run, results: initialResults, releases: initialRel
                     setReleases(prev => [...prev, newRelease]);
                   }}
                   placeholder="No release"
-                  className="w-48"
+                  className="w-64"
                 />
                 {/* Environment Selector */}
                 <div className="flex items-center gap-1">
@@ -941,6 +949,10 @@ export function RunExecutor({ run, results: initialResults, releases: initialRel
                   onClick={() => {
                     setSelectedResult(result);
                     setNotes(result.notes || "");
+                    // Update URL with scenario parameter
+                    const url = new URL(window.location.href);
+                    url.searchParams.set("scenario", result.scenarioId.toString());
+                    window.history.replaceState({}, "", url.toString());
                   }}
                   className="flex-1 text-left min-w-0"
                 >
