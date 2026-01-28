@@ -28,13 +28,78 @@ export function ConnectInstructions({ baseUrl }: ConnectInstructionsProps) {
               <InfoIcon className="w-5 h-5 text-brand-600 dark:text-brand-400" />
             </div>
           </div>
-          <div>
+          <div className="flex-1 min-w-0">
             <h3 className="font-medium text-brand-900 dark:text-brand-100 mb-1">
               What is MCP?
             </h3>
-            <p className="text-sm text-brand-700 dark:text-brand-300">
+            <p className="text-sm text-brand-700 dark:text-brand-300 mb-4">
               The Model Context Protocol (MCP) allows AI assistants like Claude to interact with SimpleTests directly.
               Once connected, your AI assistant can create, read, search, and manage test cases on your behalf.
+            </p>
+
+            {/* Example Chat Interface */}
+            <div className="bg-white dark:bg-slate-900 rounded-lg border border-brand-200 dark:border-slate-700 overflow-hidden shadow-sm">
+              {/* Chat Header */}
+              <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-slate-800 dark:to-slate-800 px-4 py-2.5 border-b border-brand-100 dark:border-slate-700 flex items-center gap-2">
+                <div className="flex gap-1.5">
+                  <div className="w-3 h-3 rounded-full bg-red-400" />
+                  <div className="w-3 h-3 rounded-full bg-yellow-400" />
+                  <div className="w-3 h-3 rounded-full bg-green-400" />
+                </div>
+                <span className="text-xs font-medium text-slate-500 dark:text-slate-400 ml-2">Claude Desktop</span>
+              </div>
+
+              {/* Chat Messages */}
+              <div className="p-4 space-y-4">
+                {/* User Message */}
+                <div className="flex gap-3">
+                  <div className="shrink-0 w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+                    <span className="text-white text-xs font-semibold">Y</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">You</div>
+                    <div className="bg-slate-100 dark:bg-slate-800 rounded-2xl rounded-tl-sm px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200">
+                      Review the contents of <code className="bg-slate-200 dark:bg-slate-700 px-1.5 py-0.5 rounded text-xs font-mono">ROUT-103</code> and edge cases in <code className="bg-slate-200 dark:bg-slate-700 px-1.5 py-0.5 rounded text-xs font-mono">ROUT-370</code> via Linear MCP. Then review the test case called &ldquo;Admin can change user roles&rdquo; on Simple Tests via MCP.
+                      <br /><br />
+                      The tests need updating. What changes/updates would you suggest to bring it in-line with the Linear context? Ask questions when in doubt.
+                    </div>
+                  </div>
+                </div>
+
+                {/* Claude Response */}
+                <div className="flex gap-3">
+                  <div className="shrink-0 w-7 h-7 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">
+                    <ClaudeLogoIcon className="w-4 h-4 text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Claude</div>
+                    <div className="space-y-2">
+                      {/* Tool calls */}
+                      <div className="flex flex-wrap gap-1.5">
+                        <span className="inline-flex items-center gap-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-xs px-2 py-1 rounded-full">
+                          <ToolIcon className="w-3 h-3" />
+                          get_issue ROUT-103
+                        </span>
+                        <span className="inline-flex items-center gap-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-xs px-2 py-1 rounded-full">
+                          <ToolIcon className="w-3 h-3" />
+                          get_issue ROUT-370
+                        </span>
+                        <span className="inline-flex items-center gap-1 bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-400 text-xs px-2 py-1 rounded-full">
+                          <ToolIcon className="w-3 h-3" />
+                          search_test_cases
+                        </span>
+                      </div>
+                      <div className="text-sm text-slate-500 dark:text-slate-400 italic">
+                        Reviewing Linear issues and test cases...
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <p className="text-xs text-brand-600 dark:text-brand-400 mt-3">
+              With MCP, Claude can pull context from multiple tools and help you keep tests in sync with requirements.
             </p>
           </div>
         </div>
@@ -304,6 +369,22 @@ function TerminalIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z" />
+    </svg>
+  );
+}
+
+function ClaudeLogoIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M4.709 15.955l4.72-2.647.08-.23-.08-.128H8.08l-.23.209-3.37 1.908-.523-.118-.441-.607.088-.654 3.55-2.316.168-.195v-.286l-.168-.14-3.758-2.085-.168-.453.195-.555.504-.156.46.039 3.68 2.066.239.117h.078l.157-.195v-4.68l.364-.415.637-.059.468.376.039.406v4.313l.117.207.235.108h.266l3.474-2.023.7.069.347.61-.187.562-3.465 2.003-.138.207v.266l.138.157 3.7 2.444.069.64-.463.493-.581.02-3.759-2.562-.127-.088h-.217l-.138.186-.04 4.149-.492.395-.64-.03-.326-.56.039-4.013-.118-.226-.176-.089h-.236l-3.7 2.523-.552-.068-.365-.572z" />
+    </svg>
+  );
+}
+
+function ToolIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437l1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008z" />
     </svg>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 
@@ -44,15 +44,25 @@ export function TestRunRow({
   onDelete,
   className,
 }: TestRunRowProps) {
+  const router = useRouter();
   const passRate = run.total > 0
     ? Math.round(((run.stats.passed || 0) / run.total) * 100)
     : 0;
 
+  const handleRowClick = (e: React.MouseEvent) => {
+    // Don't navigate if clicking on a link or button
+    const target = e.target as HTMLElement;
+    if (target.closest('a') || target.closest('button')) {
+      return;
+    }
+    router.push(`/runs/${run.id}`);
+  };
+
   return (
-    <Link
-      href={`/runs/${run.id}`}
+    <div
+      onClick={handleRowClick}
       className={cn(
-        "flex items-center justify-between p-4 hover:bg-muted/50 transition-colors group",
+        "flex items-center justify-between p-4 hover:bg-muted/50 transition-colors group cursor-pointer",
         className
       )}
     >
@@ -77,7 +87,6 @@ export function TestRunRow({
                 href={`https://linear.app/${linearWorkspace}/issue/${run.linearIssueIdentifier}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
                 className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
               >
                 <LinearIcon className="w-3.5 h-3.5" />
@@ -92,7 +101,6 @@ export function TestRunRow({
                 href={`https://linear.app/${linearWorkspace}/project/${run.linearProjectId}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
                 className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
               >
                 <ProjectIcon className="w-3.5 h-3.5" />
@@ -107,7 +115,6 @@ export function TestRunRow({
                 href={`https://linear.app/${linearWorkspace}/project/${run.linearProjectId}#projectTab=milestones`}
                 target="_blank"
                 rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
                 className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
               >
                 <MilestoneIcon className="w-3.5 h-3.5" />
@@ -207,11 +214,7 @@ export function TestRunRow({
         {/* Action Buttons */}
         {showActions && onDuplicate && (
           <button
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onDuplicate();
-            }}
+            onClick={onDuplicate}
             className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors opacity-0 group-hover:opacity-100"
             title="Duplicate run"
           >
@@ -221,11 +224,7 @@ export function TestRunRow({
 
         {showActions && onDelete && (
           <button
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onDelete();
-            }}
+            onClick={onDelete}
             className="p-1.5 text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-md transition-colors opacity-0 group-hover:opacity-100"
             title="Delete run"
           >
@@ -235,7 +234,7 @@ export function TestRunRow({
 
         <ChevronRightIcon className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
       </div>
-    </Link>
+    </div>
   );
 }
 
