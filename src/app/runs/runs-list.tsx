@@ -12,6 +12,12 @@ import { ReleasePicker } from "@/components/release-picker";
 import { completeRelease, reopenRelease } from "@/app/releases/actions";
 import { duplicateTestRun } from "@/app/runs/actions";
 
+interface Collaborator {
+  id: string;
+  name: string;
+  avatar: string | null;
+}
+
 interface RunWithStats {
   id: number;
   name: string;
@@ -26,6 +32,7 @@ interface RunWithStats {
   linearMilestoneName: string | null;
   stats: Record<string, number>;
   total: number;
+  collaborators: Collaborator[];
 }
 
 interface Release {
@@ -556,6 +563,40 @@ function RunRow({ run, linearWorkspace, onDuplicate }: { run: RunWithStats; line
         <Badge variant={run.status === "completed" ? "default" : "warning"}>
           {run.status}
         </Badge>
+
+        {/* Collaborator Avatars */}
+        {run.collaborators.length > 0 && (
+          <div className="flex items-center -space-x-1.5" title={run.collaborators.map(c => c.name).join(", ")}>
+            {run.collaborators.slice(0, 3).map((collaborator) => (
+              collaborator.avatar ? (
+                <img
+                  key={collaborator.id}
+                  src={collaborator.avatar}
+                  alt={collaborator.name}
+                  title={collaborator.name}
+                  className="w-5 h-5 rounded-full ring-2 ring-background"
+                />
+              ) : (
+                <div
+                  key={collaborator.id}
+                  title={collaborator.name}
+                  className="w-5 h-5 rounded-full bg-brand-500/10 flex items-center justify-center ring-2 ring-background"
+                >
+                  <span className="text-[8px] font-medium text-brand-600">
+                    {collaborator.name?.[0]?.toUpperCase() || "?"}
+                  </span>
+                </div>
+              )
+            ))}
+            {run.collaborators.length > 3 && (
+              <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center ring-2 ring-background">
+                <span className="text-[8px] font-medium text-muted-foreground">
+                  +{run.collaborators.length - 3}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Duplicate Button */}
         <button

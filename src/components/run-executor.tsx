@@ -75,13 +75,16 @@ interface Props {
   availableScenarios: AvailableScenario[];
   linearWorkspace?: string;
   collaborators: Collaborator[];
+  currentUser: Collaborator;
 }
 
-export function RunExecutor({ run, results, releases: initialReleases, availableScenarios, linearWorkspace, collaborators }: Props) {
+export function RunExecutor({ run, results: initialResults, releases: initialReleases, availableScenarios, linearWorkspace, collaborators: initialCollaborators, currentUser }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [results, setResults] = useState<Result[]>(initialResults);
+  const [collaborators, setCollaborators] = useState<Collaborator[]>(initialCollaborators);
   const [selectedResult, setSelectedResult] = useState<Result | null>(
-    results.find((r) => r.status === "pending") || results[0] || null
+    initialResults.find((r) => r.status === "pending") || initialResults[0] || null
   );
   const [notes, setNotes] = useState("");
 
@@ -334,20 +337,47 @@ export function RunExecutor({ run, results, releases: initialReleases, available
   const handleStatusUpdate = (status: "passed" | "failed" | "blocked" | "skipped") => {
     if (!selectedResult) return;
 
+    const executedAt = new Date();
+    const currentNotes = notes.trim() || null;
+
+    // Optimistically update local state
+    const updatedResult: Result = {
+      ...selectedResult,
+      status,
+      notes: currentNotes,
+      executedAt,
+      executedBy: currentUser.id,
+      // Capture snapshots (same as server does)
+      scenarioTitleSnapshot: selectedResult.scenarioTitleSnapshot || selectedResult.scenarioTitle,
+      scenarioGherkinSnapshot: selectedResult.scenarioGherkinSnapshot || selectedResult.scenarioGherkin,
+      testCaseTitleSnapshot: selectedResult.testCaseTitleSnapshot || selectedResult.testCaseTitle,
+    };
+
+    // Update results array
+    setResults(prev => prev.map(r => r.id === selectedResult.id ? updatedResult : r));
+
+    // Add current user to collaborators if not already present
+    if (!collaborators.find(c => c.id === currentUser.id)) {
+      setCollaborators(prev => [...prev, currentUser]);
+    }
+
+    // Move to next pending case
+    const currentIndex = results.findIndex((r) => r.id === selectedResult.id);
+    const nextPending = results.find((r, i) => i > currentIndex && r.status === "pending");
+    if (nextPending) {
+      setSelectedResult(nextPending);
+      setNotes("");
+    } else {
+      // Stay on current result but update it
+      setSelectedResult(updatedResult);
+    }
+
     startTransition(async () => {
       await updateTestResult({
         resultId: selectedResult.id,
         status,
-        notes: notes.trim() || undefined,
+        notes: currentNotes || undefined,
       });
-
-      // Move to next pending case
-      const currentIndex = results.findIndex((r) => r.id === selectedResult.id);
-      const nextPending = results.find((r, i) => i > currentIndex && r.status === "pending");
-      if (nextPending) {
-        setSelectedResult(nextPending);
-        setNotes("");
-      }
 
       router.refresh();
     });

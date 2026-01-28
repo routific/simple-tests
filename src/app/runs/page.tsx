@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
-import { testRuns, testRunResults, releases } from "@/lib/db/schema";
-import { eq, sql, count } from "drizzle-orm";
+import { testRuns, testRunResults, releases, users } from "@/lib/db/schema";
+import { eq, sql, count, inArray } from "drizzle-orm";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,50 @@ export default async function RunsPage() {
     .where(eq(testRuns.organizationId, organizationId))
     .orderBy(sql`${testRuns.createdAt} DESC`);
 
+  // Collect all user IDs across all runs (creators + executors)
+  const allUserIds = new Set<string>();
+  runs.forEach(run => {
+    if (run.createdBy) allUserIds.add(run.createdBy);
+  });
+
+  // Get all executors from test results
+  const allExecutors = await db
+    .select({
+      testRunId: testRunResults.testRunId,
+      executedBy: testRunResults.executedBy,
+    })
+    .from(testRunResults)
+    .where(sql`${testRunResults.executedBy} IS NOT NULL`);
+
+  allExecutors.forEach(e => {
+    if (e.executedBy) allUserIds.add(e.executedBy);
+  });
+
+  // Fetch all user info at once
+  const allUsers = allUserIds.size > 0
+    ? await db
+        .select({
+          id: users.id,
+          name: users.name,
+          avatar: users.avatar,
+        })
+        .from(users)
+        .where(inArray(users.id, Array.from(allUserIds)))
+    : [];
+
+  const usersMap = new Map(allUsers.map(u => [u.id, u]));
+
+  // Build executor map per run
+  const executorsByRun = new Map<number, Set<string>>();
+  allExecutors.forEach(e => {
+    if (e.executedBy) {
+      if (!executorsByRun.has(e.testRunId)) {
+        executorsByRun.set(e.testRunId, new Set());
+      }
+      executorsByRun.get(e.testRunId)!.add(e.executedBy);
+    }
+  });
+
   // Get stats for each run
   const runStats = await Promise.all(
     runs.map(async (run) => {
@@ -55,6 +99,15 @@ export default async function RunsPage() {
         total += r.count;
       });
 
+      // Build collaborators list for this run
+      const collaboratorIds = new Set<string>();
+      if (run.createdBy) collaboratorIds.add(run.createdBy);
+      executorsByRun.get(run.id)?.forEach(id => collaboratorIds.add(id));
+
+      const collaborators = Array.from(collaboratorIds)
+        .map(id => usersMap.get(id))
+        .filter((u): u is { id: string; name: string; avatar: string | null } => u !== undefined);
+
       return {
         id: run.id,
         name: run.name,
@@ -69,6 +122,7 @@ export default async function RunsPage() {
         linearMilestoneName: run.linearMilestoneName,
         stats,
         total,
+        collaborators,
       };
     })
   );

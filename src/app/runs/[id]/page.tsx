@@ -59,8 +59,11 @@ export default async function RunDetailPage({ params }: Props) {
     if (r.executedBy) userIds.add(r.executedBy);
   });
 
+  // Always include the current user in the user IDs to fetch
+  userIds.add(session.user.id);
+
   // Fetch user info for collaborators
-  const collaborators = userIds.size > 0
+  const allUsers = userIds.size > 0
     ? await db
         .select({
           id: users.id,
@@ -70,6 +73,21 @@ export default async function RunDetailPage({ params }: Props) {
         .from(users)
         .where(inArray(users.id, Array.from(userIds)))
     : [];
+
+  // Separate current user from collaborators (collaborators are those who have contributed)
+  const currentUser = allUsers.find(u => u.id === session.user.id) || {
+    id: session.user.id,
+    name: session.user.name || "Unknown",
+    avatar: session.user.image || null,
+  };
+
+  // Collaborators are creator + executors (not necessarily including current user unless they've contributed)
+  const collaboratorIds = new Set<string>();
+  if (run.createdBy) collaboratorIds.add(run.createdBy);
+  results.forEach(r => {
+    if (r.executedBy) collaboratorIds.add(r.executedBy);
+  });
+  const collaborators = allUsers.filter(u => collaboratorIds.has(u.id));
 
   // Fetch releases for editing
   const allReleases = await db
@@ -106,6 +124,7 @@ export default async function RunDetailPage({ params }: Props) {
         availableScenarios={availableScenarios}
         linearWorkspace={session.user.organizationUrlKey}
         collaborators={collaborators}
+        currentUser={currentUser}
       />
     </div>
   );
