@@ -76,17 +76,25 @@ interface Props {
   linearWorkspace?: string;
   collaborators: Collaborator[];
   currentUser: Collaborator;
+  initialScenarioId?: number | null;
 }
 
-export function RunExecutor({ run, results: initialResults, releases: initialReleases, availableScenarios, linearWorkspace, collaborators: initialCollaborators, currentUser }: Props) {
+export function RunExecutor({ run, results: initialResults, releases: initialReleases, availableScenarios, linearWorkspace, collaborators: initialCollaborators, currentUser, initialScenarioId }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [results, setResults] = useState<Result[]>(initialResults);
   const [collaborators, setCollaborators] = useState<Collaborator[]>(initialCollaborators);
-  const [selectedResult, setSelectedResult] = useState<Result | null>(
-    initialResults.find((r) => r.status === "pending") || initialResults[0] || null
-  );
+  const [selectedResult, setSelectedResult] = useState<Result | null>(() => {
+    // If deep-linking to a specific scenario, select it
+    if (initialScenarioId) {
+      const linkedResult = initialResults.find((r) => r.scenarioId === initialScenarioId);
+      if (linkedResult) return linkedResult;
+    }
+    // Otherwise, select first pending or first result
+    return initialResults.find((r) => r.status === "pending") || initialResults[0] || null;
+  });
   const [notes, setNotes] = useState("");
+  const [linkCopied, setLinkCopied] = useState(false);
 
   // Edit mode state
   const [isEditing, setIsEditing] = useState(false);
@@ -770,7 +778,7 @@ export function RunExecutor({ run, results: initialResults, releases: initialRel
                       : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400"
                   )}
                 >
-                  {run.status}
+                  {run.status === "in_progress" ? "In Progress" : "Completed"}
                 </span>
                 {/* Collaborator avatars */}
                 {collaborators.length > 0 && (
@@ -984,12 +992,38 @@ export function RunExecutor({ run, results: initialResults, releases: initialRel
                     </div>
                   )}
                 </div>
-                <Link
-                  href={`/cases/${selectedResult.testCaseId}`}
-                  className="text-sm text-blue-600 hover:underline"
-                >
-                  View case
-                </Link>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      const url = `${window.location.origin}/runs/${run.id}?scenario=${selectedResult.scenarioId}`;
+                      navigator.clipboard.writeText(url);
+                      setLinkCopied(true);
+                      setTimeout(() => setLinkCopied(false), 2000);
+                    }}
+                    className={cn(
+                      "p-1.5 rounded transition-colors flex items-center gap-1",
+                      linkCopied
+                        ? "text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20"
+                        : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))]"
+                    )}
+                    title="Copy link to this scenario"
+                  >
+                    {linkCopied ? (
+                      <>
+                        <CheckIcon className="w-4 h-4" />
+                        <span className="text-xs">Copied</span>
+                      </>
+                    ) : (
+                      <LinkIcon className="w-4 h-4" />
+                    )}
+                  </button>
+                  <Link
+                    href={`/cases/${selectedResult.testCaseId}`}
+                    className="text-sm text-blue-600 hover:underline"
+                  >
+                    View case
+                  </Link>
+                </div>
               </div>
 
               <div className="mb-6">
@@ -1302,6 +1336,22 @@ function MilestoneIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v1.5M3 21v-6m0 0l2.77-.693a9 9 0 016.208.682l.108.054a9 9 0 006.086.71l3.114-.732a48.524 48.524 0 01-.005-10.499l-3.11.732a9 9 0 01-6.085-.711l-.108-.054a9 9 0 00-6.208-.682L3 4.5M3 15V4.5" />
+    </svg>
+  );
+}
+
+function LinkIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
+    </svg>
+  );
+}
+
+function CheckIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
     </svg>
   );
 }

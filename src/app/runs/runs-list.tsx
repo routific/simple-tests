@@ -574,7 +574,7 @@ function RunRow({ run, linearWorkspace, onDuplicate, onDelete }: { run: RunWithS
 
         {/* Run Status */}
         <Badge variant={run.status === "completed" ? "default" : "warning"}>
-          {run.status}
+          {run.status === "in_progress" ? "In Progress" : "Completed"}
         </Badge>
 
         {/* Collaborator Avatars */}
