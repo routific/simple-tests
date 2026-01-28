@@ -113,7 +113,7 @@ export function ReleasePicker({
       </button>
 
       {isOpen && (
-        <div className="absolute z-50 mt-1 w-full bg-background border border-border rounded-lg shadow-lg max-h-80 overflow-auto">
+        <div className="absolute z-50 mt-1 min-w-[280px] w-full bg-background border border-border rounded-lg shadow-lg max-h-80 overflow-auto">
           {/* No release option */}
           <div
             className={cn(
