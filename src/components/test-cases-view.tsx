@@ -867,7 +867,7 @@ function TestCaseListContent({
     });
   };
 
-  const handleBulkStateChange = (state: "active" | "draft" | "retired" | "rejected") => {
+  const handleBulkStateChange = (state: "active" | "draft" | "upcoming" | "retired" | "rejected") => {
     startTransition(async () => {
       await bulkUpdateTestCaseState(Array.from(selectedCases), state);
       setShowStateModal(false);
