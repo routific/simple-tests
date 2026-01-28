@@ -90,6 +90,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [LinearProvider()],
   pages: {
     signIn: "/signin",
+    error: "/auth/error",
   },
   callbacks: {
     async jwt({ token, account, profile }) {
