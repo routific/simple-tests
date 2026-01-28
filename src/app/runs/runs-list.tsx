@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ReleasePicker } from "@/components/release-picker";
-import { RunStatusBadge } from "@/components/run-status-badge";
 import { completeRelease, reopenRelease } from "@/app/releases/actions";
 import { duplicateTestRun, deleteTestRun } from "@/app/runs/actions";
 
@@ -574,7 +573,9 @@ function RunRow({ run, linearWorkspace, onDuplicate, onDelete }: { run: RunWithS
         )}
 
         {/* Run Status */}
-        <RunStatusBadge status={run.status} />
+        <Badge variant={run.status === "completed" ? "default" : "warning"}>
+          {run.status === "in_progress" ? "In Progress" : "Completed"}
+        </Badge>
 
         {/* Collaborator Avatars */}
         {run.collaborators.length > 0 && (
