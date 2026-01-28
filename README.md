@@ -146,8 +146,13 @@ src/
 │   ├── releases/
 │   │   └── actions.ts           # Release management actions
 │   ├── import/page.tsx          # Import instructions
+│   ├── settings/
+│   │   └── connect/             # MCP connection instructions
 │   ├── api/
 │   │   ├── auth/[...nextauth]/  # Auth.js route handler
+│   │   ├── mcp/                 # Model Context Protocol endpoints
+│   │   │   ├── sse/             # SSE transport for MCP
+│   │   │   └── messages/        # MCP message handler
 │   │   ├── repository/          # Import/export endpoints
 │   │   └── linear/              # Linear API endpoints
 │   │       ├── projects/        # Fetch Linear projects
@@ -307,6 +312,12 @@ Test cases can contain multiple scenarios, each with their own Gherkin content. 
 - **Milestone tracking** - Link runs to project milestones
 - **Issue attachment** - Connect runs to specific Linear issues
 
+### MCP (Model Context Protocol)
+- **AI assistant integration** - Connect Claude Desktop or Claude Code to SimpleTests
+- **Full API access** - Create, read, search, and manage test cases via MCP tools
+- **Cross-tool workflows** - Combine with Linear MCP to sync requirements with test cases
+- **OAuth authentication** - Secure access using your Linear credentials
+
 ## Data Migration
 
 The import script (`npm run import`) handles Testmo CSV exports:
@@ -374,6 +385,8 @@ The app runs at http://localhost:3000.
 | `src/app/folders/actions.ts` | Folder management mutations |
 | `src/app/runs/actions.ts` | Test run mutations (create, update, add/remove scenarios) |
 | `src/app/releases/actions.ts` | Release management mutations |
+| `src/app/api/mcp/sse/route.ts` | MCP SSE transport endpoint |
+| `src/app/settings/connect/` | MCP connection instructions page |
 | `scripts/import-testmo.ts` | CSV import script |
 | `drizzle.config.ts` | Database migration config |
 
