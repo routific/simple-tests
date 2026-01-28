@@ -96,6 +96,15 @@ export function RunExecutor({ run, results: initialResults, releases: initialRel
   const [notes, setNotes] = useState("");
   const [linkCopied, setLinkCopied] = useState(false);
 
+  // Update URL with initially selected scenario on mount
+  useEffect(() => {
+    if (selectedResult && !initialScenarioId) {
+      const url = new URL(window.location.href);
+      url.searchParams.set("scenario", selectedResult.scenarioId.toString());
+      window.history.replaceState({}, "", url.toString());
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Edit mode state
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(run.name);
