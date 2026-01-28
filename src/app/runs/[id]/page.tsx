@@ -9,9 +9,10 @@ export const dynamic = "force-dynamic";
 
 interface Props {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ scenario?: string }>;
 }
 
-export default async function RunDetailPage({ params }: Props) {
+export default async function RunDetailPage({ params, searchParams }: Props) {
   const session = await getSessionWithOrg();
   if (!session) {
     redirect("/signin");
@@ -19,7 +20,9 @@ export default async function RunDetailPage({ params }: Props) {
 
   const { organizationId } = session.user;
   const { id } = await params;
+  const { scenario: scenarioParam } = await searchParams;
   const runId = parseInt(id);
+  const initialScenarioId = scenarioParam ? parseInt(scenarioParam) : null;
 
   const run = await db.select().from(testRuns).where(eq(testRuns.id, runId)).get();
 
@@ -125,6 +128,7 @@ export default async function RunDetailPage({ params }: Props) {
         linearWorkspace={session.user.organizationUrlKey}
         collaborators={collaborators}
         currentUser={currentUser}
+        initialScenarioId={initialScenarioId}
       />
     </div>
   );
