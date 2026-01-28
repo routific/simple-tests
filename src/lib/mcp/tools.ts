@@ -57,7 +57,7 @@ export function registerTools(auth: AuthContext): Tool[] {
           folderId: { type: "number", description: "Filter by folder ID" },
           state: {
             type: "string",
-            enum: ["active", "draft", "retired", "rejected"],
+            enum: ["active", "draft", "upcoming", "retired", "rejected"],
             description: "Filter by state",
           },
           priority: {
@@ -90,7 +90,7 @@ export function registerTools(auth: AuthContext): Tool[] {
           query: { type: "string", description: "Search query (searches title and gherkin content)" },
           state: {
             type: "string",
-            enum: ["active", "draft", "retired", "rejected"],
+            enum: ["active", "draft", "upcoming", "retired", "rejected"],
             description: "Filter by state",
           },
           limit: { type: "number", description: "Maximum number of results (default: 20)" },
@@ -155,7 +155,7 @@ export function registerTools(auth: AuthContext): Tool[] {
             folderId: { type: "number", description: "Folder ID (optional)" },
             state: {
               type: "string",
-              enum: ["active", "draft", "retired", "rejected"],
+              enum: ["active", "draft", "upcoming", "retired", "rejected"],
               description: "State of the test case",
             },
             priority: {
@@ -202,7 +202,7 @@ export function registerTools(auth: AuthContext): Tool[] {
             id: { type: "number", description: "Test case ID" },
             title: { type: "string", description: "New title" },
             folderId: { type: "number", description: "New folder ID" },
-            state: { type: "string", enum: ["active", "draft", "retired", "rejected"] },
+            state: { type: "string", enum: ["active", "draft", "upcoming", "retired", "rejected"] },
             priority: { type: "string", enum: ["normal", "high", "critical"] },
           },
           required: ["id"],

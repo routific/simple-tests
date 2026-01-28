@@ -28,7 +28,7 @@ export function registerTestCaseTools(auth: AuthContext): Tool[] {
             },
             state: {
               type: "string",
-              enum: ["active", "draft", "retired", "rejected"],
+              enum: ["active", "draft", "upcoming", "retired", "rejected"],
               description: "State of the test case (default: active)",
             },
             priority: {
@@ -64,7 +64,7 @@ export function registerTestCaseTools(auth: AuthContext): Tool[] {
             },
             state: {
               type: "string",
-              enum: ["active", "draft", "retired", "rejected"],
+              enum: ["active", "draft", "upcoming", "retired", "rejected"],
               description: "New state",
             },
             priority: {

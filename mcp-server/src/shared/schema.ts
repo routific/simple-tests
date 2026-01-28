@@ -54,7 +54,7 @@ export const testCases = sqliteTable(
     template: text("template", { enum: ["bdd_feature", "steps", "text"] })
       .notNull()
       .default("bdd_feature"),
-    state: text("state", { enum: ["active", "draft", "retired", "rejected"] })
+    state: text("state", { enum: ["active", "draft", "upcoming", "retired", "rejected"] })
       .notNull()
       .default("active"),
     priority: text("priority", { enum: ["normal", "high", "critical"] })

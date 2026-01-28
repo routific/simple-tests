@@ -53,7 +53,7 @@ export const testCases = sqliteTable(
     template: text("template", { enum: ["bdd_feature", "steps", "text"] })
       .notNull()
       .default("bdd_feature"),
-    state: text("state", { enum: ["active", "draft", "retired", "rejected"] })
+    state: text("state", { enum: ["active", "draft", "upcoming", "retired", "rejected"] })
       .notNull()
       .default("active"),
     priority: text("priority", { enum: ["normal", "high", "critical"] })
@@ -218,6 +218,7 @@ export const undoStack = sqliteTable(
         "move_folder",
         "move_test_case_to_folder",
         "reorder_folders",
+        "delete_test_run",
       ],
     }).notNull(),
     description: text("description").notNull(),

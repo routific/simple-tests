@@ -11,7 +11,7 @@ interface SaveTestCaseInput {
   id?: number;
   title: string;
   folderId: number | null;
-  state: "active" | "draft" | "retired" | "rejected";
+  state: "active" | "draft" | "upcoming" | "retired" | "rejected";
 }
 
 // Helper to compute diff between two objects
@@ -454,7 +454,7 @@ export async function bulkDeleteTestCases(ids: number[]) {
 
 export async function bulkUpdateTestCaseState(
   ids: number[],
-  state: "active" | "draft" | "retired" | "rejected"
+  state: "active" | "draft" | "upcoming" | "retired" | "rejected"
 ) {
   const session = await getSessionWithOrg();
   if (!session) {

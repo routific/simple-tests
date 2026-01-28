@@ -73,8 +73,8 @@ async function getTestCasesList(
     conditions.push(eq(testCases.folderId, parseInt(folderId, 10)));
   }
 
-  if (state && ["active", "draft", "retired", "rejected"].includes(state)) {
-    conditions.push(eq(testCases.state, state as "active" | "draft" | "retired" | "rejected"));
+  if (state && ["active", "draft", "upcoming", "retired", "rejected"].includes(state)) {
+    conditions.push(eq(testCases.state, state as "active" | "draft" | "upcoming" | "retired" | "rejected"));
   }
 
   const cases = await db

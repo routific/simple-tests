@@ -20,7 +20,7 @@ import {
 } from "@/app/cases/actions";
 import { exportTestCases, importTestCases, ExportData } from "@/app/cases/export-actions";
 import { getScenarios } from "@/app/cases/scenario-actions";
-import { getLastUndo, getLastRedo, getUndoStack, getRedoStack, executeUndo, executeRedo } from "@/app/cases/undo-actions";
+import { UndoRedoButtons } from "@/components/undo-redo-buttons";
 import { cn } from "@/lib/utils";
 import { buildFolderBreadcrumb, formatBreadcrumb } from "@/lib/folders";
 import { FolderPicker } from "@/components/folder-picker";
@@ -181,49 +181,7 @@ export function TestCasesView({
   const lastSelectedIndexRef = useRef<number | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
-  const [isUndoing, setIsUndoing] = useState(false);
-  const [isRedoing, setIsRedoing] = useState(false);
-  const [lastUndoAction, setLastUndoAction] = useState<{ id: number; description: string } | null>(null);
-  const [lastRedoAction, setLastRedoAction] = useState<{ id: number; description: string } | null>(null);
-  const [undoStackItems, setUndoStackItems] = useState<Array<{ id: number; description: string; actionType: string; createdAt: Date }>>([]);
-  const [redoStackItems, setRedoStackItems] = useState<Array<{ id: number; description: string; actionType: string; createdAt: Date }>>([]);
-  const [showUndoDropdown, setShowUndoDropdown] = useState(false);
-  const [showRedoDropdown, setShowRedoDropdown] = useState(false);
-  const undoDropdownRef = useRef<HTMLDivElement>(null);
-  const redoDropdownRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Fetch last undo/redo actions on mount and after changes
-  const refreshUndoRedo = async () => {
-    const [lastUndo, lastRedo, undoItems, redoItems] = await Promise.all([
-      getLastUndo(),
-      getLastRedo(),
-      getUndoStack(),
-      getRedoStack(),
-    ]);
-    setLastUndoAction(lastUndo);
-    setLastRedoAction(lastRedo);
-    setUndoStackItems(undoItems);
-    setRedoStackItems(redoItems);
-  };
-
-  // Close dropdowns when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (undoDropdownRef.current && !undoDropdownRef.current.contains(e.target as Node)) {
-        setShowUndoDropdown(false);
-      }
-      if (redoDropdownRef.current && !redoDropdownRef.current.contains(e.target as Node)) {
-        setShowRedoDropdown(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  useEffect(() => {
-    refreshUndoRedo();
-  }, [cases]); // Refresh when cases change
 
   // Handle deep-link: open panel for initial case ID from URL
   useEffect(() => {
@@ -237,74 +195,6 @@ export function TestCasesView({
       }
     }
   }, [initialSelectedCaseId, cases]);
-
-  const handleUndo = async () => {
-    if (isUndoing || !lastUndoAction) return;
-    setIsUndoing(true);
-    try {
-      const result = await executeUndo();
-      if (result.error) {
-        alert(`Undo failed: ${result.error}`);
-      } else if (result.description) {
-        // Refresh to show changes
-        router.refresh();
-        refreshUndoRedo();
-      }
-    } catch {
-      alert("Undo failed. Please try again.");
-    } finally {
-      setIsUndoing(false);
-    }
-  };
-
-  const handleRedo = async () => {
-    if (isRedoing || !lastRedoAction) return;
-    setIsRedoing(true);
-    try {
-      const result = await executeRedo();
-      if (result.error) {
-        alert(`Redo failed: ${result.error}`);
-      } else if (result.description) {
-        // Refresh to show changes
-        router.refresh();
-        refreshUndoRedo();
-      }
-    } catch {
-      alert("Redo failed. Please try again.");
-    } finally {
-      setIsRedoing(false);
-    }
-  };
-
-  // Keyboard shortcuts for undo/redo
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Check if we're in an input/textarea (don't intercept typing)
-      const target = e.target as HTMLElement;
-      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
-        return;
-      }
-
-      // CMD+Z (Mac) or Ctrl+Z (Windows) for undo
-      if ((e.metaKey || e.ctrlKey) && e.key === "z" && !e.shiftKey) {
-        e.preventDefault();
-        handleUndo();
-      }
-      // CMD+Shift+Z (Mac) or Ctrl+Shift+Z (Windows) for redo
-      else if ((e.metaKey || e.ctrlKey) && e.key === "z" && e.shiftKey) {
-        e.preventDefault();
-        handleRedo();
-      }
-      // CMD+Y (Windows-style redo)
-      else if ((e.metaKey || e.ctrlKey) && e.key === "y") {
-        e.preventDefault();
-        handleRedo();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [lastUndoAction, lastRedoAction, isUndoing, isRedoing]);
 
   const handleExport = async () => {
     setIsExporting(true);
@@ -456,110 +346,7 @@ export function TestCasesView({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {lastUndoAction && (
-            <div className="relative" ref={undoDropdownRef}>
-              <div className="flex items-center">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={handleUndo}
-                  disabled={isUndoing}
-                  className="text-muted-foreground hover:text-foreground rounded-r-none pr-1"
-                  title={`Undo: ${lastUndoAction.description} (${navigator.platform.includes("Mac") ? "⌘" : "Ctrl"}+Z)`}
-                >
-                  {isUndoing ? (
-                    <LoadingIcon className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <UndoIcon className="w-4 h-4" />
-                  )}
-                  Undo
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setShowUndoDropdown(!showUndoDropdown)}
-                  className="text-muted-foreground hover:text-foreground rounded-l-none pl-0 pr-1"
-                >
-                  <ChevronDownIcon className="w-3 h-3" />
-                </Button>
-              </div>
-              {showUndoDropdown && undoStackItems.length > 0 && (
-                <div className="absolute right-0 top-full mt-1 w-64 bg-background border border-border rounded-md shadow-lg z-50">
-                  <div className="p-2 text-xs font-medium text-muted-foreground border-b border-border bg-muted/50">
-                    Undo History
-                  </div>
-                  <div className="max-h-48 overflow-y-auto">
-                    {undoStackItems.map((item, index) => (
-                      <div
-                        key={item.id}
-                        className={cn(
-                          "px-3 py-2 text-sm",
-                          index === 0 ? "bg-accent/50" : "hover:bg-accent/30"
-                        )}
-                      >
-                        <div className="font-medium truncate">{item.description}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {formatTimeAgo(item.createdAt)}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-          {lastRedoAction && (
-            <div className="relative" ref={redoDropdownRef}>
-              <div className="flex items-center">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={handleRedo}
-                  disabled={isRedoing}
-                  className="text-muted-foreground hover:text-foreground rounded-r-none pr-1"
-                  title={`Redo: ${lastRedoAction.description} (${navigator.platform.includes("Mac") ? "⌘" : "Ctrl"}+Shift+Z)`}
-                >
-                  {isRedoing ? (
-                    <LoadingIcon className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <RedoIcon className="w-4 h-4" />
-                  )}
-                  Redo
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setShowRedoDropdown(!showRedoDropdown)}
-                  className="text-muted-foreground hover:text-foreground rounded-l-none pl-0 pr-1"
-                >
-                  <ChevronDownIcon className="w-3 h-3" />
-                </Button>
-              </div>
-              {showRedoDropdown && redoStackItems.length > 0 && (
-                <div className="absolute right-0 top-full mt-1 w-64 bg-background border border-border rounded-md shadow-lg z-50">
-                  <div className="p-2 text-xs font-medium text-muted-foreground border-b border-border bg-muted/50">
-                    Redo History
-                  </div>
-                  <div className="max-h-48 overflow-y-auto">
-                    {redoStackItems.map((item, index) => (
-                      <div
-                        key={item.id}
-                        className={cn(
-                          "px-3 py-2 text-sm",
-                          index === 0 ? "bg-accent/50" : "hover:bg-accent/30"
-                        )}
-                      >
-                        <div className="font-medium truncate">{item.description}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {formatTimeAgo(item.createdAt)}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+          <UndoRedoButtons refreshKey={cases.length} />
           <Link href="/cases/changelog">
             <Button
               size="sm"
@@ -670,7 +457,7 @@ export function TestCasesView({
 }
 
 // Test Case List Content
-const STATE_OPTIONS = ["active", "draft", "retired", "rejected"] as const;
+const STATE_OPTIONS = ["active", "draft", "upcoming", "retired", "rejected"] as const;
 type TestCaseState = (typeof STATE_OPTIONS)[number];
 
 function getStateBadgeVariant(state: string) {
@@ -679,6 +466,8 @@ function getStateBadgeVariant(state: string) {
       return "success";
     case "draft":
       return "warning";
+    case "upcoming":
+      return "info";
     case "retired":
       return "secondary";
     case "rejected":
@@ -1075,7 +864,7 @@ function TestCaseListContent({
           description={`Update state for ${selectedCases.size} test case(s)`}
         >
           <div className="p-6 space-y-2">
-            {(["active", "draft", "retired", "rejected"] as const).map((state) => (
+            {(["active", "draft", "upcoming", "retired", "rejected"] as const).map((state) => (
               <button
                 key={state}
                 onClick={() => handleBulkStateChange(state)}
@@ -1578,6 +1367,7 @@ function NewCaseModal({
               >
                 <option value="active">Active</option>
                 <option value="draft">Draft</option>
+                <option value="upcoming">Upcoming</option>
                 <option value="retired">Retired</option>
                 <option value="rejected">Rejected</option>
               </select>
@@ -1743,6 +1533,8 @@ function TestCasePanel({
         return "success";
       case "draft":
         return "warning";
+      case "upcoming":
+        return "info";
       case "retired":
         return "secondary";
       case "rejected":
@@ -1805,6 +1597,7 @@ function TestCasePanel({
                   >
                     <option value="active">Active</option>
                     <option value="draft">Draft</option>
+                    <option value="upcoming">Upcoming</option>
                     <option value="retired">Retired</option>
                     <option value="rejected">Rejected</option>
                   </select>
@@ -2145,42 +1938,6 @@ function ImportIcon({ className }: { className?: string }) {
         strokeLinecap="round"
         strokeLinejoin="round"
         d="M9 8.25H7.5a2.25 2.25 0 00-2.25 2.25v9a2.25 2.25 0 002.25 2.25h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25H15M9 12l3 3m0 0l3-3m-3 3V2.25"
-      />
-    </svg>
-  );
-}
-
-function UndoIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={1.5}
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3"
-      />
-    </svg>
-  );
-}
-
-function RedoIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={1.5}
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M15 15l6-6m0 0l-6-6m6 6H9a6 6 0 000 12h3"
       />
     </svg>
   );
