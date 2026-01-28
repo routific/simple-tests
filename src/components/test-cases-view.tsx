@@ -483,8 +483,8 @@ export function TestCasesView({
                 </Button>
               </div>
               {showUndoDropdown && undoStackItems.length > 0 && (
-                <div className="absolute right-0 top-full mt-1 w-64 bg-popover border border-border rounded-md shadow-lg z-50">
-                  <div className="p-2 text-xs font-medium text-muted-foreground border-b border-border">
+                <div className="absolute right-0 top-full mt-1 w-64 bg-background border border-border rounded-md shadow-lg z-50">
+                  <div className="p-2 text-xs font-medium text-muted-foreground border-b border-border bg-muted/50">
                     Undo History
                   </div>
                   <div className="max-h-48 overflow-y-auto">
@@ -535,8 +535,8 @@ export function TestCasesView({
                 </Button>
               </div>
               {showRedoDropdown && redoStackItems.length > 0 && (
-                <div className="absolute right-0 top-full mt-1 w-64 bg-popover border border-border rounded-md shadow-lg z-50">
-                  <div className="p-2 text-xs font-medium text-muted-foreground border-b border-border">
+                <div className="absolute right-0 top-full mt-1 w-64 bg-background border border-border rounded-md shadow-lg z-50">
+                  <div className="p-2 text-xs font-medium text-muted-foreground border-b border-border bg-muted/50">
                     Redo History
                   </div>
                   <div className="max-h-48 overflow-y-auto">
