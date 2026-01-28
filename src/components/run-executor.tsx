@@ -6,6 +6,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { GherkinDisplay } from "./gherkin-editor";
 import { ReleasePicker } from "./release-picker";
+import { formatRunStatus } from "./run-status-badge";
 import { Input } from "./ui/input";
 import { ResizablePanel } from "./ui/resizable-panel";
 import { updateTestResult, completeTestRun, deleteTestRun, updateTestRun, addScenariosToRun, removeScenariosFromRun } from "@/app/runs/actions";
@@ -795,7 +796,7 @@ export function RunExecutor({ run, results: initialResults, releases: initialRel
                       : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400"
                   )}
                 >
-                  {run.status === "in_progress" ? "In Progress" : "Completed"}
+                  {formatRunStatus(run.status)}
                 </span>
                 {/* Collaborator avatars */}
                 {collaborators.length > 0 && (
