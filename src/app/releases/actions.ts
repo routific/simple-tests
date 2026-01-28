@@ -112,6 +112,31 @@ export async function reopenRelease(id: number) {
   }
 }
 
+export async function updateRelease(id: number, name: string) {
+  const session = await getSessionWithOrg();
+  if (!session) {
+    return { error: "Unauthorized" };
+  }
+
+  const { organizationId } = session.user;
+
+  try {
+    await db
+      .update(releases)
+      .set({ name: name.trim() })
+      .where(
+        and(eq(releases.id, id), eq(releases.organizationId, organizationId))
+      );
+
+    revalidatePath("/runs");
+
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to update release:", error);
+    return { error: "Failed to update release" };
+  }
+}
+
 export async function deleteRelease(id: number) {
   const session = await getSessionWithOrg();
   if (!session) {

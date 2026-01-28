@@ -18,7 +18,7 @@ export default async function RunsPage() {
 
   const { organizationId } = session.user;
 
-  // Fetch all releases
+  // Fetch all releases (newest first)
   const allReleases = await db
     .select({
       id: releases.id,
@@ -27,7 +27,7 @@ export default async function RunsPage() {
     })
     .from(releases)
     .where(eq(releases.organizationId, organizationId))
-    .orderBy(releases.createdAt);
+    .orderBy(sql`${releases.createdAt} DESC`);
 
   // Fetch all runs
   const runs = await db

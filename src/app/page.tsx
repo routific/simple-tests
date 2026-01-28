@@ -1,12 +1,12 @@
 import { db } from "@/lib/db";
-import { testCases, testRuns, testRunResults, folders } from "@/lib/db/schema";
-import { count, eq, sql, and } from "drizzle-orm";
+import { testCases, testRuns, testRunResults, folders, users } from "@/lib/db/schema";
+import { count, eq, sql, and, inArray } from "drizzle-orm";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { getSessionWithOrg } from "@/lib/auth";
+import { TestRunRow, type TestRunData } from "@/components/test-run-row";
 
 export const dynamic = "force-dynamic";
 
@@ -32,18 +32,63 @@ async function getStats(organizationId: string) {
     .where(and(eq(testCases.organizationId, organizationId), eq(testCases.state, "active")));
 
   const recentRuns = await db
-    .select({
-      id: testRuns.id,
-      name: testRuns.name,
-      status: testRuns.status,
-      createdAt: testRuns.createdAt,
-    })
+    .select()
     .from(testRuns)
     .where(eq(testRuns.organizationId, organizationId))
     .orderBy(sql`${testRuns.createdAt} DESC`)
     .limit(5);
 
-  const runStats = await Promise.all(
+  // Collect all user IDs (creators + executors)
+  const allUserIds = new Set<string>();
+  recentRuns.forEach(run => {
+    if (run.createdBy) allUserIds.add(run.createdBy);
+  });
+
+  // Get all executors from test results for these runs
+  const runIds = recentRuns.map(r => r.id);
+  const allExecutors = runIds.length > 0
+    ? await db
+        .select({
+          testRunId: testRunResults.testRunId,
+          executedBy: testRunResults.executedBy,
+        })
+        .from(testRunResults)
+        .where(and(
+          inArray(testRunResults.testRunId, runIds),
+          sql`${testRunResults.executedBy} IS NOT NULL`
+        ))
+    : [];
+
+  allExecutors.forEach(e => {
+    if (e.executedBy) allUserIds.add(e.executedBy);
+  });
+
+  // Fetch all user info at once
+  const allUsers = allUserIds.size > 0
+    ? await db
+        .select({
+          id: users.id,
+          name: users.name,
+          avatar: users.avatar,
+        })
+        .from(users)
+        .where(inArray(users.id, Array.from(allUserIds)))
+    : [];
+
+  const usersMap = new Map(allUsers.map(u => [u.id, u]));
+
+  // Build executor map per run
+  const executorsByRun = new Map<number, Set<string>>();
+  allExecutors.forEach(e => {
+    if (e.executedBy) {
+      if (!executorsByRun.has(e.testRunId)) {
+        executorsByRun.set(e.testRunId, new Set());
+      }
+      executorsByRun.get(e.testRunId)!.add(e.executedBy);
+    }
+  });
+
+  const runStats: TestRunData[] = await Promise.all(
     recentRuns.map(async (run) => {
       const results = await db
         .select({ status: testRunResults.status, count: count() })
@@ -52,11 +97,37 @@ async function getStats(organizationId: string) {
         .groupBy(testRunResults.status);
 
       const stats: Record<string, number> = {};
+      let total = 0;
       results.forEach((r) => {
         stats[r.status] = r.count;
+        total += r.count;
       });
 
-      return { ...run, stats };
+      // Build collaborators list for this run
+      const collaboratorIds = new Set<string>();
+      if (run.createdBy) collaboratorIds.add(run.createdBy);
+      executorsByRun.get(run.id)?.forEach(id => collaboratorIds.add(id));
+
+      const collaborators = Array.from(collaboratorIds)
+        .map(id => usersMap.get(id))
+        .filter((u): u is { id: string; name: string; avatar: string | null } => u !== undefined);
+
+      return {
+        id: run.id,
+        name: run.name,
+        releaseId: run.releaseId,
+        status: run.status,
+        environment: run.environment,
+        createdAt: run.createdAt,
+        linearIssueIdentifier: run.linearIssueIdentifier,
+        linearProjectId: run.linearProjectId,
+        linearProjectName: run.linearProjectName,
+        linearMilestoneId: run.linearMilestoneId,
+        linearMilestoneName: run.linearMilestoneName,
+        stats,
+        total,
+        collaborators,
+      };
     })
   );
 
@@ -142,38 +213,11 @@ export default async function Dashboard() {
           ) : (
             <div className="divide-y divide-border rounded-lg border border-border overflow-hidden">
               {stats.recentRuns.map((run) => (
-                <Link
+                <TestRunRow
                   key={run.id}
-                  href={`/runs/${run.id}`}
-                  className="flex items-center justify-between p-4 hover:bg-muted/50 transition-colors"
-                >
-                  <div>
-                    <div className="font-medium text-foreground">{run.name}</div>
-                    <div className="text-sm text-muted-foreground">
-                      {run.createdAt?.toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      })}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {run.stats.passed && (
-                      <Badge variant="success">{run.stats.passed} passed</Badge>
-                    )}
-                    {run.stats.failed && (
-                      <Badge variant="destructive">{run.stats.failed} failed</Badge>
-                    )}
-                    {run.stats.pending && (
-                      <Badge variant="secondary">{run.stats.pending} pending</Badge>
-                    )}
-                    <Badge
-                      variant={run.status === "completed" ? "default" : "warning"}
-                    >
-                      {run.status}
-                    </Badge>
-                  </div>
-                </Link>
+                  run={run}
+                  linearWorkspace={session.user.organizationUrlKey}
+                />
               ))}
             </div>
           )}
