@@ -39,6 +39,36 @@ function formatTimeAgo(date: Date): string {
   return `${diffDays} day${diffDays !== 1 ? "s" : ""} ago`;
 }
 
+// Helper to parse changes JSON
+function parseChanges(changesJson: string): Array<{ field: string; oldValue: unknown; newValue: unknown }> {
+  try {
+    return JSON.parse(changesJson) || [];
+  } catch {
+    return [];
+  }
+}
+
+// Helper to format field names for display
+function formatFieldName(field: string): string {
+  const fieldMap: Record<string, string> = {
+    title: "Title",
+    state: "State",
+    folderId: "Folder",
+    "scenario.title": "Scenario Title",
+    "scenario.gherkin": "Scenario Steps",
+    "scenario.added": "Scenario Added",
+    "scenario.removed": "Scenario Removed",
+  };
+  return fieldMap[field] || field;
+}
+
+// Helper to format values for diff display
+function formatValue(value: unknown): string {
+  if (value === null || value === undefined) return "(empty)";
+  if (typeof value === "string") return value;
+  return JSON.stringify(value);
+}
+
 // Helper to format audit log actions
 function formatAuditAction(action: string, changesJson: string): string {
   try {
@@ -1591,11 +1621,21 @@ function TestCasePanel({
     id: number;
     action: string;
     changes: string;
+    previousValues: string | null;
+    newValues: string | null;
     createdAt: Date;
     userName: string | null;
     userAvatar: string | null;
   }>>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [expandedEntryId, setExpandedEntryId] = useState<number | null>(null);
+
+  const refreshAuditLog = async () => {
+    if (testCase) {
+      const logs = await getTestCaseAuditLog(testCase.id);
+      setAuditLog(logs);
+    }
+  };
 
   // Fetch scenarios when panel opens
   useEffect(() => {
@@ -1659,6 +1699,7 @@ function TestCasePanel({
 
         setIsEditing(false);
         onSaved();
+        refreshAuditLog();
       } catch {
         setError("Failed to save test case");
       }
@@ -1862,36 +1903,77 @@ function TestCasePanel({
                     <ChevronDownIcon className={cn("w-3 h-3 transition-transform", showHistory && "rotate-180")} />
                   </button>
                   {showHistory && (
-                    <div className="mt-3 space-y-3 max-h-64 overflow-y-auto">
-                      {auditLog.slice().reverse().map((entry) => (
-                        <div key={entry.id} className="flex gap-3 text-sm">
-                          {entry.userAvatar ? (
-                            <img
-                              src={entry.userAvatar}
-                              alt=""
-                              className="w-6 h-6 rounded-full flex-shrink-0"
-                            />
-                          ) : (
-                            <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
-                              <span className="text-xs text-muted-foreground">
-                                {entry.userName?.charAt(0) || "?"}
-                              </span>
-                            </div>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <div className="text-foreground">
-                              <span className="font-medium">{entry.userName || "Unknown"}</span>
-                              {" "}
-                              <span className="text-muted-foreground">
-                                {formatAuditAction(entry.action, entry.changes)}
-                              </span>
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {formatTimeAgo(entry.createdAt)}
-                            </div>
+                    <div className="mt-3 space-y-2 max-h-80 overflow-y-auto">
+                      {auditLog.slice().reverse().map((entry) => {
+                        const isExpanded = expandedEntryId === entry.id;
+                        const changes = parseChanges(entry.changes);
+                        const hasDiff = changes.length > 0 || entry.previousValues || entry.newValues;
+
+                        return (
+                          <div key={entry.id} className="border border-border rounded-lg overflow-hidden">
+                            <button
+                              onClick={() => hasDiff && setExpandedEntryId(isExpanded ? null : entry.id)}
+                              className={cn(
+                                "w-full flex gap-3 p-3 text-sm text-left",
+                                hasDiff && "hover:bg-muted/50 cursor-pointer",
+                                !hasDiff && "cursor-default"
+                              )}
+                            >
+                              {entry.userAvatar ? (
+                                <img
+                                  src={entry.userAvatar}
+                                  alt=""
+                                  className="w-6 h-6 rounded-full flex-shrink-0"
+                                />
+                              ) : (
+                                <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
+                                  <span className="text-xs text-muted-foreground">
+                                    {entry.userName?.charAt(0) || "?"}
+                                  </span>
+                                </div>
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <div className="text-foreground">
+                                  <span className="font-medium">{entry.userName || "Unknown"}</span>
+                                  {" "}
+                                  <span className="text-muted-foreground">
+                                    {formatAuditAction(entry.action, entry.changes)}
+                                  </span>
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  {formatTimeAgo(entry.createdAt)}
+                                </div>
+                              </div>
+                              {hasDiff && (
+                                <ChevronDownIcon className={cn("w-4 h-4 text-muted-foreground transition-transform flex-shrink-0", isExpanded && "rotate-180")} />
+                              )}
+                            </button>
+                            {isExpanded && hasDiff && (
+                              <div className="px-3 pb-3 pt-0 border-t border-border bg-muted/30">
+                                <div className="mt-2 space-y-2 text-xs font-mono">
+                                  {changes.map((change, i) => (
+                                    <div key={i} className="space-y-1">
+                                      <div className="text-muted-foreground font-sans font-medium">
+                                        {formatFieldName(change.field)}
+                                      </div>
+                                      {change.oldValue !== null && change.oldValue !== undefined && (
+                                        <div className="bg-red-500/10 text-red-700 dark:text-red-400 px-2 py-1 rounded whitespace-pre-wrap break-all">
+                                          - {formatValue(change.oldValue)}
+                                        </div>
+                                      )}
+                                      {change.newValue !== null && change.newValue !== undefined && (
+                                        <div className="bg-green-500/10 text-green-700 dark:text-green-400 px-2 py-1 rounded whitespace-pre-wrap break-all">
+                                          + {formatValue(change.newValue)}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
