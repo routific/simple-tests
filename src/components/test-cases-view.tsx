@@ -757,6 +757,20 @@ function TestCaseListContent({
   const [draggedId, setDraggedId] = useState<number | null>(null);
   const [dropIndicator, setDropIndicator] = useState<{ id: number; position: "before" | "after" } | null>(null);
   const [showStateModal, setShowStateModal] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // CMD+K to focus search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const handleBulkDelete = () => {
     if (!confirm(`Delete ${selectedCases.size} test case(s)? You can undo this action.`)) {
@@ -947,8 +961,9 @@ function TestCaseListContent({
         <div className="flex-1 relative">
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
+            ref={searchInputRef}
             type="text"
-            placeholder="Search test cases..."
+            placeholder="Search test cases... (⌘K)"
             defaultValue={search}
             onChange={(e) => {
               const value = e.target.value;
