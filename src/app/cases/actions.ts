@@ -257,6 +257,38 @@ export async function deleteTestCase(id: number) {
   }
 }
 
+export async function getAllAuditLogs(limit = 100) {
+  const session = await getSessionWithOrg();
+  if (!session) {
+    return [];
+  }
+
+  const { organizationId } = session.user;
+
+  const logs = await db
+    .select({
+      id: testCaseAuditLog.id,
+      testCaseId: testCaseAuditLog.testCaseId,
+      testCaseTitle: testCases.title,
+      userId: testCaseAuditLog.userId,
+      action: testCaseAuditLog.action,
+      changes: testCaseAuditLog.changes,
+      previousValues: testCaseAuditLog.previousValues,
+      newValues: testCaseAuditLog.newValues,
+      createdAt: testCaseAuditLog.createdAt,
+      userName: users.name,
+      userAvatar: users.avatar,
+    })
+    .from(testCaseAuditLog)
+    .innerJoin(testCases, eq(testCaseAuditLog.testCaseId, testCases.id))
+    .leftJoin(users, eq(testCaseAuditLog.userId, users.id))
+    .where(eq(testCases.organizationId, organizationId))
+    .orderBy(testCaseAuditLog.createdAt)
+    .limit(limit);
+
+  return logs.reverse(); // Return newest first
+}
+
 export async function getTestCaseAuditLog(testCaseId: number) {
   const session = await getSessionWithOrg();
   if (!session) {
