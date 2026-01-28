@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { testCases, scenarios, testCaseAuditLog } from "@/lib/db/schema";
+import { testCases, scenarios, testCaseAuditLog, users } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getSessionWithOrg } from "@/lib/auth";
@@ -282,8 +282,20 @@ export async function getTestCaseAuditLog(testCaseId: number) {
   }
 
   const logs = await db
-    .select()
+    .select({
+      id: testCaseAuditLog.id,
+      testCaseId: testCaseAuditLog.testCaseId,
+      userId: testCaseAuditLog.userId,
+      action: testCaseAuditLog.action,
+      changes: testCaseAuditLog.changes,
+      previousValues: testCaseAuditLog.previousValues,
+      newValues: testCaseAuditLog.newValues,
+      createdAt: testCaseAuditLog.createdAt,
+      userName: users.name,
+      userAvatar: users.avatar,
+    })
     .from(testCaseAuditLog)
+    .leftJoin(users, eq(testCaseAuditLog.userId, users.id))
     .where(eq(testCaseAuditLog.testCaseId, testCaseId))
     .orderBy(testCaseAuditLog.createdAt);
 

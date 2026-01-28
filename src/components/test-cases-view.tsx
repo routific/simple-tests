@@ -15,6 +15,7 @@ import {
   bulkUpdateTestCaseState,
   bulkMoveTestCasesToFolder,
   reorderTestCases,
+  getTestCaseAuditLog,
 } from "@/app/cases/actions";
 import { exportTestCases, importTestCases, ExportData } from "@/app/cases/export-actions";
 import { getScenarios } from "@/app/cases/scenario-actions";
@@ -36,6 +37,54 @@ function formatTimeAgo(date: Date): string {
   if (diffMinutes < 60) return `${diffMinutes} minute${diffMinutes !== 1 ? "s" : ""} ago`;
   if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? "s" : ""} ago`;
   return `${diffDays} day${diffDays !== 1 ? "s" : ""} ago`;
+}
+
+// Helper to format audit log actions
+function formatAuditAction(action: string, changesJson: string): string {
+  try {
+    const changes = JSON.parse(changesJson) as Array<{ field: string; oldValue: unknown; newValue: unknown }>;
+
+    if (action === "created") {
+      return "created this test case";
+    }
+
+    if (action === "deleted") {
+      return "deleted this test case";
+    }
+
+    if (changes.length === 0) {
+      return "made changes";
+    }
+
+    const descriptions = changes.map((change) => {
+      if (change.field === "scenario.added") {
+        return `added scenario "${change.newValue}"`;
+      }
+      if (change.field === "scenario.removed") {
+        return `removed scenario "${change.oldValue}"`;
+      }
+      if (change.field === "scenario.title") {
+        return `renamed scenario to "${change.newValue}"`;
+      }
+      if (change.field === "scenario.gherkin") {
+        return "updated scenario steps";
+      }
+      if (change.field === "title") {
+        return `renamed to "${change.newValue}"`;
+      }
+      if (change.field === "state") {
+        return `changed state to ${change.newValue}`;
+      }
+      if (change.field === "folderId") {
+        return change.newValue ? "moved to a folder" : "removed from folder";
+      }
+      return `updated ${change.field}`;
+    });
+
+    return descriptions.join(", ");
+  } catch {
+    return "made changes";
+  }
 }
 
 interface Scenario {
@@ -1538,6 +1587,15 @@ function TestCasePanel({
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [loadingScenarios, setLoadingScenarios] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [auditLog, setAuditLog] = useState<Array<{
+    id: number;
+    action: string;
+    changes: string;
+    createdAt: Date;
+    userName: string | null;
+    userAvatar: string | null;
+  }>>([]);
+  const [showHistory, setShowHistory] = useState(false);
 
   // Fetch scenarios when panel opens
   useEffect(() => {
@@ -1548,6 +1606,9 @@ function TestCasePanel({
           setScenarios(data);
         })
         .finally(() => setLoadingScenarios(false));
+
+      // Fetch audit log
+      getTestCaseAuditLog(testCase.id).then(setAuditLog);
     }
   }, [testCase?.id, isOpen]);
 
@@ -1788,6 +1849,53 @@ function TestCasePanel({
                   />
                 )}
               </div>
+
+              {/* History */}
+              {auditLog.length > 0 && (
+                <div>
+                  <button
+                    onClick={() => setShowHistory(!showHistory)}
+                    className="flex items-center gap-2 text-sm font-medium text-foreground hover:text-brand-600 transition-colors"
+                  >
+                    <HistoryIcon className="w-4 h-4" />
+                    History ({auditLog.length})
+                    <ChevronDownIcon className={cn("w-3 h-3 transition-transform", showHistory && "rotate-180")} />
+                  </button>
+                  {showHistory && (
+                    <div className="mt-3 space-y-3 max-h-64 overflow-y-auto">
+                      {auditLog.slice().reverse().map((entry) => (
+                        <div key={entry.id} className="flex gap-3 text-sm">
+                          {entry.userAvatar ? (
+                            <img
+                              src={entry.userAvatar}
+                              alt=""
+                              className="w-6 h-6 rounded-full flex-shrink-0"
+                            />
+                          ) : (
+                            <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
+                              <span className="text-xs text-muted-foreground">
+                                {entry.userName?.charAt(0) || "?"}
+                              </span>
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="text-foreground">
+                              <span className="font-medium">{entry.userName || "Unknown"}</span>
+                              {" "}
+                              <span className="text-muted-foreground">
+                                {formatAuditAction(entry.action, entry.changes)}
+                              </span>
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {formatTimeAgo(entry.createdAt)}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Actions */}
               <div className="flex justify-end pt-4 border-t border-border">
@@ -2145,6 +2253,24 @@ function PlayIcon({ className }: { className?: string }) {
         strokeLinecap="round"
         strokeLinejoin="round"
         d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z"
+      />
+    </svg>
+  );
+}
+
+function HistoryIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={1.5}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"
       />
     </svg>
   );

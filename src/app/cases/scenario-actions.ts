@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { scenarios, testCases } from "@/lib/db/schema";
+import { scenarios, testCases, testCaseAuditLog } from "@/lib/db/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getSessionWithOrg } from "@/lib/auth";
@@ -59,6 +59,27 @@ export async function saveScenario(input: SaveScenarioInput) {
             order: existing.order,
           },
         });
+
+        // Compute changes for audit log
+        const changes: { field: string; oldValue: unknown; newValue: unknown }[] = [];
+        if (existing.title !== input.title) {
+          changes.push({ field: "scenario.title", oldValue: existing.title, newValue: input.title });
+        }
+        if (existing.gherkin !== input.gherkin) {
+          changes.push({ field: "scenario.gherkin", oldValue: existing.gherkin, newValue: input.gherkin });
+        }
+
+        // Log to test case audit log if there were changes
+        if (changes.length > 0) {
+          await db.insert(testCaseAuditLog).values({
+            testCaseId: input.testCaseId,
+            userId: session.user.id,
+            action: "updated",
+            changes: JSON.stringify(changes),
+            previousValues: JSON.stringify({ scenarioId: input.id, title: existing.title, gherkin: existing.gherkin }),
+            newValues: JSON.stringify({ scenarioId: input.id, title: input.title, gherkin: input.gherkin }),
+          });
+        }
       }
 
       // Update existing scenario
@@ -99,6 +120,16 @@ export async function saveScenario(input: SaveScenarioInput) {
       await recordUndo("create_scenario", `Create scenario "${input.title}"`, {
         scenarioId: result[0].id,
         testCaseId: input.testCaseId,
+      });
+
+      // Log to test case audit log
+      await db.insert(testCaseAuditLog).values({
+        testCaseId: input.testCaseId,
+        userId: session.user.id,
+        action: "updated",
+        changes: JSON.stringify([{ field: "scenario.added", oldValue: null, newValue: input.title }]),
+        previousValues: null,
+        newValues: JSON.stringify({ scenarioId: result[0].id, title: input.title, gherkin: input.gherkin }),
       });
 
       revalidatePath("/cases");
@@ -154,6 +185,16 @@ export async function deleteScenario(id: number) {
           createdAt: scenarioData.createdAt.getTime(),
           updatedAt: scenarioData.updatedAt.getTime(),
         },
+      });
+
+      // Log to test case audit log
+      await db.insert(testCaseAuditLog).values({
+        testCaseId: scenario.testCaseId,
+        userId: session.user.id,
+        action: "updated",
+        changes: JSON.stringify([{ field: "scenario.removed", oldValue: scenarioData.title, newValue: null }]),
+        previousValues: JSON.stringify({ scenarioId: id, title: scenarioData.title, gherkin: scenarioData.gherkin }),
+        newValues: null,
       });
     }
 
