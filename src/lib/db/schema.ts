@@ -186,6 +186,10 @@ export const testRunResults = sqliteTable(
     notes: text("notes"),
     executedAt: integer("executed_at", { mode: "timestamp" }),
     executedBy: text("executed_by").references(() => users.id),
+    // Snapshot fields - captured when scenario is marked complete
+    scenarioTitleSnapshot: text("scenario_title_snapshot"),
+    scenarioGherkinSnapshot: text("scenario_gherkin_snapshot"),
+    testCaseTitleSnapshot: text("test_case_title_snapshot"),
   },
   (table) => [index("test_run_results_run_idx").on(table.testRunId)]
 );

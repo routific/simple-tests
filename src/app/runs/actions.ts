@@ -107,14 +107,60 @@ export async function updateTestResult(input: UpdateResultInput) {
   const userId = session.user.id;
 
   try {
+    // Get the current result to check if we need to capture a snapshot
+    const currentResult = await db
+      .select({
+        status: testRunResults.status,
+        scenarioId: testRunResults.scenarioId,
+        scenarioTitleSnapshot: testRunResults.scenarioTitleSnapshot,
+      })
+      .from(testRunResults)
+      .where(eq(testRunResults.id, input.resultId))
+      .get();
+
+    if (!currentResult) {
+      return { error: "Result not found" };
+    }
+
+    // Prepare update data
+    const updateData: {
+      status: typeof input.status;
+      notes: string | null;
+      executedAt: Date;
+      executedBy: string;
+      scenarioTitleSnapshot?: string;
+      scenarioGherkinSnapshot?: string;
+      testCaseTitleSnapshot?: string;
+    } = {
+      status: input.status,
+      notes: input.notes || null,
+      executedAt: new Date(),
+      executedBy: userId,
+    };
+
+    // Capture snapshot if moving to a non-pending status and no snapshot exists yet
+    if (input.status !== "pending" && !currentResult.scenarioTitleSnapshot) {
+      const scenarioData = await db
+        .select({
+          title: scenarios.title,
+          gherkin: scenarios.gherkin,
+          testCaseTitle: testCases.title,
+        })
+        .from(scenarios)
+        .innerJoin(testCases, eq(scenarios.testCaseId, testCases.id))
+        .where(eq(scenarios.id, currentResult.scenarioId))
+        .get();
+
+      if (scenarioData) {
+        updateData.scenarioTitleSnapshot = scenarioData.title;
+        updateData.scenarioGherkinSnapshot = scenarioData.gherkin;
+        updateData.testCaseTitleSnapshot = scenarioData.testCaseTitle;
+      }
+    }
+
     await db
       .update(testRunResults)
-      .set({
-        status: input.status,
-        notes: input.notes || null,
-        executedAt: new Date(),
-        executedBy: userId,
-      })
+      .set(updateData)
       .where(eq(testRunResults.id, input.resultId));
 
     revalidatePath("/runs");

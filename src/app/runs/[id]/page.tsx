@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
-import { testRuns, testRunResults, testCases, folders, scenarios, releases } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { testRuns, testRunResults, testCases, folders, scenarios, releases, users } from "@/lib/db/schema";
+import { eq, inArray } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
 import { RunExecutor } from "@/components/run-executor";
 import { getSessionWithOrg } from "@/lib/auth";
@@ -33,12 +33,17 @@ export default async function RunDetailPage({ params }: Props) {
       status: testRunResults.status,
       notes: testRunResults.notes,
       executedAt: testRunResults.executedAt,
+      executedBy: testRunResults.executedBy,
       scenarioId: testRunResults.scenarioId,
       scenarioTitle: scenarios.title,
       scenarioGherkin: scenarios.gherkin,
       testCaseId: scenarios.testCaseId,
       testCaseTitle: testCases.title,
       folderName: folders.name,
+      // Snapshot fields
+      scenarioTitleSnapshot: testRunResults.scenarioTitleSnapshot,
+      scenarioGherkinSnapshot: testRunResults.scenarioGherkinSnapshot,
+      testCaseTitleSnapshot: testRunResults.testCaseTitleSnapshot,
     })
     .from(testRunResults)
     .innerJoin(scenarios, eq(testRunResults.scenarioId, scenarios.id))
@@ -46,6 +51,25 @@ export default async function RunDetailPage({ params }: Props) {
     .leftJoin(folders, eq(testCases.folderId, folders.id))
     .where(eq(testRunResults.testRunId, runId))
     .orderBy(folders.name, testCases.title, scenarios.order);
+
+  // Collect all user IDs (creator + executors)
+  const userIds = new Set<string>();
+  if (run.createdBy) userIds.add(run.createdBy);
+  results.forEach(r => {
+    if (r.executedBy) userIds.add(r.executedBy);
+  });
+
+  // Fetch user info for collaborators
+  const collaborators = userIds.size > 0
+    ? await db
+        .select({
+          id: users.id,
+          name: users.name,
+          avatar: users.avatar,
+        })
+        .from(users)
+        .where(inArray(users.id, Array.from(userIds)))
+    : [];
 
   // Fetch releases for editing
   const allReleases = await db
@@ -81,6 +105,7 @@ export default async function RunDetailPage({ params }: Props) {
         releases={allReleases as { id: number; name: string; status: "active" | "completed" }[]}
         availableScenarios={availableScenarios}
         linearWorkspace={session.user.organizationUrlKey}
+        collaborators={collaborators}
       />
     </div>
   );

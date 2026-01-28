@@ -35,12 +35,23 @@ interface Result {
   status: string;
   notes: string | null;
   executedAt: Date | null;
+  executedBy: string | null;
   scenarioId: number;
   scenarioTitle: string;
   scenarioGherkin: string;
   testCaseId: number;
   testCaseTitle: string;
   folderName: string | null;
+  // Snapshot fields - captured when test was completed
+  scenarioTitleSnapshot: string | null;
+  scenarioGherkinSnapshot: string | null;
+  testCaseTitleSnapshot: string | null;
+}
+
+interface Collaborator {
+  id: string;
+  name: string;
+  avatar: string | null;
 }
 
 interface Release {
@@ -63,9 +74,10 @@ interface Props {
   releases: Release[];
   availableScenarios: AvailableScenario[];
   linearWorkspace?: string;
+  collaborators: Collaborator[];
 }
 
-export function RunExecutor({ run, results, releases: initialReleases, availableScenarios, linearWorkspace }: Props) {
+export function RunExecutor({ run, results, releases: initialReleases, availableScenarios, linearWorkspace, collaborators }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [selectedResult, setSelectedResult] = useState<Result | null>(
@@ -730,6 +742,42 @@ export function RunExecutor({ run, results, releases: initialReleases, available
                 >
                   {run.status}
                 </span>
+                {/* Collaborator avatars */}
+                {collaborators.length > 0 && (
+                  <>
+                    <span className="text-border">·</span>
+                    <div className="flex items-center -space-x-2" title={collaborators.map(c => c.name).join(", ")}>
+                      {collaborators.slice(0, 5).map((collaborator) => (
+                        collaborator.avatar ? (
+                          <img
+                            key={collaborator.id}
+                            src={collaborator.avatar}
+                            alt={collaborator.name}
+                            title={collaborator.name}
+                            className="w-6 h-6 rounded-full ring-2 ring-background"
+                          />
+                        ) : (
+                          <div
+                            key={collaborator.id}
+                            title={collaborator.name}
+                            className="w-6 h-6 rounded-full bg-brand-500/10 flex items-center justify-center ring-2 ring-background"
+                          >
+                            <span className="text-[10px] font-medium text-brand-600">
+                              {collaborator.name?.[0]?.toUpperCase() || "?"}
+                            </span>
+                          </div>
+                        )
+                      ))}
+                      {collaborators.length > 5 && (
+                        <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center ring-2 ring-background">
+                          <span className="text-[10px] font-medium text-muted-foreground">
+                            +{collaborators.length - 5}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -879,10 +927,10 @@ export function RunExecutor({ run, results, releases: initialReleases, available
               <div className="flex items-start justify-between mb-4">
                 <div>
                   <div className="text-sm text-[hsl(var(--muted-foreground))] mb-1">
-                    {selectedResult.testCaseTitle}
+                    {selectedResult.testCaseTitleSnapshot || selectedResult.testCaseTitle}
                   </div>
                   <div className="flex items-center gap-3">
-                    <h2 className="text-lg font-medium">{selectedResult.scenarioTitle}</h2>
+                    <h2 className="text-lg font-medium">{selectedResult.scenarioTitleSnapshot || selectedResult.scenarioTitle}</h2>
                     {selectedResult.status !== "pending" && (
                       <span
                         className={cn(
@@ -916,8 +964,54 @@ export function RunExecutor({ run, results, releases: initialReleases, available
 
               <div className="mb-6">
                 <h3 className="text-sm font-medium mb-2">Steps</h3>
-                <GherkinDisplay text={selectedResult.scenarioGherkin} />
+                <GherkinDisplay text={selectedResult.scenarioGherkinSnapshot || selectedResult.scenarioGherkin} />
               </div>
+
+              {/* Executor info for completed scenarios */}
+              {selectedResult.status !== "pending" && selectedResult.executedBy && (
+                <div className="mb-6 p-3 bg-muted/50 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    {(() => {
+                      const executor = collaborators.find(c => c.id === selectedResult.executedBy);
+                      return executor ? (
+                        <>
+                          {executor.avatar ? (
+                            <img src={executor.avatar} alt="" className="w-6 h-6 rounded-full" />
+                          ) : (
+                            <div className="w-6 h-6 rounded-full bg-brand-500/10 flex items-center justify-center">
+                              <span className="text-xs font-medium text-brand-600">
+                                {executor.name?.[0]?.toUpperCase() || "?"}
+                              </span>
+                            </div>
+                          )}
+                          <div className="text-sm">
+                            <span className="font-medium">{executor.name}</span>
+                            <span className="text-muted-foreground"> marked as </span>
+                            <span className={cn(
+                              "font-medium",
+                              selectedResult.status === "passed" ? "text-emerald-600 dark:text-emerald-400" :
+                              selectedResult.status === "failed" ? "text-rose-600 dark:text-rose-400" :
+                              selectedResult.status === "blocked" ? "text-orange-600 dark:text-orange-400" :
+                              "text-gray-600 dark:text-gray-400"
+                            )}>{selectedResult.status}</span>
+                            {selectedResult.executedAt && (
+                              <span className="text-muted-foreground">
+                                {" "}on {new Date(selectedResult.executedAt).toLocaleDateString("en-US", {
+                                  month: "short",
+                                  day: "numeric",
+                                  year: "numeric",
+                                  hour: "numeric",
+                                  minute: "2-digit",
+                                })}
+                              </span>
+                            )}
+                          </div>
+                        </>
+                      ) : null;
+                    })()}
+                  </div>
+                </div>
+              )}
 
               {run.status === "in_progress" && (
                 <div className="space-y-4">
