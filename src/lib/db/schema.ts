@@ -75,6 +75,25 @@ export const testCases = sqliteTable(
   (table) => [index("test_cases_org_idx").on(table.organizationId)]
 );
 
+// Junction table for test case to Linear issue links
+export const testCaseLinearIssues = sqliteTable(
+  "test_case_linear_issues",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    testCaseId: integer("test_case_id")
+      .notNull()
+      .references(() => testCases.id, { onDelete: "cascade" }),
+    linearIssueId: text("linear_issue_id").notNull(),
+    linearIssueIdentifier: text("linear_issue_identifier").notNull(),
+    linearIssueTitle: text("linear_issue_title").notNull(),
+    linkedAt: integer("linked_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    linkedBy: text("linked_by").references(() => users.id),
+  },
+  (table) => [index("tcli_test_case_idx").on(table.testCaseId)]
+);
+
 // Scenarios table - each test case has multiple scenarios
 export const scenarios = sqliteTable(
   "scenarios",
@@ -264,6 +283,7 @@ export type Organization = typeof organizations.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type Folder = typeof folders.$inferSelect;
 export type TestCase = typeof testCases.$inferSelect;
+export type TestCaseLinearIssue = typeof testCaseLinearIssues.$inferSelect;
 export type Scenario = typeof scenarios.$inferSelect;
 export type TestCaseAuditLog = typeof testCaseAuditLog.$inferSelect;
 export type Release = typeof releases.$inferSelect;

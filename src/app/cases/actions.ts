@@ -1,17 +1,24 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { testCases, scenarios, testCaseAuditLog, users } from "@/lib/db/schema";
+import { testCases, scenarios, testCaseAuditLog, testCaseLinearIssues, users } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getSessionWithOrg } from "@/lib/auth";
 import { recordUndo } from "./undo-actions";
+
+interface LinkedIssue {
+  id: string;
+  identifier: string;
+  title: string;
+}
 
 interface SaveTestCaseInput {
   id?: number;
   title: string;
   folderId: number | null;
   state: "active" | "draft" | "upcoming" | "retired" | "rejected";
+  linkedIssues?: LinkedIssue[];
 }
 
 // Helper to compute diff between two objects
@@ -121,6 +128,11 @@ export async function saveTestCase(input: SaveTestCaseInput) {
         });
       }
 
+      // Update linked issues if provided
+      if (input.linkedIssues !== undefined) {
+        await updateLinkedIssues(input.id, input.linkedIssues, userId);
+      }
+
       revalidatePath("/cases");
       revalidatePath(`/cases/${input.id}`);
 
@@ -160,6 +172,11 @@ export async function saveTestCase(input: SaveTestCaseInput) {
         testCaseId: newId,
       });
 
+      // Add linked issues if provided
+      if (input.linkedIssues && input.linkedIssues.length > 0) {
+        await updateLinkedIssues(newId, input.linkedIssues, userId);
+      }
+
       revalidatePath("/cases");
 
       return { success: true, id: newId };
@@ -168,6 +185,68 @@ export async function saveTestCase(input: SaveTestCaseInput) {
     console.error("Failed to save test case:", error);
     return { error: "Failed to save test case" };
   }
+}
+
+// Helper to update linked issues for a test case
+async function updateLinkedIssues(
+  testCaseId: number,
+  linkedIssues: LinkedIssue[],
+  userId: string
+) {
+  // Delete existing links
+  await db
+    .delete(testCaseLinearIssues)
+    .where(eq(testCaseLinearIssues.testCaseId, testCaseId));
+
+  // Insert new links
+  if (linkedIssues.length > 0) {
+    await db.insert(testCaseLinearIssues).values(
+      linkedIssues.map((issue) => ({
+        testCaseId,
+        linearIssueId: issue.id,
+        linearIssueIdentifier: issue.identifier,
+        linearIssueTitle: issue.title,
+        linkedBy: userId,
+      }))
+    );
+  }
+}
+
+// Get linked issues for a test case
+export async function getLinkedIssues(testCaseId: number) {
+  const session = await getSessionWithOrg();
+  if (!session) {
+    return [];
+  }
+
+  const { organizationId } = session.user;
+
+  // Verify test case belongs to organization
+  const testCase = await db
+    .select()
+    .from(testCases)
+    .where(
+      and(
+        eq(testCases.id, testCaseId),
+        eq(testCases.organizationId, organizationId)
+      )
+    )
+    .get();
+
+  if (!testCase) {
+    return [];
+  }
+
+  const links = await db
+    .select({
+      id: testCaseLinearIssues.linearIssueId,
+      identifier: testCaseLinearIssues.linearIssueIdentifier,
+      title: testCaseLinearIssues.linearIssueTitle,
+    })
+    .from(testCaseLinearIssues)
+    .where(eq(testCaseLinearIssues.testCaseId, testCaseId));
+
+  return links;
 }
 
 export async function deleteTestCase(id: number) {

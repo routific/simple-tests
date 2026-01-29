@@ -1,6 +1,8 @@
 import { db } from "@/lib/db";
 import { folders } from "@/lib/db/schema";
+import { redirect } from "next/navigation";
 import { TestCaseEditor } from "@/components/test-case-editor";
+import { getSessionWithOrg } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +11,11 @@ interface Props {
 }
 
 export default async function NewTestCasePage({ searchParams }: Props) {
+  const session = await getSessionWithOrg();
+  if (!session) {
+    redirect("/signin");
+  }
+
   const params = await searchParams;
   const folderId = params.folder ? parseInt(params.folder) : null;
 
@@ -25,6 +32,7 @@ export default async function NewTestCasePage({ searchParams }: Props) {
         folders={allFolders}
         currentFolder={currentFolder}
         defaultFolderId={folderId}
+        linearWorkspace={session.user.organizationUrlKey}
       />
     </div>
   );

@@ -17,6 +17,7 @@ import {
   bulkMoveTestCasesToFolder,
   reorderTestCases,
   getTestCaseAuditLog,
+  getLinkedIssues,
 } from "@/app/cases/actions";
 import { exportTestCases, importTestCases, ExportData } from "@/app/cases/export-actions";
 import { getScenarios } from "@/app/cases/scenario-actions";
@@ -24,6 +25,13 @@ import { getLastUndo, getLastRedo, getUndoStack, getRedoStack, executeUndo, exec
 import { cn } from "@/lib/utils";
 import { buildFolderBreadcrumb, formatBreadcrumb } from "@/lib/folders";
 import { FolderPicker } from "@/components/folder-picker";
+import { LinearIssuePicker, LinkedIssuesList } from "@/components/linear-issue-picker";
+
+interface LinkedIssue {
+  id: string;
+  identifier: string;
+  title: string;
+}
 
 // Helper to format time ago
 function formatTimeAgo(date: Date): string {
@@ -157,6 +165,8 @@ interface TestCasesViewProps {
   selectedFolderIds?: number[] | null;
   /** Initial case ID from URL for deep-linking */
   initialSelectedCaseId?: number | null;
+  /** Linear workspace URL key for deep links */
+  linearWorkspace?: string;
 }
 
 export function TestCasesView({
@@ -171,6 +181,7 @@ export function TestCasesView({
   currentOffset,
   selectedFolderIds,
   initialSelectedCaseId,
+  linearWorkspace,
 }: TestCasesViewProps) {
   const router = useRouter();
   const [isNewCaseModalOpen, setIsNewCaseModalOpen] = useState(false);
@@ -646,6 +657,7 @@ export function TestCasesView({
         currentFolderId={currentFolderId}
         currentFolderName={currentFolderName}
         onSaved={handleCaseSaved}
+        linearWorkspace={linearWorkspace}
       />
 
       {/* Test Case Detail Panel */}
@@ -656,6 +668,7 @@ export function TestCasesView({
         folders={folders}
         onSaved={handleCaseSaved}
         onDeleted={handleCaseDeleted}
+        linearWorkspace={linearWorkspace}
       />
     </>
   );
@@ -1456,6 +1469,7 @@ function NewCaseModal({
   currentFolderId,
   currentFolderName,
   onSaved,
+  linearWorkspace,
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -1463,11 +1477,13 @@ function NewCaseModal({
   currentFolderId: number | null;
   currentFolderName: string | null;
   onSaved: () => void;
+  linearWorkspace?: string;
 }) {
   const [isPending, startTransition] = useTransition();
   const [title, setTitle] = useState("");
   const [folderId, setFolderId] = useState<number | null>(currentFolderId);
   const [state, setState] = useState<string>("active");
+  const [linkedIssues, setLinkedIssues] = useState<LinkedIssue[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   // Sync folderId when modal opens or currentFolderId changes
@@ -1490,6 +1506,7 @@ function NewCaseModal({
           title: title.trim(),
           folderId: folderId,
           state: state as "active" | "draft" | "retired" | "rejected",
+          linkedIssues,
         });
 
         if (result.error) {
@@ -1498,6 +1515,7 @@ function NewCaseModal({
           // Reset form and close
           setTitle("");
           setState("active");
+          setLinkedIssues([]);
           setError(null);
           onClose();
           onSaved();
@@ -1513,6 +1531,7 @@ function NewCaseModal({
     setTitle("");
     setFolderId(currentFolderId);
     setState("active");
+    setLinkedIssues([]);
     setError(null);
     onClose();
   };
@@ -1578,6 +1597,19 @@ function NewCaseModal({
               </select>
             </div>
           </div>
+
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-2">
+              Linked Issues <span className="text-muted-foreground font-normal">(optional)</span>
+            </label>
+            <LinearIssuePicker
+              multiple
+              values={linkedIssues}
+              onMultiChange={setLinkedIssues}
+              placeholder="Search Linear issues..."
+              workspace={linearWorkspace}
+            />
+          </div>
         </div>
 
         <div className="mt-auto pt-4">
@@ -1607,6 +1639,7 @@ function TestCasePanel({
   folders,
   onSaved,
   onDeleted,
+  linearWorkspace,
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -1614,12 +1647,15 @@ function TestCasePanel({
   folders: Folder[];
   onSaved: () => void;
   onDeleted: () => void;
+  linearWorkspace?: string;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [title, setTitle] = useState("");
   const [folderId, setFolderId] = useState<number | null>(null);
   const [state, setState] = useState<string>("active");
+  const [linkedIssues, setLinkedIssues] = useState<LinkedIssue[]>([]);
+  const [loadingLinkedIssues, setLoadingLinkedIssues] = useState(false);
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [loadingScenarios, setLoadingScenarios] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1643,7 +1679,7 @@ function TestCasePanel({
     }
   };
 
-  // Fetch scenarios when panel opens
+  // Fetch scenarios and linked issues when panel opens
   useEffect(() => {
     if (testCase && isOpen) {
       setLoadingScenarios(true);
@@ -1652,6 +1688,14 @@ function TestCasePanel({
           setScenarios(data);
         })
         .finally(() => setLoadingScenarios(false));
+
+      // Fetch linked issues
+      setLoadingLinkedIssues(true);
+      getLinkedIssues(testCase.id)
+        .then((data) => {
+          setLinkedIssues(data);
+        })
+        .finally(() => setLoadingLinkedIssues(false));
 
       // Fetch audit log
       getTestCaseAuditLog(testCase.id).then(setAuditLog);
@@ -1664,6 +1708,7 @@ function TestCasePanel({
       setTitle(testCase.title);
       setFolderId(testCase.folderId ?? null);
       setState(testCase.state);
+      // Keep linkedIssues as-is since they were fetched
     }
     setIsEditing(false);
     setError(null);
@@ -1690,6 +1735,7 @@ function TestCasePanel({
           title: title.trim(),
           folderId: folderId,
           state: state as "active" | "draft" | "retired" | "rejected",
+          linkedIssues,
         });
 
         if (result.error) {
@@ -1811,6 +1857,23 @@ function TestCasePanel({
 
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">
+                  Linked Issues <span className="text-muted-foreground font-normal">(optional)</span>
+                </label>
+                {loadingLinkedIssues ? (
+                  <div className="text-sm text-muted-foreground">Loading linked issues...</div>
+                ) : (
+                  <LinearIssuePicker
+                    multiple
+                    values={linkedIssues}
+                    onMultiChange={setLinkedIssues}
+                    placeholder="Search Linear issues..."
+                    workspace={linearWorkspace}
+                  />
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
                   Scenarios
                 </label>
                 {loadingScenarios ? (
@@ -1883,6 +1946,20 @@ function TestCasePanel({
                   )}
                 </div>
               </div>
+
+              {/* Linked Issues */}
+              {(linkedIssues.length > 0 || loadingLinkedIssues) && (
+                <div>
+                  <h4 className="text-sm font-medium text-foreground mb-3">
+                    Linked Issues
+                  </h4>
+                  {loadingLinkedIssues ? (
+                    <div className="text-sm text-muted-foreground">Loading linked issues...</div>
+                  ) : (
+                    <LinkedIssuesList issues={linkedIssues} workspace={linearWorkspace} />
+                  )}
+                </div>
+              )}
 
               {/* Scenarios */}
               <div>

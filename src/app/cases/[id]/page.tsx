@@ -1,8 +1,9 @@
 import { db } from "@/lib/db";
 import { testCases, folders } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { TestCaseEditor } from "@/components/test-case-editor";
+import { getSessionWithOrg } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,11 @@ interface Props {
 }
 
 export default async function TestCaseDetailPage({ params }: Props) {
+  const session = await getSessionWithOrg();
+  if (!session) {
+    redirect("/signin");
+  }
+
   const { id } = await params;
   const caseId = parseInt(id);
 
@@ -36,6 +42,7 @@ export default async function TestCaseDetailPage({ params }: Props) {
         testCase={testCase}
         folders={allFolders}
         currentFolder={currentFolder}
+        linearWorkspace={session.user.organizationUrlKey}
       />
     </div>
   );

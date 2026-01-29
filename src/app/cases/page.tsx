@@ -164,6 +164,7 @@ export default async function CasesPage({ searchParams }: Props) {
           currentOffset={offset}
           selectedFolderIds={selectedFolderIds}
           initialSelectedCaseId={selectedCaseId}
+          linearWorkspace={session.user.organizationUrlKey}
         />
       </div>
     </div>

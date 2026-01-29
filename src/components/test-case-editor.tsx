@@ -8,12 +8,20 @@ import { ScenarioAccordion } from "./scenario-accordion";
 import {
   saveTestCase,
   deleteTestCase,
+  getLinkedIssues,
 } from "@/app/cases/actions";
 import { getScenarios, saveScenario } from "@/app/cases/scenario-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { FolderPicker } from "@/components/folder-picker";
+import { LinearIssuePicker } from "@/components/linear-issue-picker";
+
+interface LinkedIssue {
+  id: string;
+  identifier: string;
+  title: string;
+}
 
 interface Scenario {
   id: number;
@@ -27,6 +35,7 @@ interface Props {
   folders: Folder[];
   currentFolder?: Folder | null;
   defaultFolderId?: number | null;
+  linearWorkspace?: string;
 }
 
 export function TestCaseEditor({
@@ -34,6 +43,7 @@ export function TestCaseEditor({
   folders,
   currentFolder,
   defaultFolderId,
+  linearWorkspace,
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -42,19 +52,26 @@ export function TestCaseEditor({
     testCase?.folderId ?? defaultFolderId ?? null
   );
   const [state, setState] = useState(testCase?.state || "active");
+  const [linkedIssues, setLinkedIssues] = useState<LinkedIssue[]>([]);
+  const [loadingLinkedIssues, setLoadingLinkedIssues] = useState(false);
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [loadingScenarios, setLoadingScenarios] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const isNew = !testCase;
 
-  // Fetch scenarios when editing existing test case
+  // Fetch scenarios and linked issues when editing existing test case
   useEffect(() => {
     if (testCase?.id) {
       setLoadingScenarios(true);
       getScenarios(testCase.id)
         .then((data) => setScenarios(data))
         .finally(() => setLoadingScenarios(false));
+
+      setLoadingLinkedIssues(true);
+      getLinkedIssues(testCase.id)
+        .then((data) => setLinkedIssues(data))
+        .finally(() => setLoadingLinkedIssues(false));
     }
   }, [testCase?.id]);
 
@@ -72,6 +89,7 @@ export function TestCaseEditor({
           title: title.trim(),
           folderId: folderId,
           state: state as "active" | "draft" | "retired" | "rejected",
+          linkedIssues,
         });
 
         if (result.error) {
@@ -219,6 +237,24 @@ export function TestCaseEditor({
                 <option value="rejected">Rejected</option>
               </select>
             </div>
+          </div>
+
+          {/* Linked Issues */}
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-2">
+              Linked Issues <span className="text-muted-foreground font-normal">(optional)</span>
+            </label>
+            {loadingLinkedIssues ? (
+              <div className="text-sm text-muted-foreground">Loading linked issues...</div>
+            ) : (
+              <LinearIssuePicker
+                multiple
+                values={linkedIssues}
+                onMultiChange={setLinkedIssues}
+                placeholder="Search Linear issues..."
+                workspace={linearWorkspace}
+              />
+            )}
           </div>
 
           {/* Scenarios */}
