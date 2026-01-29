@@ -1208,8 +1208,22 @@ function GroupedTestCaseList({
   onDragLeave: (e: React.DragEvent) => void;
   onDrop: (e: React.DragEvent) => void;
 }) {
-  // Track collapsed folder groups
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<number | null>>(new Set());
+  // Check if we're showing cases from multiple folders (parent + children)
+  const showFolderGroups = selectedFolderIds && selectedFolderIds.length > 1;
+
+  // Get child folder IDs (all except the current folder)
+  const childFolderIds = useMemo(() => {
+    if (!selectedFolderIds) return [];
+    return selectedFolderIds.filter(id => id !== currentFolderId);
+  }, [selectedFolderIds, currentFolderId]);
+
+  // Track collapsed folder groups - child folders start collapsed by default
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<number | null>>(() => new Set());
+
+  // Reset collapsed state when folder selection changes (collapse all by default)
+  useEffect(() => {
+    setCollapsedGroups(new Set(childFolderIds));
+  }, [childFolderIds.join(',')]);
 
   const toggleGroupCollapse = (folderId: number | null) => {
     setCollapsedGroups(prev => {
@@ -1223,8 +1237,11 @@ function GroupedTestCaseList({
     });
   };
 
-  // Check if we're showing cases from multiple folders (parent + children)
-  const showFolderGroups = selectedFolderIds && selectedFolderIds.length > 1;
+  const expandAllGroups = () => setCollapsedGroups(new Set());
+  const collapseAllGroups = () => setCollapsedGroups(new Set(childFolderIds));
+
+  // Check if all groups are expanded or collapsed
+  const allExpanded = childFolderIds.length > 0 && collapsedGroups.size === 0;
 
   // Group cases by folder
   const groupedCases = useMemo(() => {
@@ -1287,6 +1304,27 @@ function GroupedTestCaseList({
 
   return (
     <div>
+      {/* Expand/Collapse All button */}
+      {showFolderGroups && childFolderIds.length > 0 && (
+        <div className="flex items-center justify-end px-4 py-2 border-b border-border bg-muted/30">
+          <button
+            onClick={allExpanded ? collapseAllGroups : expandAllGroups}
+            className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {allExpanded ? (
+              <>
+                <CollapseAllIcon className="w-3.5 h-3.5" />
+                Collapse All
+              </>
+            ) : (
+              <>
+                <ExpandAllIcon className="w-3.5 h-3.5" />
+                Expand All
+              </>
+            )}
+          </button>
+        </div>
+      )}
       {groupedCases.map((group, groupIndex) => {
         const isCollapsed = collapsedGroups.has(group.folderId);
 
@@ -1457,6 +1495,24 @@ function ChevronIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+    </svg>
+  );
+}
+
+// Expand all icon
+function ExpandAllIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+    </svg>
+  );
+}
+
+// Collapse all icon
+function CollapseAllIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
     </svg>
   );
 }
