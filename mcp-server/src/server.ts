@@ -57,7 +57,8 @@ export function createMcpServer(auth: AuthContext) {
 
       // Test case tools
       if (name.startsWith("create_test_case") || name.startsWith("update_test_case") ||
-          name.startsWith("delete_test_case")) {
+          name.startsWith("delete_test_case") || name.startsWith("link_linear_issue") ||
+          name.startsWith("unlink_linear_issue") || name.startsWith("get_linked_issues")) {
         return await handleTestCaseTool(name, args || {}, auth);
       }
 

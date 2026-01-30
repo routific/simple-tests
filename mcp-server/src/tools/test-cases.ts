@@ -1,5 +1,5 @@
 import { eq, and } from "drizzle-orm";
-import { db, testCases, testCaseAuditLog, folders, scenarios } from "../shared/index.js";
+import { db, testCases, testCaseAuditLog, testCaseLinearIssues, folders, scenarios } from "../shared/index.js";
 import { AuthContext, hasPermission } from "../auth/index.js";
 import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
@@ -89,6 +89,64 @@ export function registerTestCaseTools(auth: AuthContext): Tool[] {
           },
           required: ["id"],
         },
+      },
+      {
+        name: "link_linear_issue",
+        description: "Link a Linear issue to a test case. Requires the Linear issue ID, identifier (e.g., ENG-123), and title.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            testCaseId: {
+              type: "number",
+              description: "ID of the test case to link the issue to",
+            },
+            linearIssueId: {
+              type: "string",
+              description: "The Linear issue UUID",
+            },
+            linearIssueIdentifier: {
+              type: "string",
+              description: "The Linear issue identifier (e.g., ENG-123)",
+            },
+            linearIssueTitle: {
+              type: "string",
+              description: "The Linear issue title",
+            },
+          },
+          required: ["testCaseId", "linearIssueId", "linearIssueIdentifier", "linearIssueTitle"],
+        },
+      },
+      {
+        name: "unlink_linear_issue",
+        description: "Unlink a Linear issue from a test case",
+        inputSchema: {
+          type: "object",
+          properties: {
+            testCaseId: {
+              type: "number",
+              description: "ID of the test case",
+            },
+            linearIssueId: {
+              type: "string",
+              description: "The Linear issue UUID to unlink",
+            },
+          },
+          required: ["testCaseId", "linearIssueId"],
+        },
+      },
+      {
+        name: "get_linked_issues",
+        description: "Get all Linear issues linked to a test case",
+        inputSchema: {
+          type: "object",
+          properties: {
+            testCaseId: {
+              type: "number",
+              description: "ID of the test case",
+            },
+          },
+          required: ["testCaseId"],
+        },
       }
     );
   }
@@ -115,6 +173,12 @@ export async function handleTestCaseTool(
       return updateTestCase(args, auth);
     case "delete_test_case":
       return deleteTestCase(args, auth);
+    case "link_linear_issue":
+      return linkLinearIssue(args, auth);
+    case "unlink_linear_issue":
+      return unlinkLinearIssue(args, auth);
+    case "get_linked_issues":
+      return getLinkedIssues(args, auth);
     default:
       return {
         content: [{ type: "text", text: `Unknown test case tool: ${name}` }],
@@ -439,6 +503,220 @@ async function deleteTestCase(
       {
         type: "text",
         text: JSON.stringify({ success: true, deletedId: id }, null, 2),
+      },
+    ],
+  };
+}
+
+async function linkLinearIssue(
+  args: Record<string, unknown>,
+  auth: AuthContext
+): Promise<CallToolResult> {
+  const { testCaseId, linearIssueId, linearIssueIdentifier, linearIssueTitle } = args as {
+    testCaseId: number;
+    linearIssueId: string;
+    linearIssueIdentifier: string;
+    linearIssueTitle: string;
+  };
+
+  if (!testCaseId || !linearIssueId || !linearIssueIdentifier || !linearIssueTitle) {
+    return {
+      content: [{ type: "text", text: "Error: testCaseId, linearIssueId, linearIssueIdentifier, and linearIssueTitle are required" }],
+      isError: true,
+    };
+  }
+
+  // Verify test case exists and belongs to org
+  const existing = await db
+    .select()
+    .from(testCases)
+    .where(
+      and(
+        eq(testCases.id, testCaseId),
+        eq(testCases.organizationId, auth.organizationId)
+      )
+    )
+    .limit(1);
+
+  if (existing.length === 0) {
+    return {
+      content: [{ type: "text", text: `Error: Test case not found: ${testCaseId}` }],
+      isError: true,
+    };
+  }
+
+  // Check if the link already exists
+  const existingLink = await db
+    .select()
+    .from(testCaseLinearIssues)
+    .where(
+      and(
+        eq(testCaseLinearIssues.testCaseId, testCaseId),
+        eq(testCaseLinearIssues.linearIssueId, linearIssueId)
+      )
+    )
+    .limit(1);
+
+  if (existingLink.length > 0) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            success: true,
+            message: "Link already exists",
+            link: existingLink[0],
+          }, null, 2),
+        },
+      ],
+    };
+  }
+
+  // Create the link
+  const result = await db
+    .insert(testCaseLinearIssues)
+    .values({
+      testCaseId,
+      linearIssueId,
+      linearIssueIdentifier,
+      linearIssueTitle,
+      linkedBy: auth.userId,
+    })
+    .returning();
+
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify({ success: true, link: result[0] }, null, 2),
+      },
+    ],
+  };
+}
+
+async function unlinkLinearIssue(
+  args: Record<string, unknown>,
+  auth: AuthContext
+): Promise<CallToolResult> {
+  const { testCaseId, linearIssueId } = args as {
+    testCaseId: number;
+    linearIssueId: string;
+  };
+
+  if (!testCaseId || !linearIssueId) {
+    return {
+      content: [{ type: "text", text: "Error: testCaseId and linearIssueId are required" }],
+      isError: true,
+    };
+  }
+
+  // Verify test case exists and belongs to org
+  const existing = await db
+    .select()
+    .from(testCases)
+    .where(
+      and(
+        eq(testCases.id, testCaseId),
+        eq(testCases.organizationId, auth.organizationId)
+      )
+    )
+    .limit(1);
+
+  if (existing.length === 0) {
+    return {
+      content: [{ type: "text", text: `Error: Test case not found: ${testCaseId}` }],
+      isError: true,
+    };
+  }
+
+  // Delete the link
+  const deleted = await db
+    .delete(testCaseLinearIssues)
+    .where(
+      and(
+        eq(testCaseLinearIssues.testCaseId, testCaseId),
+        eq(testCaseLinearIssues.linearIssueId, linearIssueId)
+      )
+    )
+    .returning();
+
+  if (deleted.length === 0) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            success: true,
+            message: "Link not found (may have already been removed)",
+          }, null, 2),
+        },
+      ],
+    };
+  }
+
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify({ success: true, unlinked: deleted[0] }, null, 2),
+      },
+    ],
+  };
+}
+
+async function getLinkedIssues(
+  args: Record<string, unknown>,
+  auth: AuthContext
+): Promise<CallToolResult> {
+  const { testCaseId } = args as { testCaseId: number };
+
+  if (!testCaseId) {
+    return {
+      content: [{ type: "text", text: "Error: testCaseId is required" }],
+      isError: true,
+    };
+  }
+
+  // Verify test case exists and belongs to org
+  const existing = await db
+    .select()
+    .from(testCases)
+    .where(
+      and(
+        eq(testCases.id, testCaseId),
+        eq(testCases.organizationId, auth.organizationId)
+      )
+    )
+    .limit(1);
+
+  if (existing.length === 0) {
+    return {
+      content: [{ type: "text", text: `Error: Test case not found: ${testCaseId}` }],
+      isError: true,
+    };
+  }
+
+  // Get all linked issues
+  const links = await db
+    .select({
+      id: testCaseLinearIssues.id,
+      linearIssueId: testCaseLinearIssues.linearIssueId,
+      linearIssueIdentifier: testCaseLinearIssues.linearIssueIdentifier,
+      linearIssueTitle: testCaseLinearIssues.linearIssueTitle,
+      linkedAt: testCaseLinearIssues.linkedAt,
+    })
+    .from(testCaseLinearIssues)
+    .where(eq(testCaseLinearIssues.testCaseId, testCaseId));
+
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify({
+          success: true,
+          testCaseId,
+          linkedIssues: links,
+        }, null, 2),
       },
     ],
   };
