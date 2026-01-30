@@ -9,6 +9,7 @@ interface KeyboardShortcutsContextType {
   sidebarCollapsed: boolean;
   toggleSidebar: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
+  isAutoCollapsed: boolean;
 }
 
 const KeyboardShortcutsContext = createContext<KeyboardShortcutsContextType | null>(null);
@@ -25,28 +26,57 @@ interface Props {
   children: ReactNode;
 }
 
+const BREAKPOINT_LG = 1024;
+
 export function KeyboardShortcutsProvider({ children }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const [showHelp, setShowHelp] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isAutoCollapsed, setIsAutoCollapsed] = useState(false);
   const [pendingG, setPendingG] = useState(false);
 
-  // Load sidebar state from localStorage on mount
+  // Load sidebar state from localStorage on mount and set up responsive listener
   useEffect(() => {
     const stored = localStorage.getItem("sidebar-collapsed");
-    if (stored === "true") {
+    const mediaQuery = window.matchMedia(`(max-width: ${BREAKPOINT_LG - 1}px)`);
+
+    // Set initial state based on screen size
+    if (mediaQuery.matches) {
+      setSidebarCollapsed(true);
+      setIsAutoCollapsed(true);
+    } else if (stored === "true") {
       setSidebarCollapsed(true);
     }
+
+    // Listen for screen size changes
+    const handleMediaChange = (e: MediaQueryListEvent) => {
+      if (e.matches) {
+        // Below breakpoint - auto collapse
+        setSidebarCollapsed(true);
+        setIsAutoCollapsed(true);
+      } else {
+        // Above breakpoint - restore user preference
+        setIsAutoCollapsed(false);
+        const storedPref = localStorage.getItem("sidebar-collapsed");
+        setSidebarCollapsed(storedPref === "true");
+      }
+    };
+
+    mediaQuery.addEventListener("change", handleMediaChange);
+    return () => mediaQuery.removeEventListener("change", handleMediaChange);
   }, []);
 
   const toggleSidebar = useCallback(() => {
     setSidebarCollapsed(prev => {
       const next = !prev;
-      localStorage.setItem("sidebar-collapsed", String(next));
+      // Only save to localStorage if not auto-collapsed by responsive behavior
+      if (!isAutoCollapsed) {
+        localStorage.setItem("sidebar-collapsed", String(next));
+      }
       return next;
     });
-  }, []);
+  }, [isAutoCollapsed]);
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -131,6 +161,7 @@ export function KeyboardShortcutsProvider({ children }: Props) {
         sidebarCollapsed,
         toggleSidebar,
         setSidebarCollapsed,
+        isAutoCollapsed,
       }}
     >
       {children}

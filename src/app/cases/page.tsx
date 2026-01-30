@@ -142,13 +142,14 @@ export default async function CasesPage({ searchParams }: Props) {
 
   return (
     <div className="flex h-full animate-fade-in">
-      {/* Sidebar - Folder Tree (Resizable) */}
-      <FolderPanel
-        folders={folderTree}
-        selectedFolderId={folderId}
-        caseCounts={caseCounts}
-        stateFilter={stateFilter}
-      />
+      {/* Sidebar - Folder Tree (Resizable) - Hidden on smaller screens */}
+      <div className="hidden lg:block">
+        <FolderPanel
+          folders={folderTree}
+          selectedFolderId={folderId}
+          caseCounts={caseCounts}
+        />
+      </div>
 
       {/* Main Content */}
       <div className="flex-1 overflow-auto flex flex-col">

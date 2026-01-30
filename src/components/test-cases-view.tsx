@@ -619,6 +619,7 @@ export function TestCasesView({
         folders={folders}
         currentFolderId={currentFolderId}
         search={search}
+        stateFilter={stateFilter}
         selectedCases={selectedCases}
         hasMore={hasMore}
         currentOffset={currentOffset}
@@ -639,6 +640,17 @@ export function TestCasesView({
             params.delete("q");
           }
           // Reset offset when search changes
+          params.delete("offset");
+          router.push(`/cases?${params.toString()}`);
+        }}
+        onStateFilterChange={(value) => {
+          const params = new URLSearchParams(window.location.search);
+          if (value) {
+            params.set("state", value);
+          } else {
+            params.delete("state");
+          }
+          // Reset offset when filter changes
           params.delete("offset");
           router.push(`/cases?${params.toString()}`);
         }}
@@ -821,6 +833,7 @@ function TestCaseListContent({
   folders,
   currentFolderId,
   search,
+  stateFilter,
   selectedCases,
   hasMore,
   currentOffset,
@@ -831,12 +844,14 @@ function TestCaseListContent({
   onClearSelection,
   onSelectionAction,
   onSearchChange,
+  onStateFilterChange,
   onLoadMore,
 }: {
   cases: TestCase[];
   folders: Folder[];
   currentFolderId: number | null;
   search: string;
+  stateFilter: string;
   selectedCases: Set<number>;
   hasMore: boolean;
   currentOffset: number;
@@ -847,6 +862,7 @@ function TestCaseListContent({
   onClearSelection: () => void;
   onSelectionAction: () => void;
   onSearchChange: (value: string) => void;
+  onStateFilterChange: (value: string) => void;
   onLoadMore: () => void;
 }) {
   const [isPending, startTransition] = useTransition();
@@ -1071,6 +1087,17 @@ function TestCaseListContent({
             className="pl-9"
           />
         </div>
+        <select
+          value={stateFilter}
+          onChange={(e) => onStateFilterChange(e.target.value)}
+          className="px-3 py-2 text-sm border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
+        >
+          <option value="">All states</option>
+          <option value="active">Active</option>
+          <option value="draft">Draft</option>
+          <option value="retired">Retired</option>
+          <option value="rejected">Rejected</option>
+        </select>
       </div>
 
       {/* State Change Modal */}
