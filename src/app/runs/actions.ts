@@ -1,8 +1,8 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { testRuns, testRunResults, releases, scenarios, testCases } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { testRuns, testRunResults, testResultHistory, releases, scenarios, testCases, users } from "@/lib/db/schema";
+import { eq, and, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getSessionWithOrg } from "@/lib/auth";
 import { createIssueAttachment, deleteAttachmentByUrl, createIssueComment } from "@/lib/linear";
@@ -107,10 +107,13 @@ export async function updateTestResult(input: UpdateResultInput) {
   const userId = session.user.id;
 
   try {
-    // Get the current result to check if we need to capture a snapshot
+    // Get the current result to check if we need to capture a snapshot and save history
     const currentResult = await db
       .select({
         status: testRunResults.status,
+        notes: testRunResults.notes,
+        executedAt: testRunResults.executedAt,
+        executedBy: testRunResults.executedBy,
         scenarioId: testRunResults.scenarioId,
         scenarioTitleSnapshot: testRunResults.scenarioTitleSnapshot,
       })
@@ -120,6 +123,17 @@ export async function updateTestResult(input: UpdateResultInput) {
 
     if (!currentResult) {
       return { error: "Result not found" };
+    }
+
+    // Save current state to history if it's non-pending and has been executed
+    if (currentResult.status !== "pending" && currentResult.executedAt) {
+      await db.insert(testResultHistory).values({
+        resultId: input.resultId,
+        status: currentResult.status,
+        notes: currentResult.notes,
+        executedAt: currentResult.executedAt,
+        executedBy: currentResult.executedBy,
+      });
     }
 
     // Prepare update data
@@ -170,6 +184,29 @@ export async function updateTestResult(input: UpdateResultInput) {
     console.error("Failed to update test result:", error);
     return { error: "Failed to update test result" };
   }
+}
+
+export async function getResultHistory(resultId: number) {
+  const session = await getSessionWithOrg();
+  if (!session) return [];
+
+  const history = await db
+    .select({
+      id: testResultHistory.id,
+      status: testResultHistory.status,
+      notes: testResultHistory.notes,
+      executedAt: testResultHistory.executedAt,
+      executedBy: testResultHistory.executedBy,
+      archivedAt: testResultHistory.archivedAt,
+      executorName: users.name,
+      executorAvatar: users.avatar,
+    })
+    .from(testResultHistory)
+    .leftJoin(users, eq(testResultHistory.executedBy, users.id))
+    .where(eq(testResultHistory.resultId, resultId))
+    .orderBy(desc(testResultHistory.archivedAt));
+
+  return history;
 }
 
 interface ResultWithDetails {

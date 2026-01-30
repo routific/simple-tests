@@ -7,6 +7,7 @@ import {
   testCaseAuditLog,
   testRuns,
   testRunResults,
+  testResultHistory,
 } from "@/lib/db/schema";
 import type { AuthContext } from "./auth";
 import { hasPermission } from "./auth";
@@ -1376,6 +1377,19 @@ async function updateTestResult(
       content: [{ type: "text", text: `Error: Test result not found: ${resultId}` }],
       isError: true,
     };
+  }
+
+  const currentResult = existing[0].result;
+
+  // Save current state to history if it's non-pending and has been executed
+  if (currentResult.status !== "pending" && currentResult.executedAt) {
+    await db.insert(testResultHistory).values({
+      resultId,
+      status: currentResult.status,
+      notes: currentResult.notes,
+      executedAt: currentResult.executedAt,
+      executedBy: currentResult.executedBy,
+    });
   }
 
   const updates: Partial<typeof testRunResults.$inferInsert> = {

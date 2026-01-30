@@ -213,6 +213,28 @@ export const testRunResults = sqliteTable(
   (table) => [index("test_run_results_run_idx").on(table.testRunId)]
 );
 
+// History of test result changes - tracks previous attempts
+export const testResultHistory = sqliteTable(
+  "test_result_history",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    resultId: integer("result_id")
+      .notNull()
+      .references(() => testRunResults.id, { onDelete: "cascade" }),
+    status: text("status", {
+      enum: ["pending", "passed", "failed", "blocked", "skipped"],
+    }).notNull(),
+    notes: text("notes"),
+    executedAt: integer("executed_at", { mode: "timestamp" }),
+    executedBy: text("executed_by").references(() => users.id),
+    // When this history entry was created (when it was superseded)
+    archivedAt: integer("archived_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [index("test_result_history_result_idx").on(table.resultId)]
+);
+
 // Undo stack for global undo functionality
 export const undoStack = sqliteTable(
   "undo_stack",
@@ -289,6 +311,7 @@ export type TestCaseAuditLog = typeof testCaseAuditLog.$inferSelect;
 export type Release = typeof releases.$inferSelect;
 export type TestRun = typeof testRuns.$inferSelect;
 export type TestRunResult = typeof testRunResults.$inferSelect;
+export type TestResultHistory = typeof testResultHistory.$inferSelect;
 export type UndoStackEntry = typeof undoStack.$inferSelect;
 export type ApiToken = typeof apiTokens.$inferSelect;
 
