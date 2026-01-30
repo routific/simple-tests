@@ -26,7 +26,7 @@ interface Props {
   children: ReactNode;
 }
 
-const BREAKPOINT_LG = 1024;
+const BREAKPOINT_XL = 1280;
 
 export function KeyboardShortcutsProvider({ children }: Props) {
   const router = useRouter();
@@ -39,7 +39,7 @@ export function KeyboardShortcutsProvider({ children }: Props) {
   // Load sidebar state from localStorage on mount and set up responsive listener
   useEffect(() => {
     const stored = localStorage.getItem("sidebar-collapsed");
-    const mediaQuery = window.matchMedia(`(max-width: ${BREAKPOINT_LG - 1}px)`);
+    const mediaQuery = window.matchMedia(`(max-width: ${BREAKPOINT_XL - 1}px)`);
 
     // Set initial state based on screen size
     if (mediaQuery.matches) {
