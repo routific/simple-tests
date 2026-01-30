@@ -4,11 +4,12 @@ import { useState, useTransition, useMemo, useEffect, useCallback, useRef } from
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { buildFolderBreadcrumb, formatBreadcrumb } from "@/lib/folders";
 import { GherkinDisplay } from "./gherkin-editor";
 import { ReleasePicker } from "./release-picker";
 import { Input } from "./ui/input";
 import { ResizablePanel } from "./ui/resizable-panel";
-import { updateTestResult, completeTestRun, deleteTestRun, updateTestRun, addScenariosToRun, removeScenariosFromRun } from "@/app/runs/actions";
+import { updateTestResult, completeTestRun, deleteTestRun, updateTestRun, addScenariosToRun, removeScenariosFromRun, getResultHistory } from "@/app/runs/actions";
 import type { TestRun } from "@/lib/db/schema";
 
 interface LinearProject {
@@ -41,11 +42,17 @@ interface Result {
   scenarioGherkin: string;
   testCaseId: number;
   testCaseTitle: string;
-  folderName: string | null;
+  folderId: number | null;
   // Snapshot fields - captured when test was completed
   scenarioTitleSnapshot: string | null;
   scenarioGherkinSnapshot: string | null;
   testCaseTitleSnapshot: string | null;
+}
+
+interface Folder {
+  id: number;
+  name: string;
+  parentId: number | null;
 }
 
 interface Collaborator {
@@ -68,9 +75,21 @@ interface AvailableScenario {
   folderName: string | null;
 }
 
+interface HistoryEntry {
+  id: number;
+  status: string;
+  notes: string | null;
+  executedAt: Date | null;
+  executedBy: string | null;
+  archivedAt: Date;
+  executorName: string | null;
+  executorAvatar: string | null;
+}
+
 interface Props {
   run: TestRun;
   results: Result[];
+  folders: Folder[];
   releases: Release[];
   availableScenarios: AvailableScenario[];
   linearWorkspace?: string;
@@ -79,7 +98,7 @@ interface Props {
   initialScenarioId?: number | null;
 }
 
-export function RunExecutor({ run, results: initialResults, releases: initialReleases, availableScenarios, linearWorkspace, collaborators: initialCollaborators, currentUser, initialScenarioId }: Props) {
+export function RunExecutor({ run, results: initialResults, folders, releases: initialReleases, availableScenarios, linearWorkspace, collaborators: initialCollaborators, currentUser, initialScenarioId }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [results, setResults] = useState<Result[]>(initialResults);
@@ -95,6 +114,8 @@ export function RunExecutor({ run, results: initialResults, releases: initialRel
   });
   const [notes, setNotes] = useState("");
   const [linkCopied, setLinkCopied] = useState(false);
+  const [resultHistory, setResultHistory] = useState<HistoryEntry[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
 
   // Update URL with initially selected scenario on mount
   useEffect(() => {
@@ -104,6 +125,16 @@ export function RunExecutor({ run, results: initialResults, releases: initialRel
       window.history.replaceState({}, "", url.toString());
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch history when selected result changes
+  useEffect(() => {
+    if (selectedResult && selectedResult.status !== "pending") {
+      getResultHistory(selectedResult.id).then(setResultHistory);
+    } else {
+      setResultHistory([]);
+    }
+    setShowHistory(false);
+  }, [selectedResult?.id, selectedResult?.status]);
 
   // Edit mode state
   const [isEditing, setIsEditing] = useState(false);
@@ -969,9 +1000,14 @@ export function RunExecutor({ run, results: initialResults, releases: initialRel
                     <StatusIcon status={result.status} />
                     <span className="font-medium truncate flex-1">{result.scenarioTitle}</span>
                   </div>
-                  <div className="text-xs text-[hsl(var(--muted-foreground))] mt-1 ml-6">
+                  <div className="text-xs text-[hsl(var(--muted-foreground))] mt-1 ml-6 truncate">
+                    {result.folderId && (
+                      <span className="opacity-70">
+                        {formatBreadcrumb(buildFolderBreadcrumb(result.folderId, folders), " / ")}
+                        {" / "}
+                      </span>
+                    )}
                     {result.testCaseTitle}
-                    {result.folderName && ` • ${result.folderName}`}
                   </div>
                 </button>
               </div>
@@ -984,16 +1020,27 @@ export function RunExecutor({ run, results: initialResults, releases: initialRel
           {selectedResult ? (
             <div className="max-w-3xl">
               <div className="flex items-start justify-between mb-4">
-                <div>
+                <div className="min-w-0 flex-1">
+                  {/* Folder breadcrumb */}
+                  {selectedResult.folderId && (
+                    <div className="text-xs text-[hsl(var(--muted-foreground))] mb-1 flex items-center gap-1">
+                      <FolderIcon className="w-3 h-3 flex-shrink-0" />
+                      <span className="truncate">
+                        {formatBreadcrumb(buildFolderBreadcrumb(selectedResult.folderId, folders), " / ")}
+                      </span>
+                    </div>
+                  )}
+                  {/* Test case title */}
                   <div className="text-sm text-[hsl(var(--muted-foreground))] mb-1">
                     {selectedResult.testCaseTitleSnapshot || selectedResult.testCaseTitle}
                   </div>
+                  {/* Scenario title + status */}
                   <div className="flex items-center gap-3">
                     <h2 className="text-lg font-medium">{selectedResult.scenarioTitleSnapshot || selectedResult.scenarioTitle}</h2>
                     {selectedResult.status !== "pending" && (
                       <span
                         className={cn(
-                          "px-2.5 py-1 text-xs font-medium rounded-full",
+                          "px-2.5 py-1 text-xs font-medium rounded-full flex-shrink-0",
                           selectedResult.status === "passed"
                             ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
                             : selectedResult.status === "failed"
@@ -1007,11 +1054,6 @@ export function RunExecutor({ run, results: initialResults, releases: initialRel
                       </span>
                     )}
                   </div>
-                  {selectedResult.folderName && (
-                    <div className="text-sm text-[hsl(var(--muted-foreground))]">
-                      {selectedResult.folderName}
-                    </div>
-                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -1095,6 +1137,61 @@ export function RunExecutor({ run, results: initialResults, releases: initialRel
                       ) : null;
                     })()}
                   </div>
+                </div>
+              )}
+
+              {/* Previous attempts history */}
+              {resultHistory.length > 0 && (
+                <div className="mb-6">
+                  <button
+                    onClick={() => setShowHistory(!showHistory)}
+                    className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1"
+                  >
+                    <HistoryIcon className="w-4 h-4" />
+                    {resultHistory.length} previous attempt{resultHistory.length !== 1 ? "s" : ""}
+                    <ChevronIcon className={cn("w-4 h-4 transition-transform", showHistory && "rotate-180")} />
+                  </button>
+                  {showHistory && (
+                    <div className="mt-2 space-y-2">
+                      {resultHistory.map((entry) => (
+                        <div key={entry.id} className="p-2 bg-muted/30 rounded text-sm">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={cn(
+                                "px-2 py-0.5 text-xs font-medium rounded-full",
+                                entry.status === "passed"
+                                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                                  : entry.status === "failed"
+                                  ? "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
+                                  : entry.status === "blocked"
+                                  ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
+                                  : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400"
+                              )}
+                            >
+                              {entry.status.charAt(0).toUpperCase() + entry.status.slice(1)}
+                            </span>
+                            {entry.executorName && (
+                              <span className="text-foreground">{entry.executorName}</span>
+                            )}
+                            {entry.executedAt && (
+                              <span className="text-muted-foreground">
+                                {new Date(entry.executedAt).toLocaleDateString("en-US", {
+                                  month: "short",
+                                  day: "numeric",
+                                  year: "numeric",
+                                  hour: "numeric",
+                                  minute: "2-digit",
+                                })}
+                              </span>
+                            )}
+                          </div>
+                          {entry.notes && (
+                            <p className="mt-1 text-muted-foreground">{entry.notes}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1373,6 +1470,30 @@ function CheckIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+    </svg>
+  );
+}
+
+function HistoryIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
+}
+
+function ChevronIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+    </svg>
+  );
+}
+
+function FolderIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
     </svg>
   );
 }

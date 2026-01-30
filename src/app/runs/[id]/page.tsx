@@ -42,7 +42,7 @@ export default async function RunDetailPage({ params, searchParams }: Props) {
       scenarioGherkin: scenarios.gherkin,
       testCaseId: scenarios.testCaseId,
       testCaseTitle: testCases.title,
-      folderName: folders.name,
+      folderId: testCases.folderId,
       // Snapshot fields
       scenarioTitleSnapshot: testRunResults.scenarioTitleSnapshot,
       scenarioGherkinSnapshot: testRunResults.scenarioGherkinSnapshot,
@@ -54,6 +54,16 @@ export default async function RunDetailPage({ params, searchParams }: Props) {
     .leftJoin(folders, eq(testCases.folderId, folders.id))
     .where(eq(testRunResults.testRunId, runId))
     .orderBy(folders.name, testCases.title, scenarios.order);
+
+  // Fetch all folders for breadcrumb display
+  const allFolders = await db
+    .select({
+      id: folders.id,
+      name: folders.name,
+      parentId: folders.parentId,
+    })
+    .from(folders)
+    .where(eq(folders.organizationId, organizationId));
 
   // Collect all user IDs (creator + executors)
   const userIds = new Set<string>();
@@ -123,6 +133,7 @@ export default async function RunDetailPage({ params, searchParams }: Props) {
       <RunExecutor
         run={run}
         results={results}
+        folders={allFolders}
         releases={allReleases as { id: number; name: string; status: "active" | "completed" }[]}
         availableScenarios={availableScenarios}
         linearWorkspace={session.user.organizationUrlKey}
