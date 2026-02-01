@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { testCases, folders, users, scenarios } from "@/lib/db/schema";
-import { eq, like, and, count, inArray } from "drizzle-orm";
+import { eq, like, and, or, count, inArray } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { FolderPanel } from "@/components/folder-panel";
 import { buildFolderTree, getDescendantFolderIds } from "@/lib/folders";
@@ -77,7 +77,14 @@ export default async function CasesPage({ searchParams }: Props) {
     conditions.push(inArray(testCases.folderId, selectedFolderIds));
   }
   if (search) {
-    conditions.push(like(testCases.title, `%${search}%`));
+    const searchId = parseInt(search);
+    if (!isNaN(searchId)) {
+      // Search by ID or title
+      conditions.push(or(eq(testCases.id, searchId), like(testCases.title, `%${search}%`))!);
+    } else {
+      // Search by title only
+      conditions.push(like(testCases.title, `%${search}%`));
+    }
   }
   if (stateFilter) {
     conditions.push(
