@@ -10,7 +10,13 @@ import { RunsList } from "./runs-list";
 
 export const dynamic = "force-dynamic";
 
-export default async function RunsPage() {
+interface PageProps {
+  searchParams: Promise<{ release?: string }>;
+}
+
+export default async function RunsPage({ searchParams }: PageProps) {
+  const params = await searchParams;
+  const initialReleaseId = params.release ? parseInt(params.release, 10) : null;
   const session = await getSessionWithOrg();
   if (!session) {
     redirect("/signin");
@@ -173,6 +179,7 @@ export default async function RunsPage() {
           runs={runStats}
           releases={allReleases as { id: number; name: string; status: "active" | "completed" }[]}
           linearWorkspace={session.user.organizationUrlKey}
+          initialReleaseId={initialReleaseId}
         />
       )}
     </div>

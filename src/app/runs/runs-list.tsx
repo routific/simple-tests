@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -25,15 +25,38 @@ interface RunsListProps {
   runs: RunWithStats[];
   releases: Release[];
   linearWorkspace?: string;
+  initialReleaseId?: number | null;
 }
 
-export function RunsList({ runs, releases, linearWorkspace }: RunsListProps) {
+export function RunsList({ runs, releases, linearWorkspace, initialReleaseId }: RunsListProps) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"active" | "completed">("active");
+
+  // Determine initial tab based on the linked release
+  const getInitialTab = () => {
+    if (initialReleaseId) {
+      const release = releases.find(r => r.id === initialReleaseId);
+      if (release) {
+        return release.status === "completed" ? "completed" : "active";
+      }
+    }
+    return "active";
+  };
+
+  const [activeTab, setActiveTab] = useState<"active" | "completed">(getInitialTab);
   const [expandedReleases, setExpandedReleases] = useState<Set<number | "unassigned">>(() => {
     const ids: (number | "unassigned")[] = ["unassigned", ...releases.filter(r => r.status === "active").map(r => r.id)];
+    // Also expand the initial release if provided
+    if (initialReleaseId && !ids.includes(initialReleaseId)) {
+      ids.push(initialReleaseId);
+    }
     return new Set(ids);
   });
+
+  // Track which release URL was copied
+  const [copiedReleaseId, setCopiedReleaseId] = useState<number | null>(null);
+
+  // Refs for scrolling to release
+  const releaseRefs = useRef<Map<number | "unassigned", HTMLDivElement>>(new Map());
   const [isPending, startTransition] = useTransition();
   const [optimisticReleases, setOptimisticReleases] = useState(releases);
 
@@ -49,6 +72,26 @@ export function RunsList({ runs, releases, linearWorkspace }: RunsListProps) {
   // Release edit state
   const [editingReleaseId, setEditingReleaseId] = useState<number | null>(null);
   const [editingReleaseName, setEditingReleaseName] = useState("");
+
+  // Scroll to initial release on mount
+  useEffect(() => {
+    if (initialReleaseId) {
+      // Small delay to ensure refs are set
+      setTimeout(() => {
+        const el = releaseRefs.current.get(initialReleaseId);
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }, 100);
+    }
+  }, [initialReleaseId]);
+
+  const copyReleaseUrl = (releaseId: number) => {
+    const url = `${window.location.origin}/runs?release=${releaseId}`;
+    navigator.clipboard.writeText(url);
+    setCopiedReleaseId(releaseId);
+    setTimeout(() => setCopiedReleaseId(null), 2000);
+  };
 
   // Group runs by release
   const runsByRelease = new Map<number | "unassigned", RunWithStats[]>();
@@ -203,7 +246,13 @@ export function RunsList({ runs, releases, linearWorkspace }: RunsListProps) {
     const isExpanded = expandedReleases.has(id);
 
     return (
-      <div key={id} className="border-b border-border last:border-b-0">
+      <div
+        key={id}
+        ref={(el) => {
+          if (el && !isUnassigned) releaseRefs.current.set(id, el);
+        }}
+        className="border-b border-border last:border-b-0"
+      >
         {/* Release Header */}
         <div
           className={cn(
@@ -267,16 +316,32 @@ export function RunsList({ runs, releases, linearWorkspace }: RunsListProps) {
                     {name}
                   </span>
                   {!isUnassigned && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleStartEditRelease(release);
-                      }}
-                      className="p-1 text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
-                      title="Edit release name"
-                    >
-                      <EditIcon className="w-3.5 h-3.5" />
-                    </button>
+                    <>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleStartEditRelease(release);
+                        }}
+                        className="p-1 text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Edit release name"
+                      >
+                        <EditIcon className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          copyReleaseUrl(release.id);
+                        }}
+                        className="p-1 text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Copy link to release"
+                      >
+                        {copiedReleaseId === release.id ? (
+                          <CheckIcon className="w-3.5 h-3.5 text-emerald-600" />
+                        ) : (
+                          <LinkIcon className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </>
                   )}
                 </>
               )}
@@ -580,6 +645,14 @@ function CloseIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+    </svg>
+  );
+}
+
+function LinkIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
     </svg>
   );
 }
