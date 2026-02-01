@@ -53,6 +53,32 @@ export function registerTestRunTools(auth: AuthContext): Tool[] {
           },
           required: ["resultId", "status"],
         },
+      },
+      {
+        name: "link_linear_issue",
+        description: "Link a test run to a Linear issue",
+        inputSchema: {
+          type: "object",
+          properties: {
+            testRunId: {
+              type: "number",
+              description: "ID of the test run to link",
+            },
+            issueId: {
+              type: "string",
+              description: "Linear issue UUID",
+            },
+            issueIdentifier: {
+              type: "string",
+              description: "Linear issue identifier (e.g., 'PLA-43')",
+            },
+            issueTitle: {
+              type: "string",
+              description: "Linear issue title",
+            },
+          },
+          required: ["testRunId", "issueId", "issueIdentifier", "issueTitle"],
+        },
       }
     );
   }
@@ -77,6 +103,8 @@ export async function handleTestRunTool(
       return createTestRun(args, auth);
     case "update_test_result":
       return updateTestResult(args, auth);
+    case "link_linear_issue":
+      return linkLinearIssue(args, auth);
     default:
       return {
         content: [{ type: "text", text: `Unknown test run tool: ${name}` }],
@@ -254,6 +282,63 @@ async function updateTestResult(
       {
         type: "text",
         text: JSON.stringify({ success: true, result: result[0] }, null, 2),
+      },
+    ],
+  };
+}
+
+async function linkLinearIssue(
+  args: Record<string, unknown>,
+  auth: AuthContext
+): Promise<CallToolResult> {
+  const { testRunId, issueId, issueIdentifier, issueTitle } = args as {
+    testRunId: number;
+    issueId: string;
+    issueIdentifier: string;
+    issueTitle: string;
+  };
+
+  if (!testRunId || !issueId || !issueIdentifier || !issueTitle) {
+    return {
+      content: [{ type: "text", text: "Error: testRunId, issueId, issueIdentifier, and issueTitle are required" }],
+      isError: true,
+    };
+  }
+
+  // Verify test run exists and belongs to org
+  const existing = await db
+    .select()
+    .from(testRuns)
+    .where(
+      and(
+        eq(testRuns.id, testRunId),
+        eq(testRuns.organizationId, auth.organizationId)
+      )
+    )
+    .limit(1);
+
+  if (existing.length === 0) {
+    return {
+      content: [{ type: "text", text: `Error: Test run not found: ${testRunId}` }],
+      isError: true,
+    };
+  }
+
+  const result = await db
+    .update(testRuns)
+    .set({
+      linearIssueId: issueId,
+      linearIssueIdentifier: issueIdentifier,
+      linearIssueTitle: issueTitle,
+    })
+    .where(eq(testRuns.id, testRunId))
+    .returning();
+
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify({ success: true, testRun: result[0] }, null, 2),
       },
     ],
   };

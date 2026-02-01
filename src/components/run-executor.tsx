@@ -168,6 +168,7 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
   const [scenarioSearch, setScenarioSearch] = useState("");
   const [selectedToAdd, setSelectedToAdd] = useState<Set<number>>(new Set());
   const [selectedToRemove, setSelectedToRemove] = useState<Set<number>>(new Set());
+  const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
 
   // Linear edit state
   const [projects, setProjects] = useState<LinearProject[]>([]);
@@ -208,6 +209,25 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
           (s.folderName?.toLowerCase().includes(search) ?? false);
       });
   }, [availableScenarios, existingScenarioIds, scenarioSearch]);
+
+  // Group filtered scenarios by test case
+  const groupedByTestCase = useMemo(() => {
+    const groups = new Map<number, { testCaseId: number; testCaseTitle: string; folderName: string | null; scenarios: typeof filteredAvailable }>();
+    for (const scenario of filteredAvailable) {
+      const existing = groups.get(scenario.testCaseId);
+      if (existing) {
+        existing.scenarios.push(scenario);
+      } else {
+        groups.set(scenario.testCaseId, {
+          testCaseId: scenario.testCaseId,
+          testCaseTitle: scenario.testCaseTitle,
+          folderName: scenario.folderName,
+          scenarios: [scenario],
+        });
+      }
+    }
+    return Array.from(groups.values());
+  }, [filteredAvailable]);
 
   const stats = {
     total: results.length,
@@ -307,6 +327,11 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
 
       // Navigation shortcuts work even in inputs
       if (e.key === "Escape") {
+        if (showCompleteConfirm) {
+          setShowCompleteConfirm(false);
+          e.preventDefault();
+          return;
+        }
         if (showAddScenarios) {
           setShowAddScenarios(false);
           setSelectedToAdd(new Set());
@@ -410,7 +435,7 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [run.status, isEditing, showAddScenarios, selectedResult, results, isPending]);
+  }, [run.status, isEditing, showAddScenarios, showCompleteConfirm, selectedResult, results, isPending]);
 
   const handleStatusUpdate = (status: "passed" | "failed" | "blocked" | "skipped") => {
     if (!selectedResult) return;
@@ -912,7 +937,7 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
           )}
           {run.status === "in_progress" && !isEditing && (
             <button
-              onClick={handleComplete}
+              onClick={() => setShowCompleteConfirm(true)}
               disabled={isPending}
               className="ml-2 px-4 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:opacity-90 disabled:opacity-50"
             >
@@ -1287,29 +1312,45 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
 
       {/* Add Scenarios Modal */}
       {showAddScenarios && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-[hsl(var(--background))] rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
-            <div className="p-4 border-b border-[hsl(var(--border))] flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Add Scenarios</h2>
+        <div className="fixed inset-0 z-50">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => {
+              setShowAddScenarios(false);
+              setSelectedToAdd(new Set());
+              setScenarioSearch("");
+            }}
+          />
+          {/* Modal */}
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <div
+              className="relative bg-background rounded-xl shadow-xl border border-border w-full max-w-2xl max-h-[80vh] flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="px-6 py-4 border-b border-border">
+                <h2 className="text-lg font-semibold">Add Scenarios</h2>
+                <p className="text-sm text-muted-foreground mt-1">Select scenarios to add to this test run</p>
+              </div>
               <button
                 onClick={() => {
                   setShowAddScenarios(false);
                   setSelectedToAdd(new Set());
                   setScenarioSearch("");
                 }}
-                className="p-1 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+                className="absolute top-4 right-4 w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
               >
-                <CloseIcon className="w-5 h-5" />
+                <CloseIcon className="w-4 h-4" />
               </button>
-            </div>
 
-            <div className="p-4 border-b border-[hsl(var(--border))]">
+            <div className="px-6 py-4 border-b border-border">
               <Input
                 type="text"
                 value={scenarioSearch}
                 onChange={(e) => setScenarioSearch(e.target.value)}
-                placeholder="Search scenarios..."
+                placeholder="Search test cases or scenarios..."
                 className="w-full"
+                autoFocus
               />
             </div>
 
@@ -1320,35 +1361,75 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
                 </div>
               ) : (
                 <div className="divide-y divide-[hsl(var(--border))]">
-                  {filteredAvailable.map((scenario) => (
-                    <label
-                      key={scenario.id}
-                      className={cn(
-                        "flex items-start gap-3 p-3 cursor-pointer hover:bg-[hsl(var(--muted))]",
-                        selectedToAdd.has(scenario.id) && "bg-brand-50 dark:bg-brand-900/20"
-                      )}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedToAdd.has(scenario.id)}
-                        onChange={() => toggleAddSelection(scenario.id)}
-                        className="mt-1 rounded border-gray-300"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium">{scenario.title}</div>
-                        <div className="text-sm text-[hsl(var(--muted-foreground))]">
-                          {scenario.testCaseTitle}
-                          {scenario.folderName && ` • ${scenario.folderName}`}
-                        </div>
+                  {groupedByTestCase.map((group) => {
+                    const allSelected = group.scenarios.every(s => selectedToAdd.has(s.id));
+                    const someSelected = group.scenarios.some(s => selectedToAdd.has(s.id));
+                    const toggleAll = () => {
+                      setSelectedToAdd(prev => {
+                        const next = new Set(prev);
+                        if (allSelected) {
+                          group.scenarios.forEach(s => next.delete(s.id));
+                        } else {
+                          group.scenarios.forEach(s => next.add(s.id));
+                        }
+                        return next;
+                      });
+                    };
+                    return (
+                      <div key={group.testCaseId}>
+                        {/* Test case header */}
+                        <label
+                          className={cn(
+                            "flex items-center gap-3 p-3 cursor-pointer hover:bg-[hsl(var(--muted))] bg-muted/30",
+                            allSelected && "bg-brand-50 dark:bg-brand-900/20"
+                          )}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={allSelected}
+                            ref={(el) => { if (el) el.indeterminate = someSelected && !allSelected; }}
+                            onChange={toggleAll}
+                            className="rounded border-gray-300"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium">{group.testCaseTitle}</div>
+                            {group.folderName && (
+                              <div className="text-xs text-[hsl(var(--muted-foreground))]">{group.folderName}</div>
+                            )}
+                          </div>
+                          <span className="text-xs text-[hsl(var(--muted-foreground))]">
+                            {group.scenarios.length} scenario{group.scenarios.length !== 1 ? "s" : ""}
+                          </span>
+                        </label>
+                        {/* Scenarios */}
+                        {group.scenarios.map((scenario) => (
+                          <label
+                            key={scenario.id}
+                            className={cn(
+                              "flex items-center gap-3 p-3 pl-9 cursor-pointer hover:bg-[hsl(var(--muted))]",
+                              selectedToAdd.has(scenario.id) && "bg-brand-50 dark:bg-brand-900/20"
+                            )}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedToAdd.has(scenario.id)}
+                              onChange={() => toggleAddSelection(scenario.id)}
+                              className="rounded border-gray-300"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm">{scenario.title}</div>
+                            </div>
+                          </label>
+                        ))}
                       </div>
-                    </label>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
 
-            <div className="p-4 border-t border-[hsl(var(--border))] flex items-center justify-between">
-              <span className="text-sm text-[hsl(var(--muted-foreground))]">
+            <div className="px-6 py-4 border-t border-border flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">
                 {selectedToAdd.size} selected
               </span>
               <div className="flex items-center gap-2">
@@ -1358,7 +1439,7 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
                     setSelectedToAdd(new Set());
                     setScenarioSearch("");
                   }}
-                  className="px-4 py-2 text-sm font-medium text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+                  className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground"
                 >
                   Cancel
                 </button>
@@ -1368,6 +1449,73 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
                   className="px-4 py-2 text-sm font-medium text-white bg-brand-500 rounded-md hover:bg-brand-600 disabled:opacity-50"
                 >
                   Add {selectedToAdd.size > 0 && `(${selectedToAdd.size})`}
+                </button>
+              </div>
+            </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Complete Run Confirmation Modal */}
+      {showCompleteConfirm && (
+        <div className="fixed inset-0 z-50">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setShowCompleteConfirm(false)}
+          />
+          {/* Modal */}
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <div
+              className="relative bg-background rounded-xl shadow-xl border border-border w-full max-w-md"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="px-6 py-4 border-b border-border">
+                <h2 className="text-lg font-semibold">Complete Test Run</h2>
+              </div>
+              <button
+                onClick={() => setShowCompleteConfirm(false)}
+                className="absolute top-4 right-4 w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              >
+                <CloseIcon className="w-4 h-4" />
+              </button>
+
+              <div className="px-6 py-4 space-y-3">
+                <p className="text-sm text-foreground">
+                  Are you sure you want to complete this test run?
+                </p>
+                <div className="text-sm text-muted-foreground space-y-2">
+                  <p>This will:</p>
+                  <ul className="list-disc list-inside space-y-1 ml-2">
+                    <li>Mark the test run as completed</li>
+                    <li>Lock the run from further changes</li>
+                    {stats.pending > 0 && (
+                      <li>Leave {stats.pending} scenario{stats.pending !== 1 ? "s" : ""} as pending</li>
+                    )}
+                  </ul>
+                </div>
+                <p className="text-sm font-medium text-amber-600 dark:text-amber-500">
+                  This action cannot be undone.
+                </p>
+              </div>
+
+              <div className="px-6 py-4 border-t border-border flex items-center justify-end gap-2">
+                <button
+                  onClick={() => setShowCompleteConfirm(false)}
+                  className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    setShowCompleteConfirm(false);
+                    handleComplete();
+                  }}
+                  disabled={isPending}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
+                >
+                  Complete Run
                 </button>
               </div>
             </div>
