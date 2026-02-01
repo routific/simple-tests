@@ -115,7 +115,6 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
   const [notes, setNotes] = useState("");
   const [linkCopied, setLinkCopied] = useState(false);
   const [resultHistory, setResultHistory] = useState<HistoryEntry[]>([]);
-  const [showHistory, setShowHistory] = useState(false);
 
   // Update URL with initially selected scenario on mount
   useEffect(() => {
@@ -133,7 +132,6 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
     } else {
       setResultHistory([]);
     }
-    setShowHistory(false);
   }, [selectedResult?.id, selectedResult?.status]);
 
   // Edit mode state
@@ -1094,104 +1092,114 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
                 <GherkinDisplay text={selectedResult.scenarioGherkinSnapshot || selectedResult.scenarioGherkin} />
               </div>
 
-              {/* Executor info for completed scenarios */}
+              {/* Attempts log - current result + history */}
               {selectedResult.status !== "pending" && selectedResult.executedBy && (
-                <div className="mb-6 p-3 bg-muted/50 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    {(() => {
-                      const executor = collaborators.find(c => c.id === selectedResult.executedBy);
-                      return executor ? (
-                        <>
-                          {executor.avatar ? (
-                            <img src={executor.avatar} alt="" className="w-6 h-6 rounded-full" />
-                          ) : (
-                            <div className="w-6 h-6 rounded-full bg-brand-500/10 flex items-center justify-center">
-                              <span className="text-xs font-medium text-brand-600">
-                                {executor.name?.[0]?.toUpperCase() || "?"}
-                              </span>
+                <div className="mb-6">
+                  <div className="text-sm text-muted-foreground flex items-center gap-1 mb-2">
+                    <HistoryIcon className="w-4 h-4" />
+                    Attempts
+                  </div>
+                  <div className="space-y-2">
+                    {/* Current result */}
+                    <div className="p-2 bg-muted/30 rounded text-sm">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={cn(
+                            "px-2 py-0.5 text-xs font-medium rounded-full",
+                            selectedResult.status === "passed"
+                              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                              : selectedResult.status === "failed"
+                              ? "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
+                              : selectedResult.status === "blocked"
+                              ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
+                              : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400"
+                          )}
+                        >
+                          {selectedResult.status.charAt(0).toUpperCase() + selectedResult.status.slice(1)}
+                        </span>
+                        {(() => {
+                          const executor = collaborators.find(c => c.id === selectedResult.executedBy);
+                          return executor ? (
+                            <div className="flex items-center gap-1.5">
+                              {executor.avatar ? (
+                                <img src={executor.avatar} alt="" className="w-5 h-5 rounded-full" />
+                              ) : (
+                                <div className="w-5 h-5 rounded-full bg-brand-500/10 flex items-center justify-center">
+                                  <span className="text-[10px] font-medium text-brand-600">
+                                    {executor.name?.[0]?.toUpperCase() || "?"}
+                                  </span>
+                                </div>
+                              )}
+                              <span className="text-foreground">{executor.name}</span>
+                            </div>
+                          ) : null;
+                        })()}
+                        {selectedResult.executedAt && (
+                          <span className="text-muted-foreground">
+                            {new Date(selectedResult.executedAt).toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                              hour: "numeric",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                        )}
+                      </div>
+                      {selectedResult.notes && (
+                        <p className="mt-1 text-muted-foreground">{selectedResult.notes}</p>
+                      )}
+                    </div>
+                    {/* Previous attempts */}
+                    {resultHistory.map((entry) => (
+                      <div key={entry.id} className="p-2 bg-muted/30 rounded text-sm">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={cn(
+                              "px-2 py-0.5 text-xs font-medium rounded-full",
+                              entry.status === "passed"
+                                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                                : entry.status === "failed"
+                                ? "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
+                                : entry.status === "blocked"
+                                ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
+                                : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400"
+                            )}
+                          >
+                            {entry.status.charAt(0).toUpperCase() + entry.status.slice(1)}
+                          </span>
+                          {entry.executorName && (
+                            <div className="flex items-center gap-1.5">
+                              {entry.executorAvatar ? (
+                                <img src={entry.executorAvatar} alt="" className="w-5 h-5 rounded-full" />
+                              ) : (
+                                <div className="w-5 h-5 rounded-full bg-brand-500/10 flex items-center justify-center">
+                                  <span className="text-[10px] font-medium text-brand-600">
+                                    {entry.executorName?.[0]?.toUpperCase() || "?"}
+                                  </span>
+                                </div>
+                              )}
+                              <span className="text-foreground">{entry.executorName}</span>
                             </div>
                           )}
-                          <div className="text-sm">
-                            <span className="font-medium">{executor.name}</span>
-                            <span className="text-muted-foreground"> marked as </span>
-                            <span className={cn(
-                              "font-medium",
-                              selectedResult.status === "passed" ? "text-emerald-600 dark:text-emerald-400" :
-                              selectedResult.status === "failed" ? "text-rose-600 dark:text-rose-400" :
-                              selectedResult.status === "blocked" ? "text-orange-600 dark:text-orange-400" :
-                              "text-gray-600 dark:text-gray-400"
-                            )}>{selectedResult.status}</span>
-                            {selectedResult.executedAt && (
-                              <span className="text-muted-foreground">
-                                {" "}on {new Date(selectedResult.executedAt).toLocaleDateString("en-US", {
-                                  month: "short",
-                                  day: "numeric",
-                                  year: "numeric",
-                                  hour: "numeric",
-                                  minute: "2-digit",
-                                })}
-                              </span>
-                            )}
-                          </div>
-                        </>
-                      ) : null;
-                    })()}
-                  </div>
-                </div>
-              )}
-
-              {/* Previous attempts history */}
-              {resultHistory.length > 0 && (
-                <div className="mb-6">
-                  <button
-                    onClick={() => setShowHistory(!showHistory)}
-                    className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1"
-                  >
-                    <HistoryIcon className="w-4 h-4" />
-                    {resultHistory.length} previous attempt{resultHistory.length !== 1 ? "s" : ""}
-                    <ChevronIcon className={cn("w-4 h-4 transition-transform", showHistory && "rotate-180")} />
-                  </button>
-                  {showHistory && (
-                    <div className="mt-2 space-y-2">
-                      {resultHistory.map((entry) => (
-                        <div key={entry.id} className="p-2 bg-muted/30 rounded text-sm">
-                          <div className="flex items-center gap-2">
-                            <span
-                              className={cn(
-                                "px-2 py-0.5 text-xs font-medium rounded-full",
-                                entry.status === "passed"
-                                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-                                  : entry.status === "failed"
-                                  ? "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
-                                  : entry.status === "blocked"
-                                  ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
-                                  : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400"
-                              )}
-                            >
-                              {entry.status.charAt(0).toUpperCase() + entry.status.slice(1)}
+                          {entry.executedAt && (
+                            <span className="text-muted-foreground">
+                              {new Date(entry.executedAt).toLocaleDateString("en-US", {
+                                month: "short",
+                                day: "numeric",
+                                year: "numeric",
+                                hour: "numeric",
+                                minute: "2-digit",
+                              })}
                             </span>
-                            {entry.executorName && (
-                              <span className="text-foreground">{entry.executorName}</span>
-                            )}
-                            {entry.executedAt && (
-                              <span className="text-muted-foreground">
-                                {new Date(entry.executedAt).toLocaleDateString("en-US", {
-                                  month: "short",
-                                  day: "numeric",
-                                  year: "numeric",
-                                  hour: "numeric",
-                                  minute: "2-digit",
-                                })}
-                              </span>
-                            )}
-                          </div>
-                          {entry.notes && (
-                            <p className="mt-1 text-muted-foreground">{entry.notes}</p>
                           )}
                         </div>
-                      ))}
-                    </div>
-                  )}
+                        {entry.notes && (
+                          <p className="mt-1 text-muted-foreground">{entry.notes}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -1242,13 +1250,6 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
                       <kbd className="text-[10px] px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded opacity-70">S</kbd>
                     </button>
                   </div>
-                </div>
-              )}
-
-              {selectedResult.notes && run.status === "completed" && (
-                <div className="mt-4 p-3 bg-[hsl(var(--muted))] rounded-md">
-                  <div className="text-sm font-medium mb-1">Notes</div>
-                  <div className="text-sm">{selectedResult.notes}</div>
                 </div>
               )}
             </div>
@@ -1478,14 +1479,6 @@ function HistoryIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  );
-}
-
-function ChevronIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
     </svg>
   );
 }
