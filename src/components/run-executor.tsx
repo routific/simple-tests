@@ -116,6 +116,30 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
   const [linkCopied, setLinkCopied] = useState(false);
   const [resultHistory, setResultHistory] = useState<HistoryEntry[]>([]);
 
+  // Sync results state when initialResults prop changes (after router.refresh)
+  useEffect(() => {
+    setResults(initialResults);
+    // Update selected result to match new data if it still exists
+    if (selectedResult) {
+      const updatedResult = initialResults.find(r => r.id === selectedResult.id);
+      if (updatedResult) {
+        setSelectedResult(updatedResult);
+      } else if (initialResults.length > 0) {
+        // Selected result was removed, select first pending or first result
+        setSelectedResult(initialResults.find(r => r.status === "pending") || initialResults[0]);
+      } else {
+        setSelectedResult(null);
+      }
+    } else if (initialResults.length > 0) {
+      setSelectedResult(initialResults.find(r => r.status === "pending") || initialResults[0]);
+    }
+  }, [initialResults]);
+
+  // Sync collaborators state when initialCollaborators prop changes
+  useEffect(() => {
+    setCollaborators(initialCollaborators);
+  }, [initialCollaborators]);
+
   // Update URL with initially selected scenario on mount
   useEffect(() => {
     if (selectedResult && !initialScenarioId) {
