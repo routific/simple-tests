@@ -236,6 +236,22 @@ export function TestCasesView({
     refreshUndoRedo();
   }, [cases]); // Refresh when cases change
 
+  // Sync selectedCase with updated cases data after router.refresh()
+  useEffect(() => {
+    if (selectedCase) {
+      const updatedCase = cases.find(c => c.id === selectedCase.id);
+      if (updatedCase) {
+        // Update with fresh data if it changed
+        if (updatedCase.title !== selectedCase.title ||
+            updatedCase.state !== selectedCase.state ||
+            updatedCase.folderId !== selectedCase.folderId ||
+            updatedCase.folderName !== selectedCase.folderName) {
+          setSelectedCase(updatedCase);
+        }
+      }
+    }
+  }, [cases]);
+
   // Handle deep-link: open panel for initial case ID from URL
   useEffect(() => {
     if (initializedRef.current) return;
@@ -1722,6 +1738,7 @@ function TestCasePanel({
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [loadingScenarios, setLoadingScenarios] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [refreshCounter, setRefreshCounter] = useState(0);
   const [auditLog, setAuditLog] = useState<Array<{
     id: number;
     action: string;
@@ -1742,7 +1759,7 @@ function TestCasePanel({
     }
   };
 
-  // Fetch scenarios and linked issues when panel opens
+  // Fetch scenarios and linked issues when panel opens or after save
   useEffect(() => {
     if (testCase && isOpen) {
       setLoadingScenarios(true);
@@ -1763,7 +1780,7 @@ function TestCasePanel({
       // Fetch audit log
       getTestCaseAuditLog(testCase.id).then(setAuditLog);
     }
-  }, [testCase?.id, isOpen]);
+  }, [testCase?.id, isOpen, refreshCounter]);
 
   // Reset form when test case changes
   const resetForm = () => {
@@ -1777,10 +1794,17 @@ function TestCasePanel({
     setError(null);
   };
 
-  // Reset when panel opens with new test case
-  if (testCase && title !== testCase.title && !isEditing) {
-    resetForm();
-  }
+  // Sync form fields when testCase prop changes (after router.refresh)
+  const lastTestCaseIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (testCase && !isEditing) {
+      // If switching to a different test case, reset the form
+      if (lastTestCaseIdRef.current !== testCase.id) {
+        resetForm();
+        lastTestCaseIdRef.current = testCase.id;
+      }
+    }
+  }, [testCase?.id, testCase?.title, testCase?.state, testCase?.folderId, isEditing]);
 
   const handleSave = () => {
     if (!testCase) return;
@@ -1813,6 +1837,7 @@ function TestCasePanel({
         }
 
         setIsEditing(false);
+        setRefreshCounter(c => c + 1); // Trigger re-fetch of scenarios and linked issues
         onSaved();
         refreshAuditLog();
       } catch {
