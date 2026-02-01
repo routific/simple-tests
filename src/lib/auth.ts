@@ -1,9 +1,49 @@
 import NextAuth from "next-auth";
 import type { OAuthConfig } from "next-auth/providers";
+import type { JWT } from "next-auth/jwt";
 import { db } from "./db";
 import { users, organizations } from "./db/schema";
 import { eq } from "drizzle-orm";
 import { LinearClient } from "@linear/sdk";
+
+// Linear tokens expire after 10 hours by default
+// We'll refresh when there's less than 5 minutes left
+const TOKEN_REFRESH_BUFFER_SECONDS = 5 * 60;
+
+interface LinearTokenResponse {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+  expires_in: number;
+  scope: string;
+}
+
+async function refreshLinearToken(refreshToken: string): Promise<LinearTokenResponse | null> {
+  try {
+    const response = await fetch("https://api.linear.app/oauth/token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        grant_type: "refresh_token",
+        refresh_token: refreshToken,
+        client_id: process.env.LINEAR_CLIENT_ID!,
+        client_secret: process.env.LINEAR_CLIENT_SECRET!,
+      }),
+    });
+
+    if (!response.ok) {
+      console.error("Failed to refresh Linear token:", response.status, await response.text());
+      return null;
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error refreshing Linear token:", error);
+    return null;
+  }
+}
 
 interface LinearProfile {
   id: string;
@@ -83,6 +123,22 @@ declare module "next-auth" {
       organizationUrlKey: string;
     };
     accessToken?: string;
+    error?: "RefreshTokenError" | "RefreshTokenMissing";
+  }
+}
+
+declare module "next-auth/jwt" {
+  interface JWT {
+    accessToken?: string;
+    refreshToken?: string;
+    accessTokenExpires?: number;
+    linearId?: string;
+    linearUsername?: string;
+    organizationId?: string;
+    organizationName?: string;
+    organizationUrlKey?: string;
+    organizationLogo?: string;
+    error?: "RefreshTokenError" | "RefreshTokenMissing";
   }
 }
 
@@ -93,17 +149,51 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     error: "/auth/error",
   },
   callbacks: {
-    async jwt({ token, account, profile }) {
+    async jwt({ token, account, profile }): Promise<JWT> {
+      // Initial sign-in: store tokens and profile info
       if (account && profile) {
         const linearProfile = profile as unknown as LinearProfile;
         token.accessToken = account.access_token;
+        token.refreshToken = account.refresh_token;
+        // Calculate expiration time (expires_in is in seconds)
+        token.accessTokenExpires = Date.now() + (account.expires_in as number) * 1000;
         token.linearId = linearProfile.id;
         token.linearUsername = linearProfile.name;
         token.organizationId = linearProfile.organization.id;
         token.organizationName = linearProfile.organization.name;
         token.organizationUrlKey = linearProfile.organization.urlKey;
         token.organizationLogo = linearProfile.organization.logoUrl;
+        return token;
       }
+
+      // Return token if it's still valid (with buffer time)
+      const expiresAt = token.accessTokenExpires as number | undefined;
+      if (expiresAt && Date.now() < expiresAt - TOKEN_REFRESH_BUFFER_SECONDS * 1000) {
+        return token;
+      }
+
+      // Token expired or expiring soon - try to refresh
+      const refreshToken = token.refreshToken as string | undefined;
+      if (!refreshToken) {
+        console.error("No refresh token available");
+        // Mark token as errored so UI can prompt re-auth
+        token.error = "RefreshTokenMissing";
+        return token;
+      }
+
+      const refreshedTokens = await refreshLinearToken(refreshToken);
+      if (!refreshedTokens) {
+        console.error("Failed to refresh access token");
+        token.error = "RefreshTokenError";
+        return token;
+      }
+
+      // Update token with refreshed values
+      token.accessToken = refreshedTokens.access_token;
+      token.refreshToken = refreshedTokens.refresh_token;
+      token.accessTokenExpires = Date.now() + refreshedTokens.expires_in * 1000;
+      delete token.error;
+
       return token;
     },
     async signIn({ profile }) {
@@ -175,6 +265,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.user.organizationName = token.organizationName as string;
         session.user.organizationUrlKey = token.organizationUrlKey as string;
         session.accessToken = token.accessToken as string;
+        if (token.error) {
+          session.error = token.error;
+        }
       }
       return session;
     },
