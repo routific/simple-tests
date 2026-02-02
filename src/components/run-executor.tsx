@@ -395,7 +395,7 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
             if (currentIndex < results.length - 1) {
               const next = results[currentIndex + 1];
               setSelectedResult(next);
-              setNotes(next.notes || "");
+              setNotes("");
               // Update URL with scenario parameter
               const url = new URL(window.location.href);
               url.searchParams.set("scenario", next.scenarioId.toString());
@@ -412,7 +412,7 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
             if (currentIndex > 0) {
               const prev = results[currentIndex - 1];
               setSelectedResult(prev);
-              setNotes(prev.notes || "");
+              setNotes("");
               // Update URL with scenario parameter
               const url = new URL(window.location.href);
               url.searchParams.set("scenario", prev.scenarioId.toString());
@@ -1035,7 +1035,7 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
                 <button
                   onClick={() => {
                     setSelectedResult(result);
-                    setNotes(result.notes || "");
+                    setNotes("");
                     // Update URL with scenario parameter
                     const url = new URL(window.location.href);
                     url.searchParams.set("scenario", result.scenarioId.toString());
