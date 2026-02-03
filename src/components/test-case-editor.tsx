@@ -36,6 +36,8 @@ interface Props {
   currentFolder?: Folder | null;
   defaultFolderId?: number | null;
   linearWorkspace?: string;
+  initialScenarios?: Scenario[];
+  initialLinkedIssues?: LinkedIssue[];
 }
 
 export function TestCaseEditor({
@@ -44,6 +46,8 @@ export function TestCaseEditor({
   currentFolder,
   defaultFolderId,
   linearWorkspace,
+  initialScenarios,
+  initialLinkedIssues,
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -52,28 +56,30 @@ export function TestCaseEditor({
     testCase?.folderId ?? defaultFolderId ?? null
   );
   const [state, setState] = useState(testCase?.state || "active");
-  const [linkedIssues, setLinkedIssues] = useState<LinkedIssue[]>([]);
+  const [linkedIssues, setLinkedIssues] = useState<LinkedIssue[]>(initialLinkedIssues ?? []);
   const [loadingLinkedIssues, setLoadingLinkedIssues] = useState(false);
-  const [scenarios, setScenarios] = useState<Scenario[]>([]);
+  const [scenarios, setScenarios] = useState<Scenario[]>(initialScenarios ?? []);
   const [loadingScenarios, setLoadingScenarios] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const isNew = !testCase;
 
-  // Fetch scenarios and linked issues when editing existing test case
+  // Only fetch client-side if initial data wasn't provided (backwards compatibility)
   useEffect(() => {
-    if (testCase?.id) {
+    if (testCase?.id && !initialScenarios) {
       setLoadingScenarios(true);
       getScenarios(testCase.id)
         .then((data) => setScenarios(data))
         .finally(() => setLoadingScenarios(false));
+    }
 
+    if (testCase?.id && !initialLinkedIssues) {
       setLoadingLinkedIssues(true);
       getLinkedIssues(testCase.id)
         .then((data) => setLinkedIssues(data))
         .finally(() => setLoadingLinkedIssues(false));
     }
-  }, [testCase?.id]);
+  }, [testCase?.id, initialScenarios, initialLinkedIssues]);
 
   const handleSave = () => {
     if (!title.trim()) {
