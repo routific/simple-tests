@@ -79,6 +79,57 @@ export function registerTestRunTools(auth: AuthContext): Tool[] {
           },
           required: ["testRunId", "issueId", "issueIdentifier", "issueTitle"],
         },
+      },
+      {
+        name: "update_test_run",
+        description: "Update an existing test run",
+        inputSchema: {
+          type: "object",
+          properties: {
+            id: {
+              type: "number",
+              description: "ID of the test run to update",
+            },
+            name: {
+              type: "string",
+              description: "New name for the test run",
+            },
+            status: {
+              type: "string",
+              enum: ["in_progress", "completed"],
+              description: "New status for the test run",
+            },
+            linearIssueId: {
+              type: ["string", "null"],
+              description: "Linear issue UUID (null to unlink)",
+            },
+            linearIssueIdentifier: {
+              type: ["string", "null"],
+              description: "Linear issue identifier (e.g., 'ROUT-300')",
+            },
+            linearIssueTitle: {
+              type: ["string", "null"],
+              description: "Linear issue title",
+            },
+            linearProjectId: {
+              type: ["string", "null"],
+              description: "Linear project UUID (null to unlink)",
+            },
+            linearProjectName: {
+              type: ["string", "null"],
+              description: "Linear project name",
+            },
+            linearMilestoneId: {
+              type: ["string", "null"],
+              description: "Linear milestone UUID (null to unlink)",
+            },
+            linearMilestoneName: {
+              type: ["string", "null"],
+              description: "Linear milestone name",
+            },
+          },
+          required: ["id"],
+        },
       }
     );
   }
@@ -101,6 +152,8 @@ export async function handleTestRunTool(
   switch (name) {
     case "create_test_run":
       return createTestRun(args, auth);
+    case "update_test_run":
+      return updateTestRun(args, auth);
     case "update_test_result":
       return updateTestResult(args, auth);
     case "link_linear_issue":
@@ -332,6 +385,85 @@ async function linkLinearIssue(
       linearIssueTitle: issueTitle,
     })
     .where(eq(testRuns.id, testRunId))
+    .returning();
+
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify({ success: true, testRun: result[0] }, null, 2),
+      },
+    ],
+  };
+}
+
+async function updateTestRun(
+  args: Record<string, unknown>,
+  auth: AuthContext
+): Promise<CallToolResult> {
+  const { id, ...updates } = args as {
+    id: number;
+    name?: string;
+    status?: "in_progress" | "completed";
+    linearIssueId?: string | null;
+    linearIssueIdentifier?: string | null;
+    linearIssueTitle?: string | null;
+    linearProjectId?: string | null;
+    linearProjectName?: string | null;
+    linearMilestoneId?: string | null;
+    linearMilestoneName?: string | null;
+  };
+
+  if (!id) {
+    return {
+      content: [{ type: "text", text: "Error: id is required" }],
+      isError: true,
+    };
+  }
+
+  // Verify test run exists and belongs to org
+  const existing = await db
+    .select()
+    .from(testRuns)
+    .where(
+      and(
+        eq(testRuns.id, id),
+        eq(testRuns.organizationId, auth.organizationId)
+      )
+    )
+    .limit(1);
+
+  if (existing.length === 0) {
+    return {
+      content: [{ type: "text", text: `Error: Test run not found: ${id}` }],
+      isError: true,
+    };
+  }
+
+  // Build updates object with only provided fields
+  const updateData: Partial<typeof testRuns.$inferInsert> = {};
+
+  if (updates.name !== undefined) updateData.name = updates.name;
+  if (updates.status !== undefined) updateData.status = updates.status;
+  if (updates.linearIssueId !== undefined) updateData.linearIssueId = updates.linearIssueId;
+  if (updates.linearIssueIdentifier !== undefined) updateData.linearIssueIdentifier = updates.linearIssueIdentifier;
+  if (updates.linearIssueTitle !== undefined) updateData.linearIssueTitle = updates.linearIssueTitle;
+  if (updates.linearProjectId !== undefined) updateData.linearProjectId = updates.linearProjectId;
+  if (updates.linearProjectName !== undefined) updateData.linearProjectName = updates.linearProjectName;
+  if (updates.linearMilestoneId !== undefined) updateData.linearMilestoneId = updates.linearMilestoneId;
+  if (updates.linearMilestoneName !== undefined) updateData.linearMilestoneName = updates.linearMilestoneName;
+
+  if (Object.keys(updateData).length === 0) {
+    return {
+      content: [{ type: "text", text: "Error: No fields to update" }],
+      isError: true,
+    };
+  }
+
+  const result = await db
+    .update(testRuns)
+    .set(updateData)
+    .where(eq(testRuns.id, id))
     .returning();
 
   return {
