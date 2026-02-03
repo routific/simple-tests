@@ -55,7 +55,7 @@ export function registerTestRunTools(auth: AuthContext): Tool[] {
         },
       },
       {
-        name: "link_linear_issue",
+        name: "link_test_run_to_issue",
         description: "Link a test run to a Linear issue",
         inputSchema: {
           type: "object",
@@ -156,7 +156,7 @@ export async function handleTestRunTool(
       return updateTestRun(args, auth);
     case "update_test_result":
       return updateTestResult(args, auth);
-    case "link_linear_issue":
+    case "link_test_run_to_issue":
       return linkLinearIssue(args, auth);
     default:
       return {

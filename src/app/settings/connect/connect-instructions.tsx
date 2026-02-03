@@ -256,6 +256,21 @@ export function ConnectInstructions({ baseUrl }: ConnectInstructionsProps) {
             type="write"
           />
           <ToolCard
+            title="rename_folder"
+            description="Rename an existing folder"
+            type="write"
+          />
+          <ToolCard
+            title="move_folder"
+            description="Move a folder to a new parent"
+            type="write"
+          />
+          <ToolCard
+            title="delete_folder"
+            description="Delete an empty folder"
+            type="write"
+          />
+          <ToolCard
             title="create_test_case"
             description="Create a new test case"
             type="write"
@@ -264,6 +279,16 @@ export function ConnectInstructions({ baseUrl }: ConnectInstructionsProps) {
             title="update_test_case"
             description="Update an existing test case"
             type="write"
+          />
+          <ToolCard
+            title="delete_test_case"
+            description="Delete a test case"
+            type="write"
+          />
+          <ToolCard
+            title="get_linked_issues"
+            description="Get Linear issues linked to a test case"
+            type="read"
           />
           <ToolCard
             title="list_test_runs"
@@ -283,6 +308,16 @@ export function ConnectInstructions({ baseUrl }: ConnectInstructionsProps) {
           <ToolCard
             title="update_test_result"
             description="Update test result status"
+            type="write"
+          />
+          <ToolCard
+            title="update_test_run"
+            description="Update test run name, status, or Linear links"
+            type="write"
+          />
+          <ToolCard
+            title="link_test_run_to_issue"
+            description="Link a test run to a Linear issue"
             type="write"
           />
         </div>
