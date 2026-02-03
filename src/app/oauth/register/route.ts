@@ -52,11 +52,18 @@ export async function POST(request: NextRequest) {
   for (const uri of redirectUris) {
     try {
       const url = new URL(uri);
-      // Allow localhost for development, require HTTPS for production
-      if (url.hostname !== "localhost" && url.hostname !== "127.0.0.1" && url.protocol !== "https:") {
+      // Allow:
+      // - localhost/127.0.0.1 (any protocol, for development)
+      // - HTTPS URLs (for web apps)
+      // - Custom protocol schemes (for native apps like Cursor, VS Code, etc.)
+      const isLocalhost = url.hostname === "localhost" || url.hostname === "127.0.0.1";
+      const isHttps = url.protocol === "https:";
+      const isCustomScheme = !url.protocol.startsWith("http");
+
+      if (!isLocalhost && !isHttps && !isCustomScheme) {
         return errorResponse(
           "invalid_redirect_uri",
-          `redirect_uri must use HTTPS (except for localhost): ${uri}`
+          `redirect_uri must use HTTPS, localhost, or a custom protocol scheme: ${uri}`
         );
       }
     } catch {
