@@ -193,6 +193,32 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
   const [loadingProjects, setLoadingProjects] = useState(false);
   const [loadingMilestones, setLoadingMilestones] = useState(false);
   const [loadingIssues, setLoadingIssues] = useState(false);
+  const [linearError, setLinearError] = useState<string | null>(null);
+
+  // Fetch Linear projects
+  const fetchProjects = useCallback(async () => {
+    setLoadingProjects(true);
+    setLinearError(null);
+    try {
+      const res = await fetch("/api/linear/projects");
+      if (res.status === 401) {
+        setLinearError("Linear connection expired. Please reconnect in Settings.");
+        setProjects([]);
+        return;
+      }
+      if (!res.ok) {
+        setLinearError("Failed to load Linear projects");
+        return;
+      }
+      const data = await res.json();
+      setProjects(data);
+    } catch (e) {
+      console.error("Failed to fetch projects:", e);
+      setLinearError("Failed to connect to Linear");
+    } finally {
+      setLoadingProjects(false);
+    }
+  }, []);
 
   // Get scenario IDs already in this run
   const existingScenarioIds = useMemo(() => new Set(results.map(r => r.scenarioId)), [results]);
@@ -243,22 +269,8 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
   // Fetch Linear projects when entering edit mode
   useEffect(() => {
     if (!isEditing) return;
-    async function fetchProjects() {
-      setLoadingProjects(true);
-      try {
-        const res = await fetch("/api/linear/projects");
-        if (res.ok) {
-          const data = await res.json();
-          setProjects(data);
-        }
-      } catch (e) {
-        console.error("Failed to fetch projects:", e);
-      } finally {
-        setLoadingProjects(false);
-      }
-    }
     fetchProjects();
-  }, [isEditing]);
+  }, [isEditing, fetchProjects]);
 
   // Fetch milestones when project changes
   useEffect(() => {
@@ -677,12 +689,32 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
               </div>
               {/* Linear Integration */}
               <div className="border border-[hsl(var(--border))] rounded-lg p-3 bg-[hsl(var(--muted))]/30">
-                <div className="flex items-center gap-2 mb-3">
-                  <LinearIcon className="w-4 h-4 text-brand-600" />
-                  <span className="text-sm font-medium">Linear Integration</span>
-                  <span className="text-xs text-[hsl(var(--muted-foreground))]">(optional)</span>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <LinearIcon className="w-4 h-4 text-brand-600" />
+                    <span className="text-sm font-medium">Linear Integration</span>
+                    <span className="text-xs text-[hsl(var(--muted-foreground))]">(optional)</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={fetchProjects}
+                    disabled={loadingProjects}
+                    className="p-1.5 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))] rounded transition-colors disabled:opacity-50"
+                    title="Refresh Linear data"
+                  >
+                    <RefreshIcon className={cn("w-4 h-4", loadingProjects && "animate-spin")} />
+                  </button>
                 </div>
 
+                {linearError ? (
+                  <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-sm text-amber-800 dark:text-amber-200 flex items-center gap-2">
+                    <WarningIcon className="w-4 h-4 shrink-0" />
+                    <span className="flex-1">{linearError}</span>
+                    <Link href="/settings" className="text-amber-600 dark:text-amber-400 hover:underline font-medium">
+                      Settings
+                    </Link>
+                  </div>
+                ) : (
                 <div className="grid grid-cols-3 gap-4">
                   {/* Project Selector */}
                   <div>
@@ -791,6 +823,7 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
                     </div>
                   </div>
                 </div>
+                )}
               </div>
             </div>
           ) : (
@@ -1659,6 +1692,22 @@ function FolderIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
+    </svg>
+  );
+}
+
+function RefreshIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+    </svg>
+  );
+}
+
+function WarningIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
     </svg>
   );
 }

@@ -222,24 +222,47 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Get session ID from query params
-  const sessionId = request.nextUrl.searchParams.get("sessionId");
+  // Get session ID from query params (or generate one)
+  const sessionId = request.nextUrl.searchParams.get("sessionId") || crypto.randomUUID();
 
-  if (!sessionId) {
-    return NextResponse.json(
-      { error: "sessionId query parameter required" },
-      { status: 400, headers: corsHeaders }
-    );
-  }
+  // Create auth context for MCP server
+  const mcpAuth = {
+    token: null as any,
+    organizationId: auth.organizationId,
+    userId: auth.userId,
+    permissions: parseScope(auth.scope) as "read" | "write" | "admin",
+  };
 
-  // Get session
-  const session = getSession(sessionId);
+  // Get or create session
+  let session = getSession(sessionId);
 
   if (!session) {
-    return NextResponse.json(
-      { error: "Session not found or expired" },
-      { status: 404, headers: corsHeaders }
-    );
+    // Create a new session on-demand for Streamable HTTP transport
+    const server = createMcpServer(mcpAuth, {
+      clientId: auth.clientId,
+      sessionId,
+    });
+    session = createSession(sessionId, server, mcpAuth);
+
+    // For POST-only flow, create a simple transport that collects responses
+    const postTransport: McpTransport = {
+      async start() {},
+      async send(message: JSONRPCMessage) {
+        // Store response to send back
+        (postTransport as any)._lastResponse = message;
+      },
+      async close() {},
+      handleIncomingMessage(message: JSONRPCMessage) {
+        this.onmessage?.(message);
+      },
+      onmessage: undefined,
+      onclose: undefined,
+      onerror: undefined,
+    };
+    setSessionTransport(sessionId, postTransport);
+
+    // Connect server to transport
+    await server.connect(postTransport as unknown as Transport);
   }
 
   // Verify token belongs to same org as session
@@ -270,8 +293,33 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    // Create a promise to capture the response
+    const responsePromise = new Promise<JSONRPCMessage | null>((resolve) => {
+      const transport = session.transport!;
+      const originalSend = transport.send.bind(transport);
+
+      // Intercept the next send call to capture the response
+      transport.send = async (responseMessage: JSONRPCMessage) => {
+        transport.send = originalSend; // Restore original
+        resolve(responseMessage);
+      };
+
+      // Set a timeout in case no response comes
+      setTimeout(() => resolve(null), 30000);
+    });
+
+    // Process the incoming message
     session.transport.handleIncomingMessage(message);
-    return NextResponse.json({ success: true }, { headers: corsHeaders });
+
+    // Wait for the response
+    const response = await responsePromise;
+
+    if (response) {
+      return NextResponse.json(response, { headers: corsHeaders });
+    } else {
+      // No response expected (e.g., for notifications)
+      return new Response(null, { status: 202, headers: corsHeaders });
+    }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error("[MCP SSE POST] Error handling message:", errorMessage);
