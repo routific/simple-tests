@@ -333,6 +333,15 @@ function Kbd({ children }: { children: ReactNode }) {
 // Changelog entries - newest first
 const CHANGELOG = [
   {
+    version: "79dbb80",
+    date: "2026-02-03",
+    changes: [
+      "Auto-refresh Linear OAuth tokens to prevent session disconnects",
+      "Add update_test_run and link_test_run_to_issue MCP tools",
+      "Document all MCP tools on the Connect settings page",
+    ],
+  },
+  {
     version: "522462e",
     date: "2026-01-31",
     changes: [

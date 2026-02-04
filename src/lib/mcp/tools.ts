@@ -241,6 +241,44 @@ export function registerTools(auth: AuthContext): Tool[] {
           },
           required: ["resultId", "status"],
         },
+      },
+      {
+        name: "update_test_run",
+        description: "Update an existing test run (name, status, or Linear links)",
+        inputSchema: {
+          type: "object",
+          properties: {
+            id: { type: "number", description: "Test run ID" },
+            name: { type: "string", description: "New name for the test run" },
+            status: {
+              type: "string",
+              enum: ["in_progress", "completed"],
+              description: "New status for the test run",
+            },
+            linearIssueId: { type: "string", description: "Linear issue UUID (empty to unlink)" },
+            linearIssueIdentifier: { type: "string", description: "Linear issue identifier (e.g., 'ROUT-300')" },
+            linearIssueTitle: { type: "string", description: "Linear issue title" },
+            linearProjectId: { type: "string", description: "Linear project UUID (empty to unlink)" },
+            linearProjectName: { type: "string", description: "Linear project name" },
+            linearMilestoneId: { type: "string", description: "Linear milestone UUID (empty to unlink)" },
+            linearMilestoneName: { type: "string", description: "Linear milestone name" },
+          },
+          required: ["id"],
+        },
+      },
+      {
+        name: "link_test_run_to_issue",
+        description: "Link a test run to a Linear issue",
+        inputSchema: {
+          type: "object",
+          properties: {
+            testRunId: { type: "number", description: "Test run ID" },
+            issueId: { type: "string", description: "Linear issue UUID" },
+            issueIdentifier: { type: "string", description: "Linear issue identifier (e.g., 'ROUT-300')" },
+            issueTitle: { type: "string", description: "Linear issue title" },
+          },
+          required: ["testRunId", "issueId", "issueIdentifier", "issueTitle"],
+        },
       }
     );
   }
@@ -300,6 +338,10 @@ export async function handleToolCall(
       return createTestRun(args, auth, auditCtx);
     case "update_test_result":
       return updateTestResult(args, auth, auditCtx);
+    case "update_test_run":
+      return updateTestRun(args, auth, auditCtx);
+    case "link_test_run_to_issue":
+      return linkTestRunToIssue(args, auth, auditCtx);
     default:
       return {
         content: [{ type: "text", text: `Unknown tool: ${name}` }],
@@ -1423,5 +1465,180 @@ async function updateTestResult(
 
   return {
     content: [{ type: "text", text: JSON.stringify({ success: true, result: result[0] }, null, 2) }],
+  };
+}
+
+async function updateTestRun(
+  args: Record<string, unknown>,
+  auth: AuthContext,
+  ctx: McpCallContext
+): Promise<CallToolResult> {
+  const { id, ...updates } = args as {
+    id: number;
+    name?: string;
+    status?: "in_progress" | "completed";
+    linearIssueId?: string;
+    linearIssueIdentifier?: string;
+    linearIssueTitle?: string;
+    linearProjectId?: string;
+    linearProjectName?: string;
+    linearMilestoneId?: string;
+    linearMilestoneName?: string;
+  };
+
+  if (!id) {
+    await logMcpWriteOperation(ctx, {
+      toolName: "update_test_run",
+      toolArgs: args,
+      entityType: "test_run",
+      status: "failed",
+      errorMessage: "id is required",
+    });
+    return {
+      content: [{ type: "text", text: "Error: id is required" }],
+      isError: true,
+    };
+  }
+
+  // Get before state for undo capability
+  const beforeState = await getEntityState("test_run", id, auth.organizationId);
+
+  if (!beforeState) {
+    await logMcpWriteOperation(ctx, {
+      toolName: "update_test_run",
+      toolArgs: args,
+      entityType: "test_run",
+      entityId: id,
+      status: "failed",
+      errorMessage: `Test run not found: ${id}`,
+    });
+    return {
+      content: [{ type: "text", text: `Error: Test run not found: ${id}` }],
+      isError: true,
+    };
+  }
+
+  // Build updates object with only provided fields
+  // Empty strings are treated as null (for unlinking)
+  const updateData: Partial<typeof testRuns.$inferInsert> = {};
+
+  if (updates.name !== undefined) updateData.name = updates.name;
+  if (updates.status !== undefined) updateData.status = updates.status;
+  if (updates.linearIssueId !== undefined) updateData.linearIssueId = updates.linearIssueId || null;
+  if (updates.linearIssueIdentifier !== undefined) updateData.linearIssueIdentifier = updates.linearIssueIdentifier || null;
+  if (updates.linearIssueTitle !== undefined) updateData.linearIssueTitle = updates.linearIssueTitle || null;
+  if (updates.linearProjectId !== undefined) updateData.linearProjectId = updates.linearProjectId || null;
+  if (updates.linearProjectName !== undefined) updateData.linearProjectName = updates.linearProjectName || null;
+  if (updates.linearMilestoneId !== undefined) updateData.linearMilestoneId = updates.linearMilestoneId || null;
+  if (updates.linearMilestoneName !== undefined) updateData.linearMilestoneName = updates.linearMilestoneName || null;
+
+  if (Object.keys(updateData).length === 0) {
+    await logMcpWriteOperation(ctx, {
+      toolName: "update_test_run",
+      toolArgs: args,
+      entityType: "test_run",
+      entityId: id,
+      status: "failed",
+      errorMessage: "No fields to update",
+    });
+    return {
+      content: [{ type: "text", text: "Error: No fields to update" }],
+      isError: true,
+    };
+  }
+
+  const result = await db
+    .update(testRuns)
+    .set(updateData)
+    .where(eq(testRuns.id, id))
+    .returning();
+
+  const afterState = await getEntityState("test_run", id, auth.organizationId);
+
+  // Log to MCP write log
+  await logMcpWriteOperation(ctx, {
+    toolName: "update_test_run",
+    toolArgs: args,
+    entityType: "test_run",
+    entityId: id,
+    beforeState,
+    afterState,
+    status: "success",
+  });
+
+  return {
+    content: [{ type: "text", text: JSON.stringify({ success: true, testRun: result[0] }, null, 2) }],
+  };
+}
+
+async function linkTestRunToIssue(
+  args: Record<string, unknown>,
+  auth: AuthContext,
+  ctx: McpCallContext
+): Promise<CallToolResult> {
+  const { testRunId, issueId, issueIdentifier, issueTitle } = args as {
+    testRunId: number;
+    issueId: string;
+    issueIdentifier: string;
+    issueTitle: string;
+  };
+
+  if (!testRunId || !issueId || !issueIdentifier || !issueTitle) {
+    await logMcpWriteOperation(ctx, {
+      toolName: "link_test_run_to_issue",
+      toolArgs: args,
+      entityType: "test_run",
+      status: "failed",
+      errorMessage: "testRunId, issueId, issueIdentifier, and issueTitle are required",
+    });
+    return {
+      content: [{ type: "text", text: "Error: testRunId, issueId, issueIdentifier, and issueTitle are required" }],
+      isError: true,
+    };
+  }
+
+  // Get before state for undo capability
+  const beforeState = await getEntityState("test_run", testRunId, auth.organizationId);
+
+  if (!beforeState) {
+    await logMcpWriteOperation(ctx, {
+      toolName: "link_test_run_to_issue",
+      toolArgs: args,
+      entityType: "test_run",
+      entityId: testRunId,
+      status: "failed",
+      errorMessage: `Test run not found: ${testRunId}`,
+    });
+    return {
+      content: [{ type: "text", text: `Error: Test run not found: ${testRunId}` }],
+      isError: true,
+    };
+  }
+
+  const result = await db
+    .update(testRuns)
+    .set({
+      linearIssueId: issueId,
+      linearIssueIdentifier: issueIdentifier,
+      linearIssueTitle: issueTitle,
+    })
+    .where(eq(testRuns.id, testRunId))
+    .returning();
+
+  const afterState = await getEntityState("test_run", testRunId, auth.organizationId);
+
+  // Log to MCP write log
+  await logMcpWriteOperation(ctx, {
+    toolName: "link_test_run_to_issue",
+    toolArgs: args,
+    entityType: "test_run",
+    entityId: testRunId,
+    beforeState,
+    afterState,
+    status: "success",
+  });
+
+  return {
+    content: [{ type: "text", text: JSON.stringify({ success: true, testRun: result[0] }, null, 2) }],
   };
 }
