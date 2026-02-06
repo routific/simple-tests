@@ -2,13 +2,11 @@ import { db } from "@/lib/db";
 import { releases, testRuns, testRunResults, users } from "@/lib/db/schema";
 import { eq, count, sql, inArray } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
-import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { getSessionWithOrg } from "@/lib/auth";
 import { getIssuesByLabel } from "@/lib/linear";
 import { TestRunRow, type TestRunData } from "@/components/test-run-row";
-import { ReleaseStatusButton } from "../release-status-button";
+import { ReleaseHeader } from "./release-header";
 
 export const dynamic = "force-dynamic";
 
@@ -144,33 +142,14 @@ export default async function ReleaseDetailPage({ params }: Props) {
 
   return (
     <div className="p-8 max-w-6xl animate-fade-in">
-      {/* Back link */}
-      <Link
-        href="/releases"
-        className="text-sm text-muted-foreground hover:text-foreground transition-colors mb-4 inline-flex items-center gap-1"
-      >
-        <ChevronLeftIcon className="w-4 h-4" />
-        All Releases
-      </Link>
-
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-8 mt-2">
-        <h1 className="text-2xl font-semibold text-foreground tracking-tight">
-          {release.name}
-        </h1>
-        <Badge variant={release.status === "active" ? "default" : "secondary"}>
-          {release.status}
-        </Badge>
-        <ReleaseStatusButton
-          releaseId={release.id}
-          status={release.status as "active" | "completed"}
-        />
-        {release.linearLabelId && (
-          <span className="text-xs text-brand-500 bg-brand-500/10 px-2 py-0.5 rounded-full">
-            Synced from Linear
-          </span>
-        )}
-      </div>
+      <ReleaseHeader
+        release={{
+          id: release.id,
+          name: release.name,
+          status: release.status as "active" | "completed",
+          linearLabelId: release.linearLabelId,
+        }}
+      />
 
       <div className="space-y-8">
         {/* Linear Issues */}
@@ -250,14 +229,6 @@ export default async function ReleaseDetailPage({ params }: Props) {
         </div>
       </div>
     </div>
-  );
-}
-
-function ChevronLeftIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-    </svg>
   );
 }
 
