@@ -175,6 +175,10 @@ export async function syncReleasesFromLinear() {
     return { error: "Unauthorized" };
   }
 
+  if (session.error === "RefreshTokenError" || session.error === "RefreshTokenMissing") {
+    return { error: "auth_expired" };
+  }
+
   const { organizationId } = session.user;
   const userId = session.user.id;
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { syncReleasesFromLinear } from "./actions";
 
@@ -13,6 +14,10 @@ export function SyncButton() {
     startTransition(async () => {
       const result = await syncReleasesFromLinear();
       if ("error" in result && result.error) {
+        if (result.error === "auth_expired") {
+          signIn("linear");
+          return;
+        }
         setMessage(result.error);
       } else if ("message" in result && result.message) {
         setMessage(result.message);
