@@ -158,6 +158,14 @@ src/
 │   │       ├── projects/        # Fetch Linear projects
 │   │       ├── milestones/      # Fetch Linear milestones
 │   │       └── issues/          # Search Linear issues
+│   ├── oauth/                   # OAuth 2.0 server for MCP
+│   │   ├── authorize/           # Authorization endpoint
+│   │   ├── token/               # Token exchange endpoint
+│   │   ├── callback/            # OAuth callback handler
+│   │   └── register/            # Dynamic client registration
+│   └── .well-known/             # OAuth discovery endpoints
+│       ├── oauth-authorization-server/
+│       └── oauth-protected-resource/
 │
 ├── components/
 │   ├── ui/                      # Reusable UI components
@@ -183,6 +191,15 @@ src/
 │   ├── db/
 │   │   ├── schema.ts            # Drizzle schema definitions
 │   │   └── index.ts             # Database connection
+│   ├── mcp/                     # MCP server implementation
+│   │   ├── server.ts            # MCP server factory
+│   │   ├── tools.ts             # MCP tool definitions
+│   │   ├── resources.ts         # MCP resource definitions
+│   │   ├── auth.ts              # Token validation
+│   │   ├── session-store.ts     # Session management
+│   │   └── audit-log.ts         # Write operation logging
+│   ├── oauth/                   # OAuth utilities for MCP
+│   │   └── utils.ts             # Token generation, validation
 │   ├── auth.ts                  # Auth.js + Linear OAuth configuration
 │   ├── linear.ts                # Linear API client
 │   ├── folders.ts               # Folder tree utilities
@@ -311,12 +328,25 @@ Test cases can contain multiple scenarios, each with their own Gherkin content. 
 - **Project linking** - Associate test runs with Linear projects
 - **Milestone tracking** - Link runs to project milestones
 - **Issue attachment** - Connect runs to specific Linear issues
+- **Test case linking** - Link Linear issues directly to test cases
+- **Auto token refresh** - Seamless session management with automatic OAuth refresh
 
 ### MCP (Model Context Protocol)
-- **AI assistant integration** - Connect Claude Desktop or Claude Code to SimpleTests
+- **AI assistant integration** - Connect Claude Desktop, Claude Code, or Cursor to SimpleTests
 - **Full API access** - Create, read, search, and manage test cases via MCP tools
 - **Cross-tool workflows** - Combine with Linear MCP to sync requirements with test cases
-- **OAuth authentication** - Secure access using your Linear credentials
+- **OAuth authentication** - Secure access using your Linear credentials (supports custom protocol schemes for native apps)
+- **Tools available**: list_folders, get_folder, list_test_cases, get_test_case, search_test_cases, create_folder, rename_folder, move_folder, delete_folder, create_test_case, update_test_case, delete_test_case, get_linked_issues, link_linear_issue, unlink_linear_issue, list_test_runs, get_test_run, create_test_run, update_test_run, update_test_result
+
+### Keyboard Shortcuts
+- **?** - Show keyboard shortcuts help
+- **⌘+Shift+I** - Show version info and changelog
+- **[** - Toggle sidebar
+- **Esc** - Close modal / cancel
+- **P/F/B/S** - Pass/Fail/Block/Skip (in test run execution)
+- **J/K or ↓/↑** - Navigate scenarios (in test run execution)
+- **N** - Focus notes field (in test run execution)
+- **⌘+Z / ⌘+Shift+Z** - Undo/Redo
 
 ## Data Migration
 
@@ -386,7 +416,10 @@ The app runs at http://localhost:3000.
 | `src/app/runs/actions.ts` | Test run mutations (create, update, add/remove scenarios) |
 | `src/app/releases/actions.ts` | Release management mutations |
 | `src/app/api/mcp/sse/route.ts` | MCP SSE transport endpoint |
+| `src/app/oauth/` | OAuth 2.0 server for MCP authentication |
+| `src/lib/mcp/` | MCP server implementation (tools, resources, auth) |
 | `src/app/settings/connect/` | MCP connection instructions page |
+| `src/components/keyboard-shortcuts-provider.tsx` | Global keyboard shortcuts and version info modal |
 | `scripts/import-testmo.ts` | CSV import script |
 | `drizzle.config.ts` | Database migration config |
 
