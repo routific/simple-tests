@@ -196,23 +196,25 @@ export async function getReleaseLabels(): Promise<LinearLabel[]> {
   try {
     const client = await getLinearClient();
 
-    // Find the "Releases" parent label group
-    const labels = await client.issueLabels({
-      first: 100,
-      filter: { name: { eq: "Releases" } },
+    // Query for labels whose parent is named "Releases"
+    // This works for both workspace-level and team-level label groups
+    const children = await client.issueLabels({
+      first: 250,
+      filter: { parent: { name: { eq: "Releases" } } },
     });
 
-    const parentLabel = labels.nodes.find((l) => l.name === "Releases");
-    if (!parentLabel) {
-      return [];
-    }
-
-    // Fetch child labels under the "Releases" group
-    const children = await parentLabel.children();
-    return children.nodes.map((l) => ({
-      id: l.id,
-      name: l.name,
-    }));
+    // Deduplicate by label ID (in case of overlapping results)
+    const seen = new Set<string>();
+    return children.nodes
+      .filter((l) => {
+        if (seen.has(l.id)) return false;
+        seen.add(l.id);
+        return true;
+      })
+      .map((l) => ({
+        id: l.id,
+        name: l.name,
+      }));
   } catch (error) {
     console.error("Failed to fetch Linear release labels:", error);
     return [];
