@@ -1,12 +1,14 @@
 import { db } from "@/lib/db";
-import { releases, testRuns, testRunResults } from "@/lib/db/schema";
-import { eq, count } from "drizzle-orm";
+import { releases, testRuns, testRunResults, users } from "@/lib/db/schema";
+import { eq, count, sql, inArray } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getSessionWithOrg } from "@/lib/auth";
 import { getIssuesByLabel } from "@/lib/linear";
+import { TestRunRow, type TestRunData } from "@/components/test-run-row";
+import { ReleaseStatusButton } from "../release-status-button";
 
 export const dynamic = "force-dynamic";
 
@@ -42,9 +44,57 @@ export default async function ReleaseDetailPage({ params }: Props) {
   const runs = await db
     .select()
     .from(testRuns)
-    .where(eq(testRuns.releaseId, releaseId));
+    .where(eq(testRuns.releaseId, releaseId))
+    .orderBy(sql`${testRuns.createdAt} DESC`);
 
-  const runStats = await Promise.all(
+  // Collect all user IDs (creators + executors)
+  const allUserIds = new Set<string>();
+  runs.forEach(run => {
+    if (run.createdBy) allUserIds.add(run.createdBy);
+  });
+
+  // Get all executors from test results
+  const runIds = runs.map(r => r.id);
+  const allExecutors = runIds.length > 0
+    ? await db
+        .select({
+          testRunId: testRunResults.testRunId,
+          executedBy: testRunResults.executedBy,
+        })
+        .from(testRunResults)
+        .where(sql`${testRunResults.executedBy} IS NOT NULL AND ${testRunResults.testRunId} IN (${sql.join(runIds.map(id => sql`${id}`), sql`, `)})`)
+    : [];
+
+  allExecutors.forEach(e => {
+    if (e.executedBy) allUserIds.add(e.executedBy);
+  });
+
+  // Fetch all user info at once
+  const allUsers = allUserIds.size > 0
+    ? await db
+        .select({
+          id: users.id,
+          name: users.name,
+          avatar: users.avatar,
+        })
+        .from(users)
+        .where(inArray(users.id, Array.from(allUserIds)))
+    : [];
+
+  const usersMap = new Map(allUsers.map(u => [u.id, u]));
+
+  // Build executor map per run
+  const executorsByRun = new Map<number, Set<string>>();
+  allExecutors.forEach(e => {
+    if (e.executedBy) {
+      if (!executorsByRun.has(e.testRunId)) {
+        executorsByRun.set(e.testRunId, new Set());
+      }
+      executorsByRun.get(e.testRunId)!.add(e.executedBy);
+    }
+  });
+
+  const runStats: TestRunData[] = await Promise.all(
     runs.map(async (run) => {
       const results = await db
         .select({
@@ -62,7 +112,31 @@ export default async function ReleaseDetailPage({ params }: Props) {
         total += r.count;
       });
 
-      return { ...run, stats, total };
+      // Build collaborators list for this run
+      const collaboratorIds = new Set<string>();
+      if (run.createdBy) collaboratorIds.add(run.createdBy);
+      executorsByRun.get(run.id)?.forEach(id => collaboratorIds.add(id));
+
+      const collaborators = Array.from(collaboratorIds)
+        .map(id => usersMap.get(id))
+        .filter((u): u is { id: string; name: string; avatar: string | null } => u !== undefined);
+
+      return {
+        id: run.id,
+        name: run.name,
+        releaseId: run.releaseId,
+        status: run.status,
+        environment: run.environment,
+        createdAt: run.createdAt,
+        linearIssueIdentifier: run.linearIssueIdentifier,
+        linearProjectId: run.linearProjectId,
+        linearProjectName: run.linearProjectName,
+        linearMilestoneId: run.linearMilestoneId,
+        linearMilestoneName: run.linearMilestoneName,
+        stats,
+        total,
+        collaborators,
+      };
     })
   );
 
@@ -87,6 +161,10 @@ export default async function ReleaseDetailPage({ params }: Props) {
         <Badge variant={release.status === "active" ? "default" : "secondary"}>
           {release.status}
         </Badge>
+        <ReleaseStatusButton
+          releaseId={release.id}
+          status={release.status as "active" | "completed"}
+        />
         {release.linearLabelId && (
           <span className="text-xs text-brand-500 bg-brand-500/10 px-2 py-0.5 rounded-full">
             Synced from Linear
@@ -157,48 +235,17 @@ export default async function ReleaseDetailPage({ params }: Props) {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid gap-2">
-              {runStats.map((run) => (
-                <Link key={run.id} href={`/runs/${run.id}`}>
-                  <Card className="hover:shadow-card transition-shadow cursor-pointer">
-                    <CardContent className="py-3 flex items-center gap-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-foreground truncate">
-                          {run.name}
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          {run.total} scenario{run.total !== 1 ? "s" : ""}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs">
-                        {run.stats.passed && (
-                          <span className="text-emerald-600">
-                            {run.stats.passed} passed
-                          </span>
-                        )}
-                        {run.stats.failed && (
-                          <span className="text-red-600">
-                            {run.stats.failed} failed
-                          </span>
-                        )}
-                        {run.stats.pending && (
-                          <span className="text-muted-foreground">
-                            {run.stats.pending} pending
-                          </span>
-                        )}
-                      </div>
-                      <Badge
-                        variant={
-                          run.status === "completed" ? "success" : "default"
-                        }
-                      >
-                        {run.status === "in_progress" ? "In Progress" : "Completed"}
-                      </Badge>
-                    </CardContent>
-                  </Card>
-                </Link>
-              ))}
-            </div>
+            <Card>
+              <div className="divide-y divide-border">
+                {runStats.map((run) => (
+                  <TestRunRow
+                    key={run.id}
+                    run={run}
+                    linearWorkspace={workspace}
+                  />
+                ))}
+              </div>
+            </Card>
           )}
         </div>
       </div>
