@@ -1,10 +1,20 @@
 import { LinearClient } from "@linear/sdk";
 import { auth } from "./auth";
 
+export class LinearAuthError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "LinearAuthError";
+  }
+}
+
 export async function getLinearClient() {
   const session = await auth();
+  if (session?.error === "RefreshTokenError" || session?.error === "RefreshTokenMissing") {
+    throw new LinearAuthError("Linear session expired");
+  }
   if (!session?.accessToken) {
-    throw new Error("No Linear access token found");
+    throw new LinearAuthError("No Linear access token found");
   }
   return new LinearClient({ accessToken: session.accessToken });
 }
@@ -216,6 +226,7 @@ export async function getReleaseLabels(): Promise<LinearLabel[]> {
         name: l.name,
       }));
   } catch (error) {
+    if (error instanceof LinearAuthError) throw error;
     console.error("Failed to fetch Linear release labels:", error);
     return [];
   }
@@ -249,6 +260,7 @@ export async function getIssuesByLabel(labelId: string): Promise<LinearIssue[]> 
 
     return results;
   } catch (error) {
+    if (error instanceof LinearAuthError) throw error;
     console.error("Failed to fetch issues by label:", error);
     return [];
   }

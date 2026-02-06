@@ -5,7 +5,7 @@ import { releases, testRuns } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getSessionWithOrg } from "@/lib/auth";
-import { getReleaseLabels } from "@/lib/linear";
+import { getReleaseLabels, LinearAuthError } from "@/lib/linear";
 
 interface CreateReleaseInput {
   name: string;
@@ -234,6 +234,9 @@ export async function syncReleasesFromLinear() {
 
     return { created, updated };
   } catch (error) {
+    if (error instanceof LinearAuthError) {
+      return { error: "auth_expired" };
+    }
     console.error("Failed to sync releases from Linear:", error);
     return { error: "Failed to sync releases from Linear" };
   }
