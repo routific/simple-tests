@@ -146,6 +146,7 @@ export const releases = sqliteTable(
     organizationId: text("organization_id")
       .notNull()
       .references(() => organizations.id),
+    linearLabelId: text("linear_label_id"),
     status: text("status", { enum: ["active", "completed"] })
       .notNull()
       .default("active"),

@@ -5,6 +5,7 @@ import { releases, testRuns } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getSessionWithOrg } from "@/lib/auth";
+import { getReleaseLabels } from "@/lib/linear";
 
 interface CreateReleaseInput {
   name: string;
@@ -165,5 +166,71 @@ export async function deleteRelease(id: number) {
   } catch (error) {
     console.error("Failed to delete release:", error);
     return { error: "Failed to delete release" };
+  }
+}
+
+export async function syncReleasesFromLinear() {
+  const session = await getSessionWithOrg();
+  if (!session) {
+    return { error: "Unauthorized" };
+  }
+
+  const { organizationId } = session.user;
+  const userId = session.user.id;
+
+  try {
+    const labels = await getReleaseLabels();
+
+    if (labels.length === 0) {
+      return { created: 0, updated: 0, message: "No labels found in the 'Releases' label group in Linear." };
+    }
+
+    // Fetch existing releases for this org that have a linearLabelId
+    const existingReleases = await db
+      .select()
+      .from(releases)
+      .where(eq(releases.organizationId, organizationId));
+
+    const existingByLabelId = new Map(
+      existingReleases
+        .filter((r) => r.linearLabelId)
+        .map((r) => [r.linearLabelId!, r])
+    );
+
+    let created = 0;
+    let updated = 0;
+
+    for (const label of labels) {
+      const existing = existingByLabelId.get(label.id);
+
+      if (existing) {
+        // Update name if changed
+        if (existing.name !== label.name) {
+          await db
+            .update(releases)
+            .set({ name: label.name })
+            .where(eq(releases.id, existing.id));
+          updated++;
+        }
+      } else {
+        // Insert new release
+        await db.insert(releases).values({
+          name: label.name,
+          organizationId,
+          linearLabelId: label.id,
+          createdBy: userId,
+          status: "active",
+        });
+        created++;
+      }
+    }
+
+    revalidatePath("/releases");
+    revalidatePath("/runs");
+
+    return { created, updated };
+  } catch (error) {
+    console.error("Failed to sync releases from Linear:", error);
+    return { error: "Failed to sync releases from Linear" };
   }
 }

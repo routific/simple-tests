@@ -23,6 +23,11 @@ export interface LinearMilestone {
   targetDate?: string;
 }
 
+export interface LinearLabel {
+  id: string;
+  name: string;
+}
+
 export interface LinearIssue {
   id: string;
   identifier: string;
@@ -184,5 +189,65 @@ export async function createIssueComment(input: CreateCommentInput): Promise<boo
   } catch (error) {
     console.error("Failed to create Linear comment:", error);
     return false;
+  }
+}
+
+export async function getReleaseLabels(): Promise<LinearLabel[]> {
+  try {
+    const client = await getLinearClient();
+
+    // Find the "Releases" parent label group
+    const labels = await client.issueLabels({
+      first: 100,
+      filter: { name: { eq: "Releases" } },
+    });
+
+    const parentLabel = labels.nodes.find((l) => l.name === "Releases");
+    if (!parentLabel) {
+      return [];
+    }
+
+    // Fetch child labels under the "Releases" group
+    const children = await parentLabel.children();
+    return children.nodes.map((l) => ({
+      id: l.id,
+      name: l.name,
+    }));
+  } catch (error) {
+    console.error("Failed to fetch Linear release labels:", error);
+    return [];
+  }
+}
+
+export async function getIssuesByLabel(labelId: string): Promise<LinearIssue[]> {
+  try {
+    const client = await getLinearClient();
+
+    const issues = await client.issues({
+      first: 100,
+      filter: {
+        labels: { some: { id: { eq: labelId } } },
+      },
+    });
+
+    const results = await Promise.all(
+      issues.nodes.map(async (issue) => {
+        const state = await issue.state;
+        return {
+          id: issue.id,
+          identifier: issue.identifier,
+          title: issue.title,
+          state: state
+            ? { name: state.name, color: state.color }
+            : { name: "Unknown", color: "#888" },
+          priority: issue.priority,
+        };
+      })
+    );
+
+    return results;
+  } catch (error) {
+    console.error("Failed to fetch issues by label:", error);
+    return [];
   }
 }
