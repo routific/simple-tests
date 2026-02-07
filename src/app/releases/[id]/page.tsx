@@ -140,6 +140,17 @@ export default async function ReleaseDetailPage({ params }: Props) {
 
   const workspace = session.user.organizationUrlKey;
 
+  // Calculate release summary for the completion modal
+  const releaseSummary = {
+    totalRuns: runStats.length,
+    totalScenarios: runStats.reduce((sum, run) => sum + run.total, 0),
+    passed: runStats.reduce((sum, run) => sum + (run.stats.passed || 0), 0),
+    failed: runStats.reduce((sum, run) => sum + (run.stats.failed || 0), 0),
+    pending: runStats.reduce((sum, run) => sum + (run.stats.pending || 0), 0),
+    blocked: runStats.reduce((sum, run) => sum + (run.stats.blocked || 0), 0),
+    skipped: runStats.reduce((sum, run) => sum + (run.stats.skipped || 0), 0),
+  };
+
   return (
     <div className="p-8 max-w-6xl animate-fade-in">
       <ReleaseHeader
@@ -149,6 +160,7 @@ export default async function ReleaseDetailPage({ params }: Props) {
           status: release.status as "active" | "completed",
           linearLabelId: release.linearLabelId,
         }}
+        summary={releaseSummary}
       />
 
       <div className="space-y-8">

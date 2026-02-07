@@ -233,6 +233,13 @@ export async function getReleaseLabels(): Promise<LinearLabel[]> {
 }
 
 export async function getIssuesByLabel(labelId: string): Promise<LinearIssue[]> {
+  // Validate that labelId is a valid UUID before making the API call
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!uuidRegex.test(labelId)) {
+    console.warn(`Invalid labelId format (not a UUID): ${labelId}`);
+    return [];
+  }
+
   try {
     const client = await getLinearClient();
 
