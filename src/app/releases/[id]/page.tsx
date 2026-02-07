@@ -4,7 +4,7 @@ import { eq, count, sql, inArray } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { getSessionWithOrg } from "@/lib/auth";
-import { getIssuesByLabel } from "@/lib/linear";
+import { getIssuesByLabel, LinearAuthError } from "@/lib/linear";
 import { TestRunRow, type TestRunData } from "@/components/test-run-row";
 import { ReleaseHeader } from "./release-header";
 
@@ -34,9 +34,22 @@ export default async function ReleaseDetailPage({ params }: Props) {
   }
 
   // Fetch Linear issues if synced from Linear
-  const linearIssues = release.linearLabelId
-    ? await getIssuesByLabel(release.linearLabelId)
-    : [];
+  // Handle expired tokens gracefully
+  let linearIssues: Awaited<ReturnType<typeof getIssuesByLabel>> = [];
+  let linearAuthExpired = false;
+
+  if (release.linearLabelId) {
+    try {
+      linearIssues = await getIssuesByLabel(release.linearLabelId);
+    } catch (error) {
+      if (error instanceof LinearAuthError) {
+        linearAuthExpired = true;
+        console.warn("Linear auth expired, skipping issue fetch");
+      } else {
+        throw error;
+      }
+    }
+  }
 
   // Fetch test runs for this release with stats
   const runs = await db
@@ -153,6 +166,25 @@ export default async function ReleaseDetailPage({ params }: Props) {
 
   return (
     <div className="p-8 max-w-6xl animate-fade-in">
+      {/* Linear Auth Warning */}
+      {linearAuthExpired && (
+        <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-yellow-100 dark:bg-yellow-900/40 flex items-center justify-center flex-shrink-0">
+              <WarningIcon className="w-4 h-4 text-yellow-600 dark:text-yellow-500" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                Linear connection expired
+              </p>
+              <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                Please sign out and sign in again to refresh your Linear connection.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <ReleaseHeader
         release={{
           id: release.id,
@@ -251,6 +283,24 @@ function ExternalLinkIcon({ className }: { className?: string }) {
         strokeLinecap="round"
         strokeLinejoin="round"
         d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"
+      />
+    </svg>
+  );
+}
+
+function WarningIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"
       />
     </svg>
   );
