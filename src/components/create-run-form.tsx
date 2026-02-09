@@ -672,14 +672,29 @@ export function CreateRunForm({ folders, cases, caseCounts, releases: initialRel
                                 </span>
                               </div>
                               <div className="grid grid-cols-[160px_70px_40px] gap-2 items-center ml-4 flex-shrink-0">
-                                <div className="flex justify-end">
+                                <div className="flex justify-end relative group/folder">
                                   {testCase.folderId ? (
-                                    <span className="text-xs text-muted-foreground flex items-center gap-1.5 max-w-full truncate">
-                                      <FolderIcon className="w-3 h-3 flex-shrink-0" />
-                                      <span className="truncate">
-                                        {formatBreadcrumb(buildFolderBreadcrumb(testCase.folderId, flatFolders))}
+                                    <>
+                                      <span className="text-xs text-muted-foreground flex items-center gap-1.5 max-w-full truncate">
+                                        <FolderIcon className="w-3 h-3 flex-shrink-0" />
+                                        <span className="truncate">
+                                          {formatBreadcrumb(buildFolderBreadcrumb(testCase.folderId, flatFolders))}
+                                        </span>
                                       </span>
-                                    </span>
+                                      <div className="absolute bottom-full right-0 mb-2 hidden group-hover/folder:flex z-50 pointer-events-none animate-in fade-in duration-100">
+                                        <div className="bg-white dark:bg-zinc-800 text-foreground text-xs px-3 py-2 rounded-lg shadow-lg border border-border flex items-center gap-2">
+                                          <FolderIcon className="w-3 h-3 text-brand-500 flex-shrink-0" />
+                                          <span className="whitespace-nowrap">
+                                            {buildFolderBreadcrumb(testCase.folderId, flatFolders).map((segment, i, arr) => (
+                                              <span key={i}>
+                                                <span className={i === arr.length - 1 ? "font-medium text-foreground" : ""}>{segment}</span>
+                                                {i < arr.length - 1 && <span className="text-muted-foreground mx-1">/</span>}
+                                              </span>
+                                            ))}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </>
                                   ) : (
                                     <span className="text-xs text-muted-foreground">No folder</span>
                                   )}
