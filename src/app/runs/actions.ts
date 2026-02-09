@@ -656,6 +656,102 @@ export async function duplicateTestRun(input: DuplicateRunInput) {
   }
 }
 
+interface DeleteAttemptInput {
+  type: "current" | "history";
+  resultId: number;
+  historyId?: number;
+}
+
+export async function deleteAttempt(input: DeleteAttemptInput) {
+  const session = await getSessionWithOrg();
+  if (!session) {
+    return { error: "Unauthorized" };
+  }
+
+  const userId = session.user.id;
+
+  try {
+    if (input.type === "current") {
+      // For current result: verify ownership, then reset to pending
+      const result = await db
+        .select({
+          executedBy: testRunResults.executedBy,
+          testRunId: testRunResults.testRunId,
+        })
+        .from(testRunResults)
+        .where(eq(testRunResults.id, input.resultId))
+        .get();
+
+      if (!result) {
+        return { error: "Result not found" };
+      }
+
+      if (result.executedBy !== userId) {
+        return { error: "You can only delete your own attempts" };
+      }
+
+      // Reset current result to pending
+      await db
+        .update(testRunResults)
+        .set({
+          status: "pending",
+          notes: null,
+          executedAt: null,
+          executedBy: null,
+        })
+        .where(eq(testRunResults.id, input.resultId));
+
+      revalidatePath("/runs");
+      revalidatePath(`/runs/${result.testRunId}`);
+
+      return { success: true, resetToPending: true };
+    } else {
+      // For history entry: verify ownership, then delete
+      if (!input.historyId) {
+        return { error: "History ID required" };
+      }
+
+      const historyEntry = await db
+        .select({
+          executedBy: testResultHistory.executedBy,
+          resultId: testResultHistory.resultId,
+        })
+        .from(testResultHistory)
+        .where(eq(testResultHistory.id, input.historyId))
+        .get();
+
+      if (!historyEntry) {
+        return { error: "History entry not found" };
+      }
+
+      if (historyEntry.executedBy !== userId) {
+        return { error: "You can only delete your own attempts" };
+      }
+
+      // Get the test run ID for revalidation
+      const result = await db
+        .select({ testRunId: testRunResults.testRunId })
+        .from(testRunResults)
+        .where(eq(testRunResults.id, historyEntry.resultId))
+        .get();
+
+      await db
+        .delete(testResultHistory)
+        .where(eq(testResultHistory.id, input.historyId));
+
+      revalidatePath("/runs");
+      if (result) {
+        revalidatePath(`/runs/${result.testRunId}`);
+      }
+
+      return { success: true };
+    }
+  } catch (error) {
+    console.error("Failed to delete attempt:", error);
+    return { error: "Failed to delete attempt" };
+  }
+}
+
 interface RemoveScenariosInput {
   runId: number;
   resultIds: number[];

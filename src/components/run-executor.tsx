@@ -9,7 +9,7 @@ import { GherkinDisplay } from "./gherkin-editor";
 import { ReleasePicker } from "./release-picker";
 import { Input } from "./ui/input";
 import { ResizablePanel } from "./ui/resizable-panel";
-import { updateTestResult, completeTestRun, deleteTestRun, updateTestRun, addScenariosToRun, removeScenariosFromRun, getResultHistory } from "@/app/runs/actions";
+import { updateTestResult, completeTestRun, deleteTestRun, updateTestRun, addScenariosToRun, removeScenariosFromRun, getResultHistory, deleteAttempt } from "@/app/runs/actions";
 import type { TestRun } from "@/lib/db/schema";
 
 interface LinearProject {
@@ -1183,7 +1183,7 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
                   </div>
                   <div className="space-y-2">
                     {/* Current result */}
-                    <div className="p-2 bg-muted/30 rounded text-sm">
+                    <div className="p-2 bg-muted/30 rounded text-sm group/attempt">
                       <div className="flex items-center gap-2">
                         <span
                           className={cn(
@@ -1227,6 +1227,35 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
                             })}
                           </span>
                         )}
+                        {run.status === "in_progress" && selectedResult.executedBy === currentUser.id && (
+                          <button
+                            onClick={() => {
+                              if (confirm("Delete this attempt? This will reset the test to pending.")) {
+                                startTransition(async () => {
+                                  const result = await deleteAttempt({
+                                    type: "current",
+                                    resultId: selectedResult.id,
+                                  });
+                                  if (result.success) {
+                                    // Update local state
+                                    setResults(prev => prev.map(r =>
+                                      r.id === selectedResult.id
+                                        ? { ...r, status: "pending", notes: null, executedAt: null, executedBy: null }
+                                        : r
+                                    ));
+                                    setSelectedResult(prev => prev ? { ...prev, status: "pending", notes: null, executedAt: null, executedBy: null } : null);
+                                    setResultHistory([]);
+                                    router.refresh();
+                                  }
+                                });
+                              }
+                            }}
+                            className="ml-auto opacity-0 group-hover/attempt:opacity-100 p-1 text-muted-foreground hover:text-rose-600 transition-opacity"
+                            title="Delete this attempt"
+                          >
+                            <TrashIcon className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                       {selectedResult.notes && (
                         <p className="mt-1 text-muted-foreground">{selectedResult.notes}</p>
@@ -1234,7 +1263,7 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
                     </div>
                     {/* Previous attempts */}
                     {resultHistory.map((entry) => (
-                      <div key={entry.id} className="p-2 bg-muted/30 rounded text-sm">
+                      <div key={entry.id} className="p-2 bg-muted/30 rounded text-sm group/attempt">
                         <div className="flex items-center gap-2">
                           <span
                             className={cn(
@@ -1274,6 +1303,29 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
                                 minute: "2-digit",
                               })}
                             </span>
+                          )}
+                          {run.status === "in_progress" && entry.executedBy === currentUser.id && (
+                            <button
+                              onClick={() => {
+                                if (confirm("Delete this attempt?")) {
+                                  startTransition(async () => {
+                                    const result = await deleteAttempt({
+                                      type: "history",
+                                      resultId: selectedResult.id,
+                                      historyId: entry.id,
+                                    });
+                                    if (result.success) {
+                                      setResultHistory(prev => prev.filter(h => h.id !== entry.id));
+                                      router.refresh();
+                                    }
+                                  });
+                                }
+                              }}
+                              className="ml-auto opacity-0 group-hover/attempt:opacity-100 p-1 text-muted-foreground hover:text-rose-600 transition-opacity"
+                              title="Delete this attempt"
+                            >
+                              <TrashIcon className="w-3.5 h-3.5" />
+                            </button>
                           )}
                         </div>
                         {entry.notes && (
