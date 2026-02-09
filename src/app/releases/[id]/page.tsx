@@ -179,7 +179,7 @@ export default async function ReleaseDetailPage({ params }: Props) {
                 Linear connection expired
               </p>
               <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                Please sign out and sign in again to refresh your Linear connection.
+                Go to <a href="/releases" className="underline hover:text-yellow-900 dark:hover:text-yellow-100">Releases</a> and click &quot;Sync from Linear&quot; to re-authenticate.
               </p>
             </div>
           </div>

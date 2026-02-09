@@ -90,7 +90,7 @@ export default async function ReleasesPage() {
                 Linear connection expired
               </p>
               <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                Please sign out and sign in again to refresh your Linear connection.
+                Click &quot;Sync from Linear&quot; to re-authenticate.
               </p>
             </div>
           </div>
