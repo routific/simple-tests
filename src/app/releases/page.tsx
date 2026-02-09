@@ -4,7 +4,7 @@ import { eq, sql, count } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { getSessionWithOrg } from "@/lib/auth";
-import { getIssuesByLabel, LinearAuthError } from "@/lib/linear";
+import { getIssuesByLabel } from "@/lib/linear";
 import { SyncButton } from "./sync-button";
 import { ReleasesList } from "./releases-list";
 
@@ -57,7 +57,8 @@ export default async function ReleasesPage() {
     );
     issueCountMap = new Map(issueCountEntries);
   } catch (error) {
-    if (error instanceof LinearAuthError) {
+    // Use error.name check instead of instanceof - instanceof can fail across module boundaries in Next.js
+    if (error instanceof Error && error.name === "LinearAuthError") {
       // Token expired - continue without issue counts
       linearAuthExpired = true;
       console.warn("Linear auth expired, skipping issue counts");

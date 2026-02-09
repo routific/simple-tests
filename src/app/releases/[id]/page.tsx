@@ -4,7 +4,7 @@ import { eq, count, sql, inArray } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { getSessionWithOrg } from "@/lib/auth";
-import { getIssuesByLabel, LinearAuthError } from "@/lib/linear";
+import { getIssuesByLabel } from "@/lib/linear";
 import { TestRunRow, type TestRunData } from "@/components/test-run-row";
 import { ReleaseHeader } from "./release-header";
 
@@ -42,7 +42,8 @@ export default async function ReleaseDetailPage({ params }: Props) {
     try {
       linearIssues = await getIssuesByLabel(release.linearLabelId);
     } catch (error) {
-      if (error instanceof LinearAuthError) {
+      // Use error.name check instead of instanceof - instanceof can fail across module boundaries in Next.js
+      if (error instanceof Error && error.name === "LinearAuthError") {
         linearAuthExpired = true;
         console.warn("Linear auth expired, skipping issue fetch");
       } else {
