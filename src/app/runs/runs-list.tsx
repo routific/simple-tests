@@ -342,7 +342,7 @@ export function RunsList({ runs, releases, linearWorkspace, initialReleaseId }: 
                         )}
                       </button>
                       <Link
-                        href={`/releases/${release.id}`}
+                        href={`/releases/${encodeURIComponent(release.name)}`}
                         onClick={(e) => e.stopPropagation()}
                         className="p-1 text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
                         title="View release details"

@@ -21,17 +21,35 @@ export default async function ReleaseDetailPage({ params }: Props) {
   }
 
   const { id } = await params;
-  const releaseId = parseInt(id);
+  const decodedId = decodeURIComponent(id);
 
-  const release = await db
-    .select()
-    .from(releases)
-    .where(eq(releases.id, releaseId))
-    .get();
+  // Try to find by ID first, then by name
+  let release;
+  const numericId = parseInt(decodedId);
+
+  if (!isNaN(numericId)) {
+    // Try numeric ID first
+    release = await db
+      .select()
+      .from(releases)
+      .where(eq(releases.id, numericId))
+      .get();
+  }
+
+  if (!release) {
+    // Try by name (case-insensitive)
+    release = await db
+      .select()
+      .from(releases)
+      .where(eq(releases.name, decodedId))
+      .get();
+  }
 
   if (!release || release.organizationId !== session.user.organizationId) {
     notFound();
   }
+
+  const releaseId = release.id;
 
   // Fetch Linear issues if synced from Linear
   // Handle expired tokens gracefully

@@ -99,7 +99,7 @@ export function ReleasesList({ releases }: ReleasesListProps) {
           ) : (
             <div className="divide-y divide-border">
               {currentReleases.map((release) => (
-                <Link key={release.id} href={`/releases/${release.id}`}>
+                <Link key={release.id} href={`/releases/${encodeURIComponent(release.name)}`}>
                   <div className="flex items-center justify-between px-6 py-4 hover:bg-muted/50 transition-colors cursor-pointer">
                     <div className="flex items-center gap-3">
                       <TagIcon className="w-5 h-5 text-muted-foreground" />

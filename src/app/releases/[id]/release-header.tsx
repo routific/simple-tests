@@ -123,11 +123,15 @@ export function ReleaseHeader({ release, summary }: ReleaseHeaderProps) {
   };
 
   const handleCopyLink = () => {
-    const url = `${window.location.origin}/releases/${release.id}`;
+    // Use release name for the URL (URL-encoded)
+    const url = `${window.location.origin}/releases/${encodeURIComponent(release.name)}`;
     navigator.clipboard.writeText(url);
     setLinkCopied(true);
     setTimeout(() => setLinkCopied(false), 2000);
   };
+
+  // Synced releases cannot be edited (name comes from Linear)
+  const isSynced = !!release.linearLabelId;
 
   return (
     <>
@@ -211,13 +215,15 @@ export function ReleaseHeader({ release, summary }: ReleaseHeaderProps) {
                 <LinkIcon className="w-4 h-4" />
               )}
             </button>
-            <button
-              onClick={() => setIsEditing(true)}
-              className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
-              title="Edit release"
-            >
-              <EditIcon className="w-4 h-4" />
-            </button>
+            {!isSynced && (
+              <button
+                onClick={() => setIsEditing(true)}
+                className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
+                title="Edit release"
+              >
+                <EditIcon className="w-4 h-4" />
+              </button>
+            )}
             <button
               onClick={handleDelete}
               disabled={isPending}
