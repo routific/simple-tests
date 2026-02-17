@@ -151,12 +151,15 @@ export async function createIssueAttachment(input: CreateAttachmentInput): Promi
     const client = await getLinearClient();
     // The Linear SDK uses attachmentLinkURL for creating URL attachments
     // It takes issueId and url as positional args, with optional title
+    const title = input.subtitle ? `${input.title} - ${input.subtitle}` : input.title;
+    console.log("[Linear] Creating attachment:", { issueId: input.issueId, url: input.url, title });
     const result = await client.attachmentLinkURL(input.issueId, input.url, {
-      title: input.subtitle ? `${input.title} - ${input.subtitle}` : input.title,
+      title,
     });
+    console.log("[Linear] Attachment creation result:", result.success);
     return result.success;
   } catch (error) {
-    console.error("Failed to create Linear attachment:", error);
+    console.error("[Linear] Failed to create attachment:", error);
     return false;
   }
 }

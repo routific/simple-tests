@@ -74,12 +74,14 @@ export async function createTestRun(input: CreateRunInput) {
         titleParts.push(`[${input.environment.charAt(0).toUpperCase() + input.environment.slice(1)}]`);
       }
 
-      await createIssueAttachment({
+      console.log("[TestRun] Creating Linear attachment for issue:", input.linearIssueId);
+      const attachmentCreated = await createIssueAttachment({
         issueId: input.linearIssueId,
         title: titleParts.join(" "),
         url: runUrl,
         subtitle: `${input.scenarioIds.length} test case${input.scenarioIds.length !== 1 ? "s" : ""}`,
       });
+      console.log("[TestRun] Attachment creation result:", attachmentCreated);
     }
 
     revalidatePath("/runs");

@@ -9,6 +9,7 @@ import { GherkinDisplay } from "./gherkin-editor";
 import { ReleasePicker } from "./release-picker";
 import { Input } from "./ui/input";
 import { ResizablePanel } from "./ui/resizable-panel";
+import { LinearProjectPicker, LinearMilestonePicker, LinearIssuePicker } from "./linear-pickers";
 import { updateTestResult, completeTestRun, deleteTestRun, updateTestRun, addScenariosToRun, removeScenariosFromRun, getResultHistory, deleteAttempt } from "@/app/runs/actions";
 import type { TestRun } from "@/lib/db/schema";
 
@@ -717,111 +718,37 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
                 ) : (
                 <div className="grid grid-cols-3 gap-4">
                   {/* Project Selector */}
-                  <div>
-                    <label className="block text-sm text-[hsl(var(--muted-foreground))] mb-1.5">
-                      Project
-                    </label>
-                    <select
-                      value={editProject?.id || ""}
-                      onChange={(e) => {
-                        const proj = projects.find(p => p.id === e.target.value);
-                        setEditProject(proj || null);
-                        setEditMilestone(null);
-                      }}
-                      disabled={loadingProjects}
-                      className="w-full px-3 py-2 text-sm border border-[hsl(var(--border))] rounded-lg bg-[hsl(var(--background))] focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors disabled:opacity-50"
-                    >
-                      <option value="">None</option>
-                      {projects.map(p => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
-                      ))}
-                    </select>
-                  </div>
+                  <LinearProjectPicker
+                    projects={projects}
+                    value={editProject}
+                    onChange={(project) => {
+                      setEditProject(project);
+                      setEditMilestone(null);
+                    }}
+                    loading={loadingProjects}
+                  />
 
                   {/* Milestone Selector */}
-                  <div>
-                    <label className="block text-sm text-[hsl(var(--muted-foreground))] mb-1.5">
-                      Milestone
-                    </label>
-                    <select
-                      value={editMilestone?.id || ""}
-                      onChange={(e) => {
-                        const ms = milestones.find(m => m.id === e.target.value);
-                        setEditMilestone(ms || null);
-                      }}
-                      disabled={!editProject || loadingMilestones}
-                      className="w-full px-3 py-2 text-sm border border-[hsl(var(--border))] rounded-lg bg-[hsl(var(--background))] focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors disabled:opacity-50"
-                    >
-                      <option value="">None</option>
-                      {milestones.map(m => (
-                        <option key={m.id} value={m.id}>{m.name}</option>
-                      ))}
-                    </select>
-                  </div>
+                  <LinearMilestonePicker
+                    milestones={milestones}
+                    value={editMilestone}
+                    onChange={setEditMilestone}
+                    disabled={!editProject}
+                    loading={loadingMilestones}
+                  />
 
-                  {/* Issue Selector with Search */}
-                  <div>
-                    <label className="block text-sm text-[hsl(var(--muted-foreground))] mb-1.5">
-                      Link to Issue
-                    </label>
-                    <div className="relative">
-                      <Input
-                        type="text"
-                        value={editIssue ? `${editIssue.identifier}: ${editIssue.title}` : issueSearch}
-                        onChange={(e) => {
-                          if (editIssue) {
-                            setEditIssue(null);
-                            setIssueSearch(e.target.value);
-                          } else {
-                            setIssueSearch(e.target.value);
-                          }
-                        }}
-                        placeholder="Search issues..."
-                        className="pr-8"
-                      />
-                      {editIssue && (
-                        <button
-                          onClick={() => {
-                            setEditIssue(null);
-                            setIssueSearch("");
-                          }}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
-                        >
-                          <CloseIcon className="w-4 h-4" />
-                        </button>
-                      )}
-                      {loadingIssues && (
-                        <div className="absolute right-2 top-1/2 -translate-y-1/2">
-                          <LoadingIcon className="w-4 h-4 animate-spin text-[hsl(var(--muted-foreground))]" />
-                        </div>
-                      )}
-                      {/* Issue dropdown */}
-                      {!editIssue && issueSearch && issues.length > 0 && (
-                        <div className="absolute z-10 mt-1 w-full bg-[hsl(var(--background))] border border-[hsl(var(--border))] rounded-lg shadow-lg max-h-48 overflow-auto">
-                          {issues.map(issue => (
-                            <button
-                              key={issue.id}
-                              onClick={() => {
-                                setEditIssue(issue);
-                                setIssueSearch("");
-                                setIssues([]);
-                              }}
-                              className="w-full px-3 py-2 text-left hover:bg-[hsl(var(--muted))] transition-colors flex items-center gap-2"
-                            >
-                              <span
-                                className="w-2 h-2 rounded-full shrink-0"
-                                style={{ backgroundColor: issue.state.color }}
-                              />
-                              <span className="font-medium text-sm">{issue.identifier}</span>
-                              <span className="text-sm text-[hsl(var(--muted-foreground))] truncate">
-                                {issue.title}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                  {/* Issue Selector */}
+                  <LinearIssuePicker
+                    issues={issues}
+                    value={editIssue}
+                    onChange={(issue) => {
+                      setEditIssue(issue);
+                      if (issue) setIssues([]);
+                    }}
+                    searchValue={issueSearch}
+                    onSearchChange={setIssueSearch}
+                    loading={loadingIssues}
+                  />
                 </div>
                 )}
               </div>
