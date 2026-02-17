@@ -11,6 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { buildFolderBreadcrumb, formatBreadcrumb } from "@/lib/folders";
 import { ReleasePicker } from "@/components/release-picker";
+import { TestCasePanel, type TestCasePanelTestCase } from "@/components/test-case-panel";
 
 interface Scenario {
   id: number;
@@ -96,6 +97,10 @@ export function CreateRunForm({ folders, cases, caseCounts, releases: initialRel
   );
   const lastSelectedIndexRef = useRef<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Edit panel state
+  const [editingTestCase, setEditingTestCase] = useState<TestCasePanelTestCase | null>(null);
+  const [isEditPanelOpen, setIsEditPanelOpen] = useState(false);
 
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState("");
@@ -728,6 +733,15 @@ export function CreateRunForm({ folders, cases, caseCounts, releases: initialRel
                       newSelected.delete(id);
                       setSelectedCases(newSelected);
                     }}
+                    onEdit={(testCase) => {
+                      setEditingTestCase({
+                        id: testCase.id,
+                        title: testCase.title,
+                        state: testCase.state,
+                        folderId: testCase.folderId,
+                      });
+                      setIsEditPanelOpen(true);
+                    }}
                   />
                 </div>
               </CardContent>
@@ -735,6 +749,31 @@ export function CreateRunForm({ folders, cases, caseCounts, releases: initialRel
           </div>
         </div>
       </div>
+
+      {/* Test Case Edit Panel */}
+      <TestCasePanel
+        isOpen={isEditPanelOpen}
+        onClose={() => {
+          setIsEditPanelOpen(false);
+          setEditingTestCase(null);
+        }}
+        testCase={editingTestCase}
+        folders={flatFolders}
+        onSaved={() => {
+          router.refresh();
+        }}
+        onDeleted={() => {
+          setIsEditPanelOpen(false);
+          setEditingTestCase(null);
+          if (editingTestCase) {
+            const newSelected = new Set(selectedCases);
+            newSelected.delete(editingTestCase.id);
+            setSelectedCases(newSelected);
+          }
+          router.refresh();
+        }}
+        hideDelete
+      />
     </>
   );
 }
@@ -743,10 +782,12 @@ function SelectionPreview({
   cases,
   selectedCases,
   onRemove,
+  onEdit,
 }: {
   cases: TestCase[];
   selectedCases: Set<number>;
   onRemove: (id: number) => void;
+  onEdit: (testCase: TestCase) => void;
 }) {
   const [expandedCases, setExpandedCases] = useState<Set<number>>(new Set());
 
@@ -807,8 +848,16 @@ function SelectionPreview({
                     {testCase.scenarios.length}
                   </span>
                   <button
+                    onClick={() => onEdit(testCase)}
+                    className="p-1 text-muted-foreground hover:text-brand-600 opacity-0 group-hover:opacity-100 transition-all"
+                    title="Edit test case"
+                  >
+                    <EditIcon className="w-3.5 h-3.5" />
+                  </button>
+                  <button
                     onClick={() => onRemove(testCase.id)}
                     className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                    title="Remove from selection"
                   >
                     <CloseIcon className="w-3.5 h-3.5" />
                   </button>
@@ -875,6 +924,14 @@ function CloseIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+    </svg>
+  );
+}
+
+function EditIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
     </svg>
   );
 }
