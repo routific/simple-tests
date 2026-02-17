@@ -85,6 +85,7 @@ export function FolderPicker({
   const [newFolderParentId, setNewFolderParentId] = useState<number | null | "none">("none");
   const [newFolderName, setNewFolderName] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
 
   const tree = buildTree(folders);
 
@@ -110,7 +111,11 @@ export function FolderPicker({
   // Close on click outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      const isInsideContainer = containerRef.current?.contains(target);
+      const isInsideContextMenu = contextMenuRef.current?.contains(target);
+
+      if (!isInsideContainer && !isInsideContextMenu) {
         setIsOpen(false);
         setContextMenu(null);
       }
@@ -119,9 +124,15 @@ export function FolderPicker({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Close context menu on any click
+  // Close context menu on click outside the context menu
   useEffect(() => {
-    const handleClick = () => setContextMenu(null);
+    const handleClick = (e: MouseEvent) => {
+      // Don't close if clicking inside the context menu itself
+      if (contextMenuRef.current?.contains(e.target as Node)) {
+        return;
+      }
+      setContextMenu(null);
+    };
     if (contextMenu) {
       document.addEventListener("click", handleClick);
       return () => document.removeEventListener("click", handleClick);
@@ -331,6 +342,7 @@ export function FolderPicker({
       {/* Context Menu - rendered via portal to escape transform containers */}
       {contextMenu && typeof document !== "undefined" && createPortal(
         <div
+          ref={contextMenuRef}
           className="fixed z-[100] bg-background border border-border rounded-lg shadow-elevated py-1 min-w-[140px] animate-fade-in"
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onClick={(e) => e.stopPropagation()}
