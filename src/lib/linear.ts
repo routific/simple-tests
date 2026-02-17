@@ -206,11 +206,11 @@ export async function getReleaseLabels(): Promise<LinearLabel[]> {
   try {
     const client = await getLinearClient();
 
-    // Query for labels whose parent is named "Releases"
+    // Query for labels whose parent is named "Release"
     // This works for both workspace-level and team-level label groups
     const children = await client.issueLabels({
       first: 250,
-      filter: { parent: { name: { eq: "Releases" } } },
+      filter: { parent: { name: { eq: "Release" } } },
     });
 
     // Deduplicate by label ID (in case of overlapping results)

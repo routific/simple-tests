@@ -186,7 +186,7 @@ export async function syncReleasesFromLinear() {
     const labels = await getReleaseLabels();
 
     if (labels.length === 0) {
-      return { created: 0, updated: 0, message: "No labels found in the 'Releases' label group in Linear." };
+      return { created: 0, updated: 0, message: "No labels found in the 'Release' label group in Linear." };
     }
 
     // Fetch existing releases for this org that have a linearLabelId
