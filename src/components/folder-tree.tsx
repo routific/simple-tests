@@ -296,20 +296,29 @@ export function FolderTree({
       const draggedFolder = findFolder(folders, dragState.id);
       if (!draggedFolder) return;
 
-      // Only show sort indicator if same parent
-      const draggedParentId = draggedFolder.parentId ?? null;
-      if (draggedParentId !== targetParentId) {
-        setSortIndicator(null);
-        return;
-      }
-
-      // Calculate if dropping before or after based on mouse position
+      // Calculate position within the target element
       const rect = e.currentTarget.getBoundingClientRect();
-      const midY = rect.top + rect.height / 2;
-      const position = e.clientY < midY ? "before" : "after";
+      const relativeY = e.clientY - rect.top;
+      const height = rect.height;
 
-      setSortIndicator({ id: targetId, position });
-      setDropTarget(null); // Clear drop target when sorting
+      // Only show sort indicator if same parent AND near edges
+      // Top 25% = sort before, Middle 50% = drop into, Bottom 25% = sort after
+      const draggedParentId = draggedFolder.parentId ?? null;
+      const isSameParent = draggedParentId === targetParentId;
+
+      if (isSameParent && relativeY < height * 0.25) {
+        // Top edge - sort before
+        setSortIndicator({ id: targetId, position: "before" });
+        setDropTarget(null);
+      } else if (isSameParent && relativeY > height * 0.75) {
+        // Bottom edge - sort after
+        setSortIndicator({ id: targetId, position: "after" });
+        setDropTarget(null);
+      } else {
+        // Center - drop into folder
+        setSortIndicator(null);
+        setDropTarget(targetId);
+      }
     },
     [dragState, folders]
   );
@@ -693,10 +702,14 @@ function FolderItem({
         onDragStart={(e) => onDragStart(e, "folder", folder.id, folder.name)}
         onDragEnd={onDragEnd}
         onDragOver={(e) => {
-          onSortDragOver(e, folder.id, folder.parentId ?? null);
-          // Also call original for moving into folders (test cases)
-          if (!sortIndicator) {
+          // Check for external test case drag first
+          const externalDrag = (window as unknown as { __draggedTestCase?: { id: number; name: string } }).__draggedTestCase;
+          if (externalDrag) {
+            // Test case being dragged - use drop into folder behavior
             onDragOver(e, folder.id);
+          } else {
+            // Folder being dragged - handle sort vs drop into based on position
+            onSortDragOver(e, folder.id, folder.parentId ?? null);
           }
         }}
         onDragLeave={onDragLeave}
