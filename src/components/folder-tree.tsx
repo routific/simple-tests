@@ -11,6 +11,7 @@ import {
   deleteFolder,
   moveFolder,
   moveTestCaseToFolder,
+  reorderFolders,
 } from "@/app/folders/actions";
 
 interface FolderTreeProps {
@@ -140,6 +141,8 @@ export function FolderTree({
   // Drag state
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [dropTarget, setDropTarget] = useState<number | "root" | null>(null);
+  // Sort indicator for reordering folders within same parent
+  const [sortIndicator, setSortIndicator] = useState<{ id: number; position: "before" | "after" } | null>(null);
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -194,6 +197,7 @@ export function FolderTree({
   const handleDragEnd = useCallback(() => {
     setDragState(null);
     setDropTarget(null);
+    setSortIndicator(null);
   }, []);
 
   const handleDragOver = useCallback(
@@ -268,6 +272,103 @@ export function FolderTree({
       setDropTarget(null);
     },
     [dragState, folders, router]
+  );
+
+  // Sort handlers for reordering within same parent
+  const handleSortDragOver = useCallback(
+    (e: React.DragEvent, targetId: number, targetParentId: number | null) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (!dragState || dragState.type !== "folder") return;
+      if (dragState.id === targetId) return;
+
+      // Find the dragged folder to check its parent
+      const findFolder = (list: FolderWithChildren[], id: number): FolderWithChildren | null => {
+        for (const f of list) {
+          if (f.id === id) return f;
+          const found = findFolder(f.children, id);
+          if (found) return found;
+        }
+        return null;
+      };
+
+      const draggedFolder = findFolder(folders, dragState.id);
+      if (!draggedFolder) return;
+
+      // Only show sort indicator if same parent
+      const draggedParentId = draggedFolder.parentId ?? null;
+      if (draggedParentId !== targetParentId) {
+        setSortIndicator(null);
+        return;
+      }
+
+      // Calculate if dropping before or after based on mouse position
+      const rect = e.currentTarget.getBoundingClientRect();
+      const midY = rect.top + rect.height / 2;
+      const position = e.clientY < midY ? "before" : "after";
+
+      setSortIndicator({ id: targetId, position });
+      setDropTarget(null); // Clear drop target when sorting
+    },
+    [dragState, folders]
+  );
+
+  const handleSortDrop = useCallback(
+    async (e: React.DragEvent, siblings: FolderWithChildren[], parentId: number | null) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (!dragState || dragState.type !== "folder" || !sortIndicator) {
+        setDragState(null);
+        setSortIndicator(null);
+        return;
+      }
+
+      const targetId = sortIndicator.id;
+      if (dragState.id === targetId) {
+        setDragState(null);
+        setSortIndicator(null);
+        return;
+      }
+
+      // Calculate new order
+      const currentIds = siblings.map((f) => f.id);
+      const fromIndex = currentIds.indexOf(dragState.id);
+      let toIndex = currentIds.indexOf(targetId);
+
+      if (fromIndex === -1 || toIndex === -1) {
+        setDragState(null);
+        setSortIndicator(null);
+        return;
+      }
+
+      // Adjust target index based on drop position
+      if (sortIndicator.position === "after") {
+        toIndex += 1;
+      }
+      // If dragging from before to after, adjust for the removal
+      if (fromIndex < toIndex) {
+        toIndex -= 1;
+      }
+
+      // Reorder the array
+      const newIds = [...currentIds];
+      newIds.splice(fromIndex, 1);
+      newIds.splice(toIndex, 0, dragState.id);
+
+      // Persist the new order
+      const result = await reorderFolders(parentId, newIds);
+      if (result.error) {
+        alert(result.error);
+      } else {
+        router.refresh();
+      }
+
+      setDragState(null);
+      setSortIndicator(null);
+    },
+    [dragState, sortIndicator, router]
   );
 
   // Context menu handlers
@@ -412,6 +513,7 @@ export function FolderTree({
           <FolderItem
             key={folder.id}
             folder={folder}
+            siblings={folders}
             selectedFolderId={selectedFolderId}
             caseCounts={caseCounts}
             level={0}
@@ -423,9 +525,12 @@ export function FolderTree({
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
+            onSortDragOver={handleSortDragOver}
+            onSortDrop={handleSortDrop}
             onContextMenu={handleContextMenu}
             dragState={dragState}
             dropTarget={dropTarget}
+            sortIndicator={sortIndicator}
             renamingId={renamingId}
             renameValue={renameValue}
             onRenameChange={setRenameValue}
@@ -463,6 +568,7 @@ export function FolderTree({
 
 function FolderItem({
   folder,
+  siblings,
   selectedFolderId,
   caseCounts,
   level,
@@ -474,9 +580,12 @@ function FolderItem({
   onDragOver,
   onDragLeave,
   onDrop,
+  onSortDragOver,
+  onSortDrop,
   onContextMenu,
   dragState,
   dropTarget,
+  sortIndicator,
   renamingId,
   renameValue,
   onRenameChange,
@@ -489,6 +598,7 @@ function FolderItem({
   buildFolderUrl,
 }: {
   folder: FolderWithChildren;
+  siblings: FolderWithChildren[];
   selectedFolderId?: number | null;
   caseCounts: Record<number, number>;
   level: number;
@@ -500,9 +610,12 @@ function FolderItem({
   onDragOver: (e: React.DragEvent, targetId: number | "root") => void;
   onDragLeave: () => void;
   onDrop: (e: React.DragEvent, targetId: number | "root") => void;
+  onSortDragOver: (e: React.DragEvent, targetId: number, targetParentId: number | null) => void;
+  onSortDrop: (e: React.DragEvent, siblings: FolderWithChildren[], parentId: number | null) => void;
   onContextMenu: (e: React.MouseEvent, folderId: number, folderName: string, parentId: number | null) => void;
   dragState: DragState | null;
   dropTarget: number | "root" | null;
+  sortIndicator: { id: number; position: "before" | "after" } | null;
   renamingId: number | null;
   renameValue: string;
   onRenameChange: (value: string) => void;
@@ -540,6 +653,9 @@ function FolderItem({
   };
   const totalCount = getTotalCount(folder);
 
+  const showSortBefore = sortIndicator?.id === folder.id && sortIndicator.position === "before";
+  const showSortAfter = sortIndicator?.id === folder.id && sortIndicator.position === "after";
+
   return (
     <div className={cn("relative", isDragging && "opacity-50")}>
       {/* Vertical line for tree structure */}
@@ -564,20 +680,40 @@ function FolderItem({
         />
       )}
 
+      {/* Sort indicator - before */}
+      {showSortBefore && (
+        <div
+          className="absolute left-2 right-2 h-0.5 bg-brand-500 rounded-full z-10"
+          style={{ top: 0 }}
+        />
+      )}
+
       <div
         draggable={!isRenaming}
         onDragStart={(e) => onDragStart(e, "folder", folder.id, folder.name)}
         onDragEnd={onDragEnd}
-        onDragOver={(e) => onDragOver(e, folder.id)}
+        onDragOver={(e) => {
+          onSortDragOver(e, folder.id, folder.parentId ?? null);
+          // Also call original for moving into folders (test cases)
+          if (!sortIndicator) {
+            onDragOver(e, folder.id);
+          }
+        }}
         onDragLeave={onDragLeave}
-        onDrop={(e) => onDrop(e, folder.id)}
+        onDrop={(e) => {
+          if (sortIndicator && sortIndicator.id === folder.id) {
+            onSortDrop(e, siblings, folder.parentId ?? null);
+          } else {
+            onDrop(e, folder.id);
+          }
+        }}
         onContextMenu={(e) => onContextMenu(e, folder.id, folder.name, folder.parentId ?? null)}
         className={cn(
           "flex items-center gap-2 py-2 pr-2 rounded-lg mx-2 relative transition-all cursor-grab",
           isSelected
             ? "bg-brand-500/10 text-brand-600 dark:text-brand-400 font-medium"
             : "hover:bg-muted text-muted-foreground hover:text-foreground",
-          isDropTarget && "ring-2 ring-brand-500 bg-brand-500/10"
+          isDropTarget && !sortIndicator && "ring-2 ring-brand-500 bg-brand-500/10"
         )}
         style={{ paddingLeft: `${12 + level * 20}px` }}
       >
@@ -641,12 +777,21 @@ function FolderItem({
         )}
       </div>
 
+      {/* Sort indicator - after */}
+      {showSortAfter && (
+        <div
+          className="absolute left-2 right-2 h-0.5 bg-brand-500 rounded-full z-10"
+          style={{ bottom: 0 }}
+        />
+      )}
+
       {hasChildren && isOpen && (
         <div className="animate-fade-in">
           {folder.children.map((child, index) => (
             <FolderItem
               key={child.id}
               folder={child}
+              siblings={folder.children}
               selectedFolderId={selectedFolderId}
               caseCounts={caseCounts}
               level={level + 1}
@@ -658,9 +803,12 @@ function FolderItem({
               onDragOver={onDragOver}
               onDragLeave={onDragLeave}
               onDrop={onDrop}
+              onSortDragOver={onSortDragOver}
+              onSortDrop={onSortDrop}
               onContextMenu={onContextMenu}
               dragState={dragState}
               dropTarget={dropTarget}
+              sortIndicator={sortIndicator}
               renamingId={renamingId}
               renameValue={renameValue}
               onRenameChange={onRenameChange}
