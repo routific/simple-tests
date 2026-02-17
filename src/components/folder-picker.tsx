@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { buildFolderBreadcrumb, formatBreadcrumb } from "@/lib/folders";
@@ -327,8 +328,8 @@ export function FolderPicker({
         </div>
       )}
 
-      {/* Context Menu */}
-      {contextMenu && (
+      {/* Context Menu - rendered via portal to escape transform containers */}
+      {contextMenu && typeof document !== "undefined" && createPortal(
         <div
           className="fixed z-[100] bg-background border border-border rounded-lg shadow-elevated py-1 min-w-[140px] animate-fade-in"
           style={{ left: contextMenu.x, top: contextMenu.y }}
@@ -341,7 +342,8 @@ export function FolderPicker({
             <PlusIcon className="w-4 h-4" />
             {contextMenu.folderId === null ? "New folder" : "Add subfolder"}
           </button>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
