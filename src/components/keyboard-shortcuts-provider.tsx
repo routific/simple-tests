@@ -333,6 +333,19 @@ function Kbd({ children }: { children: ReactNode }) {
 // Changelog entries - newest first
 const CHANGELOG = [
   {
+    version: "a802149",
+    date: "2026-02-17",
+    changes: [
+      "Add releases feature with Linear label sync and completion celebration",
+      "Drag-and-drop sorting for folders in the sidebar",
+      "Right-click context menu to add subfolders in folder picker",
+      "Inline test case editing in new test run screen",
+      "Allow users to delete their own test run attempts",
+      "Hover tooltip showing full folder path on test case rows",
+      "Handle expired Linear tokens gracefully on release pages",
+    ],
+  },
+  {
     version: "79dbb80",
     date: "2026-02-03",
     changes: [

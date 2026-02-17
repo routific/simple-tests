@@ -144,6 +144,8 @@ src/
 │   │   ├── runs-list.tsx        # Runs list component with release grouping
 │   │   └── actions.ts           # Server actions (create, update, add/remove scenarios)
 │   ├── releases/
+│   │   ├── page.tsx             # Releases list with Linear label sync
+│   │   ├── [id]/page.tsx        # Release detail with linked test runs
 │   │   └── actions.ts           # Release management actions
 │   ├── import/page.tsx          # Import instructions
 │   ├── settings/
@@ -296,10 +298,10 @@ Test cases can contain multiple scenarios, each with their own Gherkin content. 
 - **Responsive design** - Adapts to different screen sizes
 
 ### Test Case Repository
-- **Folder tree sidebar** - Expandable/collapsible hierarchy with drag-and-drop
+- **Folder tree sidebar** - Expandable/collapsible hierarchy with drag-and-drop sorting
 - **Nested folder view** - View test cases from parent folder and all descendants
-- **Drag-and-drop organization** - Move folders and test cases between folders
-- **Right-click context menu** - Rename, delete, or add subfolders
+- **Drag-and-drop organization** - Sort and move folders and test cases between folders
+- **Right-click context menu** - Rename, delete, or add subfolders (also in folder picker dropdowns)
 - **Search and filter** - By title, state (active, draft, retired, rejected)
 - **Bulk operations** - Select multiple cases to move, change state, delete, or create run
 - **Undo/redo** - Revert folder and scenario changes with keyboard shortcuts (Cmd+Z, Cmd+Shift+Z)
@@ -312,10 +314,19 @@ Test cases can contain multiple scenarios, each with their own Gherkin content. 
 - **Create runs** - Name, select cases/scenarios by folder or individually
 - **Releases** - Group runs by release (e.g., "v2.0", "Sprint 15")
 - **Edit runs** - Update name, release, add/remove scenarios after creation
+- **Inline editing** - Edit test case details directly from the run creation screen
 - **Linear integration** - Link to projects, milestones, and issues
 - **Execute runs** - Step through scenarios, mark Pass/Fail/Blocked/Skipped
 - **Add notes** - Capture observations during testing
 - **Progress tracking** - Visual progress bar, status counts
+- **Delete attempts** - Remove your own test results if recorded by mistake
+
+### Releases
+- **Releases list** - View all releases with status and test run counts
+- **Linear label sync** - Sync releases from Linear labels (Release label group)
+- **Release detail page** - View all test runs associated with a release
+- **Complete/Reopen** - Mark releases as complete with confetti celebration
+- **Deep links** - Share direct links to specific releases
 
 ### Dashboard
 - Quick stats (total cases, active cases, folders, runs)
