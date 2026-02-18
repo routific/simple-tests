@@ -30,6 +30,7 @@ export default async function RunsPage({ searchParams }: PageProps) {
       id: releases.id,
       name: releases.name,
       status: releases.status,
+      linearLabelId: releases.linearLabelId,
     })
     .from(releases)
     .where(eq(releases.organizationId, organizationId))
@@ -177,7 +178,7 @@ export default async function RunsPage({ searchParams }: PageProps) {
       ) : (
         <RunsList
           runs={runStats}
-          releases={allReleases as { id: number; name: string; status: "active" | "completed" }[]}
+          releases={allReleases as { id: number; name: string; status: "active" | "completed"; linearLabelId: string | null }[]}
           linearWorkspace={session.user.organizationUrlKey}
           initialReleaseId={initialReleaseId}
         />

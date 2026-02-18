@@ -32,6 +32,7 @@ export default async function NewRunPage({ searchParams }: Props) {
       id: releases.id,
       name: releases.name,
       status: releases.status,
+      linearLabelId: releases.linearLabelId,
     })
     .from(releases)
     .where(eq(releases.organizationId, organizationId))
@@ -113,7 +114,7 @@ export default async function NewRunPage({ searchParams }: Props) {
         folders={folderTree}
         cases={cases}
         caseCounts={caseCounts}
-        releases={allReleases as { id: number; name: string; status: "active" | "completed" }[]}
+        releases={allReleases as { id: number; name: string; status: "active" | "completed"; linearLabelId: string | null }[]}
         initialSelectedCaseIds={initialSelectedCaseIds}
       />
     </div>

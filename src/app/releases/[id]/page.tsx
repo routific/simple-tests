@@ -23,7 +23,7 @@ export default async function ReleaseDetailPage({ params }: Props) {
   const { id } = await params;
   const decodedId = decodeURIComponent(id);
 
-  // Try to find by ID first, then by name
+  // Try to find by ID first, then by linearLabelId, then by name
   let release;
   const numericId = parseInt(decodedId);
 
@@ -37,7 +37,16 @@ export default async function ReleaseDetailPage({ params }: Props) {
   }
 
   if (!release) {
-    // Try by name (case-insensitive)
+    // Try by linearLabelId (UUID)
+    release = await db
+      .select()
+      .from(releases)
+      .where(eq(releases.linearLabelId, decodedId))
+      .get();
+  }
+
+  if (!release) {
+    // Fall back to name (for backwards compatibility)
     release = await db
       .select()
       .from(releases)

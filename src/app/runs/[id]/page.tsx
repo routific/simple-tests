@@ -108,6 +108,7 @@ export default async function RunDetailPage({ params, searchParams }: Props) {
       id: releases.id,
       name: releases.name,
       status: releases.status,
+      linearLabelId: releases.linearLabelId,
     })
     .from(releases)
     .where(eq(releases.organizationId, organizationId))
@@ -134,7 +135,7 @@ export default async function RunDetailPage({ params, searchParams }: Props) {
         run={run}
         results={results}
         folders={allFolders}
-        releases={allReleases as { id: number; name: string; status: "active" | "completed" }[]}
+        releases={allReleases as { id: number; name: string; status: "active" | "completed"; linearLabelId: string | null }[]}
         availableScenarios={availableScenarios}
         linearWorkspace={session.user.organizationUrlKey}
         collaborators={collaborators}

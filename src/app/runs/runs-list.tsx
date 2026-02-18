@@ -19,6 +19,7 @@ interface Release {
   id: number;
   name: string;
   status: "active" | "completed";
+  linearLabelId: string | null;
 }
 
 interface RunsListProps {
@@ -86,10 +87,11 @@ export function RunsList({ runs, releases, linearWorkspace, initialReleaseId }: 
     }
   }, [initialReleaseId]);
 
-  const copyReleaseUrl = (releaseId: number) => {
-    const url = `${window.location.origin}/runs?release=${releaseId}`;
+  const copyReleaseUrl = (release: Release) => {
+    const slug = release.linearLabelId || release.id;
+    const url = `${window.location.origin}/releases/${slug}`;
     navigator.clipboard.writeText(url);
-    setCopiedReleaseId(releaseId);
+    setCopiedReleaseId(release.id);
     setTimeout(() => setCopiedReleaseId(null), 2000);
   };
 
@@ -330,7 +332,7 @@ export function RunsList({ runs, releases, linearWorkspace, initialReleaseId }: 
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          copyReleaseUrl(release.id);
+                          copyReleaseUrl(release);
                         }}
                         className="p-1 text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
                         title="Copy link to release"
@@ -342,7 +344,7 @@ export function RunsList({ runs, releases, linearWorkspace, initialReleaseId }: 
                         )}
                       </button>
                       <Link
-                        href={`/releases/${encodeURIComponent(release.name)}`}
+                        href={`/releases/${release.linearLabelId || release.id}`}
                         onClick={(e) => e.stopPropagation()}
                         className="p-1 text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
                         title="View release details"

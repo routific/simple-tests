@@ -11,6 +11,7 @@ interface Release {
   id: number;
   name: string;
   status: "active" | "completed";
+  linearLabelId: string | null;
 }
 
 interface ReleasePickerProps {
@@ -62,6 +63,7 @@ export function ReleasePicker({
           id: result.release.id,
           name: result.release.name,
           status: result.release.status as "active" | "completed",
+          linearLabelId: null, // Newly created releases aren't synced from Linear
         };
         onReleaseCreated?.(newRelease);
         onChange(newRelease.id);

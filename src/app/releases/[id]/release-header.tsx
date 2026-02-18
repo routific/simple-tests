@@ -123,8 +123,9 @@ export function ReleaseHeader({ release, summary }: ReleaseHeaderProps) {
   };
 
   const handleCopyLink = () => {
-    // Use release name for the URL (URL-encoded)
-    const url = `${window.location.origin}/releases/${encodeURIComponent(release.name)}`;
+    // Use linearLabelId for synced releases (stable), otherwise use numeric ID
+    const slug = release.linearLabelId || release.id;
+    const url = `${window.location.origin}/releases/${slug}`;
     navigator.clipboard.writeText(url);
     setLinkCopied(true);
     setTimeout(() => setLinkCopied(false), 2000);

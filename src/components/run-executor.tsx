@@ -66,6 +66,7 @@ interface Release {
   id: number;
   name: string;
   status: "active" | "completed";
+  linearLabelId: string | null;
 }
 
 interface AvailableScenario {
