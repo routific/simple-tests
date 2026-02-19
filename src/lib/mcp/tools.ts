@@ -14,7 +14,7 @@ import type { AuthContext } from "./auth";
 import { hasPermission } from "./auth";
 import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { logMcpWriteOperation, getEntityState, type EntityType } from "./audit-log";
-import { createIssueAttachment, deleteAttachmentByUrl } from "@/lib/linear";
+import { createIssueAttachmentForUser, deleteAttachmentByUrlForUser } from "@/lib/linear";
 
 // Context for audit logging
 export interface McpCallContext {
@@ -24,6 +24,7 @@ export interface McpCallContext {
 }
 
 async function createLinearAttachmentForRun(opts: {
+  userId: string;
   issueId: string;
   runId: number;
   runName: string;
@@ -52,7 +53,7 @@ async function createLinearAttachmentForRun(opts: {
     titleParts.push(`[${opts.environment.charAt(0).toUpperCase() + opts.environment.slice(1)}]`);
   }
 
-  return createIssueAttachment({
+  return createIssueAttachmentForUser(opts.userId, {
     issueId: opts.issueId,
     title: titleParts.join(" "),
     url: runUrl,
@@ -1604,7 +1605,7 @@ async function updateTestRun(
 
     // Delete attachment from old issue if there was one
     if (oldIssueId) {
-      await deleteAttachmentByUrl(runUrl);
+      await deleteAttachmentByUrlForUser(auth.userId, runUrl);
     }
 
     // Create attachment on new issue if there is one
@@ -1614,6 +1615,7 @@ async function updateTestRun(
         ? null // can't determine from project change
         : (run.releaseId as number | null) ?? null;
       await createLinearAttachmentForRun({
+        userId: auth.userId,
         issueId: newIssueId,
         runId: id,
         runName: updates.name ?? (run.name as string) ?? "",
@@ -1692,7 +1694,7 @@ async function linkTestRunToIssue(
 
   // Delete attachment from old issue if there was one
   if (oldIssueId) {
-    await deleteAttachmentByUrl(runUrl);
+    await deleteAttachmentByUrlForUser(auth.userId, runUrl);
   }
 
   const result = await db
@@ -1709,6 +1711,7 @@ async function linkTestRunToIssue(
   const run = beforeState as Record<string, unknown>;
   const resultsArray = (run.results as Array<unknown>) || [];
   await createLinearAttachmentForRun({
+    userId: auth.userId,
     issueId,
     runId: testRunId,
     runName: (run.name as string) || "",

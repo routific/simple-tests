@@ -18,7 +18,7 @@ interface LinearTokenResponse {
   scope: string;
 }
 
-async function refreshLinearToken(refreshToken: string): Promise<LinearTokenResponse | null> {
+export async function refreshLinearToken(refreshToken: string): Promise<LinearTokenResponse | null> {
   try {
     const response = await fetch("https://api.linear.app/oauth/token", {
       method: "POST",
@@ -163,6 +163,19 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.organizationName = linearProfile.organization.name;
         token.organizationUrlKey = linearProfile.organization.urlKey;
         token.organizationLogo = linearProfile.organization.logoUrl;
+
+        // Persist Linear tokens to DB for MCP server access
+        if (account.access_token && linearProfile.id) {
+          await db
+            .update(users)
+            .set({
+              linearAccessToken: account.access_token as string,
+              linearRefreshToken: account.refresh_token as string,
+              linearAccessTokenExpiresAt: new Date(Date.now() + (account.expires_in as number) * 1000),
+            })
+            .where(eq(users.id, linearProfile.id));
+        }
+
         return token;
       }
 
@@ -193,6 +206,18 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       token.refreshToken = refreshedTokens.refresh_token;
       token.accessTokenExpires = Date.now() + refreshedTokens.expires_in * 1000;
       delete token.error;
+
+      // Persist refreshed tokens to DB for MCP server access
+      if (token.linearId) {
+        await db
+          .update(users)
+          .set({
+            linearAccessToken: refreshedTokens.access_token,
+            linearRefreshToken: refreshedTokens.refresh_token,
+            linearAccessTokenExpiresAt: new Date(Date.now() + refreshedTokens.expires_in * 1000),
+          })
+          .where(eq(users.id, token.linearId as string));
+      }
 
       return token;
     },

@@ -1,5 +1,8 @@
 import { LinearClient } from "@linear/sdk";
-import { auth } from "./auth";
+import { eq } from "drizzle-orm";
+import { auth, refreshLinearToken } from "./auth";
+import { db } from "./db";
+import { users } from "./db/schema";
 
 export class LinearAuthError extends Error {
   constructor(message: string) {
@@ -200,6 +203,82 @@ export async function deleteAttachmentByUrl(url: string): Promise<boolean> {
     return true;
   } catch (error) {
     console.error("Failed to delete Linear attachment:", error);
+    return false;
+  }
+}
+
+// Token refresh buffer: refresh if less than 5 minutes remain
+const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
+
+export async function getLinearClientForUser(userId: string): Promise<LinearClient> {
+  const user = await db
+    .select({
+      linearAccessToken: users.linearAccessToken,
+      linearRefreshToken: users.linearRefreshToken,
+      linearAccessTokenExpiresAt: users.linearAccessTokenExpiresAt,
+    })
+    .from(users)
+    .where(eq(users.id, userId))
+    .get();
+
+  if (!user?.linearAccessToken) {
+    throw new LinearAuthError("No Linear access token stored for user");
+  }
+
+  // Check if token needs refresh
+  const expiresAt = user.linearAccessTokenExpiresAt?.getTime();
+  if (expiresAt && Date.now() > expiresAt - TOKEN_REFRESH_BUFFER_MS) {
+    if (!user.linearRefreshToken) {
+      throw new LinearAuthError("Linear token expired and no refresh token available");
+    }
+
+    const refreshed = await refreshLinearToken(user.linearRefreshToken);
+    if (!refreshed) {
+      throw new LinearAuthError("Failed to refresh Linear token");
+    }
+
+    // Persist refreshed tokens
+    await db
+      .update(users)
+      .set({
+        linearAccessToken: refreshed.access_token,
+        linearRefreshToken: refreshed.refresh_token,
+        linearAccessTokenExpiresAt: new Date(Date.now() + refreshed.expires_in * 1000),
+      })
+      .where(eq(users.id, userId));
+
+    return new LinearClient({ accessToken: refreshed.access_token });
+  }
+
+  return new LinearClient({ accessToken: user.linearAccessToken });
+}
+
+export async function createIssueAttachmentForUser(
+  userId: string,
+  input: CreateAttachmentInput
+): Promise<boolean> {
+  try {
+    const client = await getLinearClientForUser(userId);
+    const title = input.subtitle ? `${input.title} - ${input.subtitle}` : input.title;
+    const result = await client.attachmentLinkURL(input.issueId, input.url, { title });
+    return result.success;
+  } catch (error) {
+    console.error("[Linear] Failed to create attachment for user:", error instanceof Error ? error.message : error);
+    return false;
+  }
+}
+
+export async function deleteAttachmentByUrlForUser(userId: string, url: string): Promise<boolean> {
+  try {
+    const client = await getLinearClientForUser(userId);
+    const attachments = await client.attachmentsForURL(url);
+    if (attachments.nodes.length === 0) return true;
+    for (const attachment of attachments.nodes) {
+      await client.deleteAttachment(attachment.id);
+    }
+    return true;
+  } catch (error) {
+    console.error("[Linear] Failed to delete attachment for user:", error instanceof Error ? error.message : error);
     return false;
   }
 }

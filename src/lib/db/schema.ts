@@ -22,6 +22,9 @@ export const users = sqliteTable("users", {
   organizationId: text("organization_id")
     .notNull()
     .references(() => organizations.id),
+  linearAccessToken: text("linear_access_token"),
+  linearRefreshToken: text("linear_refresh_token"),
+  linearAccessTokenExpiresAt: integer("linear_access_token_expires_at", { mode: "timestamp" }),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .$defaultFn(() => new Date()),

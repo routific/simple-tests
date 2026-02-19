@@ -333,6 +333,13 @@ function Kbd({ children }: { children: ReactNode }) {
 // Changelog entries - newest first
 const CHANGELOG = [
   {
+    version: "35678b5",
+    date: "2026-02-19",
+    changes: [
+      "Fix MCP Linear attachments by persisting OAuth tokens to DB for server-side access",
+    ],
+  },
+  {
     version: "461fc98",
     date: "2026-02-19",
     changes: [
