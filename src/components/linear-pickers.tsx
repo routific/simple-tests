@@ -77,7 +77,7 @@ function getProjectStateColor(state: string) {
   }
 }
 
-// Linear Project Picker
+// Linear Project Picker with search
 export function LinearProjectPicker({
   projects,
   value,
@@ -90,17 +90,32 @@ export function LinearProjectPicker({
   loading: boolean;
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setIsOpen(false);
+        setSearch("");
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // Focus input when dropdown opens
+  useEffect(() => {
+    if (isOpen && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [isOpen]);
+
+  // Filter projects by search
+  const filteredProjects = search
+    ? projects.filter(p => p.name.toLowerCase().includes(search.toLowerCase()))
+    : projects;
 
   return (
     <div ref={containerRef} className="relative">
@@ -142,43 +157,64 @@ export function LinearProjectPicker({
       </button>
 
       {isOpen && (
-        <div className="absolute z-20 mt-1 w-full bg-background border border-border rounded-lg shadow-lg max-h-48 overflow-auto">
-          <button
-            type="button"
-            onClick={() => {
-              onChange(null);
-              setIsOpen(false);
-            }}
-            className={cn(
-              "w-full px-3 py-2 text-left hover:bg-muted transition-colors flex items-center gap-2",
-              !value && "bg-muted/50"
-            )}
-          >
-            <span className="text-sm text-muted-foreground">None</span>
-          </button>
-          {projects.map((project) => (
+        <div className="absolute z-20 mt-1 w-full bg-background border border-border rounded-lg shadow-lg">
+          {/* Search input */}
+          <div className="p-2 border-b border-border">
+            <input
+              ref={inputRef}
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search projects..."
+              className="w-full px-2 py-1.5 text-sm bg-muted/50 border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary/20"
+            />
+          </div>
+          <div className="max-h-48 overflow-auto">
             <button
               type="button"
-              key={project.id}
               onClick={() => {
-                onChange(project);
+                onChange(null);
                 setIsOpen(false);
+                setSearch("");
               }}
               className={cn(
                 "w-full px-3 py-2 text-left hover:bg-muted transition-colors flex items-center gap-2",
-                value?.id === project.id && "bg-muted/50"
+                !value && "bg-muted/50"
               )}
             >
-              <span
-                className="w-2 h-2 rounded-full shrink-0"
-                style={{ backgroundColor: getProjectStateColor(project.state) }}
-              />
-              <span className="text-sm text-foreground truncate">{project.name}</span>
-              <span className="text-xs text-muted-foreground capitalize ml-auto shrink-0">
-                {project.state}
-              </span>
+              <span className="text-sm text-muted-foreground">None</span>
             </button>
-          ))}
+            {filteredProjects.length === 0 ? (
+              <div className="px-3 py-2 text-sm text-muted-foreground">
+                No projects found
+              </div>
+            ) : (
+              filteredProjects.map((project) => (
+                <button
+                  type="button"
+                  key={project.id}
+                  onClick={() => {
+                    onChange(project);
+                    setIsOpen(false);
+                    setSearch("");
+                  }}
+                  className={cn(
+                    "w-full px-3 py-2 text-left hover:bg-muted transition-colors flex items-center gap-2",
+                    value?.id === project.id && "bg-muted/50"
+                  )}
+                >
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{ backgroundColor: getProjectStateColor(project.state) }}
+                  />
+                  <span className="text-sm text-foreground truncate">{project.name}</span>
+                  <span className="text-xs text-muted-foreground capitalize ml-auto shrink-0">
+                    {project.state}
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
         </div>
       )}
     </div>

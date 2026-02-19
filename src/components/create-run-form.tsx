@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { createTestRun } from "@/app/runs/actions";
@@ -453,12 +454,26 @@ export function CreateRunForm({ folders, cases, caseCounts, releases: initialRel
                 </div>
 
                 {linearError ? (
-                  <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-sm text-amber-800 dark:text-amber-200 flex items-center gap-2">
-                    <WarningIcon className="w-4 h-4 shrink-0" />
-                    <span className="flex-1">{linearError}</span>
-                    <Link href="/settings" className="text-amber-600 dark:text-amber-400 hover:underline font-medium">
-                      Settings
-                    </Link>
+                  <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-yellow-100 dark:bg-yellow-900/40 flex items-center justify-center flex-shrink-0">
+                        <WarningIcon className="w-4 h-4 text-yellow-600 dark:text-yellow-500" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                          Linear connection expired
+                        </p>
+                        <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                          Click &quot;Reconnect&quot; to re-authenticate with Linear.
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => signIn("linear")}
+                        className="px-3 py-1.5 text-sm font-medium text-yellow-800 dark:text-yellow-200 bg-yellow-100 dark:bg-yellow-800/50 hover:bg-yellow-200 dark:hover:bg-yellow-800 rounded-md transition-colors"
+                      >
+                        Reconnect
+                      </button>
+                    </div>
                   </div>
                 ) : (
                 <div className="grid grid-cols-3 gap-4">

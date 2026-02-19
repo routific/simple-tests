@@ -101,14 +101,22 @@ export async function getIssues(search?: string): Promise<LinearIssue[]> {
   try {
     const client = await getLinearClient();
 
-    // Check if search looks like an issue identifier (e.g., "ENG-123")
+    // Check if search looks like an issue identifier (e.g., "ENG-123") or just a number (e.g., "386")
     const identifierMatch = search?.match(/^[A-Z]+-(\d+)$/i);
+    const numberOnlyMatch = search?.match(/^(\d+)$/);
+
+    // Determine if we should search by number
+    const searchNumber = identifierMatch
+      ? parseInt(identifierMatch[1], 10)
+      : numberOnlyMatch
+        ? parseInt(numberOnlyMatch[1], 10)
+        : null;
 
     const issues = await client.issues({
       first: 50,
       ...(search && {
-        filter: identifierMatch
-          ? { number: { eq: parseInt(identifierMatch[1], 10) } }
+        filter: searchNumber !== null
+          ? { number: { eq: searchNumber } }
           : { title: { containsIgnoreCase: search } },
       }),
     });
