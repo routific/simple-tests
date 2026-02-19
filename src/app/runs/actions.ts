@@ -74,7 +74,12 @@ export async function createTestRun(input: CreateRunInput) {
         titleParts.push(`[${input.environment.charAt(0).toUpperCase() + input.environment.slice(1)}]`);
       }
 
-      console.log("[TestRun] Creating Linear attachment for issue:", input.linearIssueId);
+      console.log("[TestRun] Creating Linear attachment:", {
+        issueId: input.linearIssueId,
+        runUrl,
+        baseUrl,
+        title: titleParts.join(" "),
+      });
       const attachmentCreated = await createIssueAttachment({
         issueId: input.linearIssueId,
         title: titleParts.join(" "),
@@ -82,6 +87,11 @@ export async function createTestRun(input: CreateRunInput) {
         subtitle: `${input.scenarioIds.length} test case${input.scenarioIds.length !== 1 ? "s" : ""}`,
       });
       console.log("[TestRun] Attachment creation result:", attachmentCreated);
+      if (!attachmentCreated) {
+        console.error("[TestRun] Warning: Linear attachment creation failed");
+      }
+    } else {
+      console.log("[TestRun] No Linear issue linked, skipping attachment creation");
     }
 
     revalidatePath("/runs");

@@ -156,6 +156,7 @@ export interface CreateAttachmentInput {
 
 export async function createIssueAttachment(input: CreateAttachmentInput): Promise<boolean> {
   try {
+    console.log("[Linear] Getting client for attachment creation...");
     const client = await getLinearClient();
     // The Linear SDK uses attachmentLinkURL for creating URL attachments
     // It takes issueId and url as positional args, with optional title
@@ -165,9 +166,18 @@ export async function createIssueAttachment(input: CreateAttachmentInput): Promi
       title,
     });
     console.log("[Linear] Attachment creation result:", result.success);
+    if (!result.success) {
+      console.error("[Linear] Attachment creation returned success=false");
+    }
     return result.success;
   } catch (error) {
-    console.error("[Linear] Failed to create attachment:", error);
+    if (error instanceof LinearAuthError) {
+      console.error("[Linear] Auth error creating attachment:", error.message);
+    } else if (error instanceof Error) {
+      console.error("[Linear] Failed to create attachment:", error.message, error.stack);
+    } else {
+      console.error("[Linear] Failed to create attachment (unknown error):", error);
+    }
     return false;
   }
 }
