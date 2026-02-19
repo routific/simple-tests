@@ -2,10 +2,10 @@
 
 import { db } from "@/lib/db";
 import { releases, testRuns } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getSessionWithOrg } from "@/lib/auth";
-import { getReleaseLabels, LinearAuthError } from "@/lib/linear";
+import { getReleaseLabels, getIssuesByLabel, LinearAuthError } from "@/lib/linear";
 
 interface CreateReleaseInput {
   name: string;
@@ -229,10 +229,73 @@ export async function syncReleasesFromLinear() {
       }
     }
 
+    // Auto-associate test runs with releases based on linked Linear issues
+    let runsAssociated = 0;
+
+    // Get all releases with linearLabelId for this org
+    const releasesWithLabels = await db
+      .select({
+        id: releases.id,
+        linearLabelId: releases.linearLabelId,
+      })
+      .from(releases)
+      .where(
+        and(
+          eq(releases.organizationId, organizationId),
+          // Only process releases that have a Linear label
+        )
+      );
+
+    for (const release of releasesWithLabels) {
+      if (!release.linearLabelId) continue;
+
+      try {
+        // Fetch issues tagged with this release label
+        const issues = await getIssuesByLabel(release.linearLabelId);
+
+        if (issues.length === 0) continue;
+
+        // Get all issue IDs
+        const issueIds = issues.map(issue => issue.id);
+
+        // Find test runs linked to these issues that don't have a release assigned
+        // and belong to this organization
+        const matchingRuns = await db
+          .select({ id: testRuns.id })
+          .from(testRuns)
+          .where(
+            and(
+              eq(testRuns.organizationId, organizationId),
+              inArray(testRuns.linearIssueId, issueIds),
+              isNull(testRuns.releaseId)
+            )
+          );
+
+        if (matchingRuns.length > 0) {
+          // Update these test runs to associate with the release
+          await db
+            .update(testRuns)
+            .set({ releaseId: release.id })
+            .where(
+              and(
+                eq(testRuns.organizationId, organizationId),
+                inArray(testRuns.linearIssueId, issueIds),
+                isNull(testRuns.releaseId)
+              )
+            );
+
+          runsAssociated += matchingRuns.length;
+        }
+      } catch (error) {
+        // Log but don't fail the whole sync if one release's issue fetch fails
+        console.error(`Failed to fetch issues for release ${release.id}:`, error);
+      }
+    }
+
     revalidatePath("/releases");
     revalidatePath("/runs");
 
-    return { created, updated };
+    return { created, updated, runsAssociated };
   } catch (error) {
     if (error instanceof LinearAuthError) {
       return { error: "auth_expired" };
