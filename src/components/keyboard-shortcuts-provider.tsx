@@ -333,6 +333,13 @@ function Kbd({ children }: { children: ReactNode }) {
 // Changelog entries - newest first
 const CHANGELOG = [
   {
+    version: "461fc98",
+    date: "2026-02-19",
+    changes: [
+      "Fix MCP test run linking not creating resource attachments on Linear issues",
+    ],
+  },
+  {
     version: "3a496e9",
     date: "2026-02-19",
     changes: [

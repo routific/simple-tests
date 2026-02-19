@@ -8,17 +8,56 @@ import {
   testRuns,
   testRunResults,
   testResultHistory,
+  releases,
 } from "@/lib/db/schema";
 import type { AuthContext } from "./auth";
 import { hasPermission } from "./auth";
 import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { logMcpWriteOperation, getEntityState, type EntityType } from "./audit-log";
+import { createIssueAttachment, deleteAttachmentByUrl } from "@/lib/linear";
 
 // Context for audit logging
 export interface McpCallContext {
   auth: AuthContext;
   clientId: string;
   sessionId?: string;
+}
+
+async function createLinearAttachmentForRun(opts: {
+  issueId: string;
+  runId: number;
+  runName: string;
+  releaseId: number | null;
+  environment: string | null;
+  scenarioCount: number;
+}): Promise<boolean> {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://simple-tests.routific.com";
+  const runUrl = `${baseUrl}/runs/${opts.runId}`;
+  const titleParts = ["Test Run"];
+
+  if (opts.releaseId) {
+    const release = await db
+      .select({ name: releases.name })
+      .from(releases)
+      .where(eq(releases.id, opts.releaseId))
+      .get();
+    if (release?.name) {
+      titleParts.push(`[${release.name}]`);
+    }
+  }
+
+  titleParts.push(opts.runName);
+
+  if (opts.environment) {
+    titleParts.push(`[${opts.environment.charAt(0).toUpperCase() + opts.environment.slice(1)}]`);
+  }
+
+  return createIssueAttachment({
+    issueId: opts.issueId,
+    title: titleParts.join(" "),
+    url: runUrl,
+    subtitle: `${opts.scenarioCount} test case${opts.scenarioCount !== 1 ? "s" : ""}`,
+  });
 }
 
 export function registerTools(auth: AuthContext): Tool[] {
@@ -1553,6 +1592,38 @@ async function updateTestRun(
     .where(eq(testRuns.id, id))
     .returning();
 
+  // Handle Linear attachment changes if the issue changed
+  const run = beforeState as Record<string, unknown>;
+  const oldIssueId = run.linearIssueId as string | null;
+  const newIssueId = updates.linearIssueId !== undefined ? (updates.linearIssueId || null) : oldIssueId;
+  const issueChanged = updates.linearIssueId !== undefined && oldIssueId !== newIssueId;
+
+  if (issueChanged) {
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://simple-tests.routific.com";
+    const runUrl = `${baseUrl}/runs/${id}`;
+
+    // Delete attachment from old issue if there was one
+    if (oldIssueId) {
+      await deleteAttachmentByUrl(runUrl);
+    }
+
+    // Create attachment on new issue if there is one
+    if (newIssueId) {
+      const resultsArray = (run.results as Array<unknown>) || [];
+      const releaseId = updates.linearProjectId !== undefined
+        ? null // can't determine from project change
+        : (run.releaseId as number | null) ?? null;
+      await createLinearAttachmentForRun({
+        issueId: newIssueId,
+        runId: id,
+        runName: updates.name ?? (run.name as string) ?? "",
+        releaseId,
+        environment: (run.environment as string | null) ?? null,
+        scenarioCount: resultsArray.length,
+      });
+    }
+  }
+
   const afterState = await getEntityState("test_run", id, auth.organizationId);
 
   // Log to MCP write log
@@ -1615,6 +1686,15 @@ async function linkTestRunToIssue(
     };
   }
 
+  const oldIssueId = (beforeState as Record<string, unknown>).linearIssueId as string | null;
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://simple-tests.routific.com";
+  const runUrl = `${baseUrl}/runs/${testRunId}`;
+
+  // Delete attachment from old issue if there was one
+  if (oldIssueId) {
+    await deleteAttachmentByUrl(runUrl);
+  }
+
   const result = await db
     .update(testRuns)
     .set({
@@ -1624,6 +1704,18 @@ async function linkTestRunToIssue(
     })
     .where(eq(testRuns.id, testRunId))
     .returning();
+
+  // Create attachment on the Linear issue
+  const run = beforeState as Record<string, unknown>;
+  const resultsArray = (run.results as Array<unknown>) || [];
+  await createLinearAttachmentForRun({
+    issueId,
+    runId: testRunId,
+    runName: (run.name as string) || "",
+    releaseId: (run.releaseId as number | null) ?? null,
+    environment: (run.environment as string | null) ?? null,
+    scenarioCount: resultsArray.length,
+  });
 
   const afterState = await getEntityState("test_run", testRunId, auth.organizationId);
 
