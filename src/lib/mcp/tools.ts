@@ -5,6 +5,7 @@ import {
   testCases,
   scenarios,
   testCaseAuditLog,
+  testCaseLinearIssues,
   testRuns,
   testRunResults,
   testResultHistory,
@@ -319,6 +320,20 @@ export function registerTools(auth: AuthContext): Tool[] {
           },
           required: ["testRunId", "issueId", "issueIdentifier", "issueTitle"],
         },
+      },
+      {
+        name: "link_test_case_to_issue",
+        description: "Link a test case to a Linear issue",
+        inputSchema: {
+          type: "object",
+          properties: {
+            testCaseId: { type: "number", description: "Test case ID" },
+            issueId: { type: "string", description: "Linear issue UUID" },
+            issueIdentifier: { type: "string", description: "Linear issue identifier (e.g., 'PLA-12')" },
+            issueTitle: { type: "string", description: "Linear issue title" },
+          },
+          required: ["testCaseId", "issueId", "issueIdentifier", "issueTitle"],
+        },
       }
     );
   }
@@ -382,6 +397,8 @@ export async function handleToolCall(
       return updateTestRun(args, auth, auditCtx);
     case "link_test_run_to_issue":
       return linkTestRunToIssue(args, auth, auditCtx);
+    case "link_test_case_to_issue":
+      return linkTestCaseToIssue(args, auth, auditCtx);
     default:
       return {
         content: [{ type: "text", text: `Unknown tool: ${name}` }],
@@ -1735,5 +1752,101 @@ async function linkTestRunToIssue(
 
   return {
     content: [{ type: "text", text: JSON.stringify({ success: true, testRun: result[0] }, null, 2) }],
+  };
+}
+
+async function linkTestCaseToIssue(
+  args: Record<string, unknown>,
+  auth: AuthContext,
+  ctx: McpCallContext
+): Promise<CallToolResult> {
+  const { testCaseId, issueId, issueIdentifier, issueTitle } = args as {
+    testCaseId: number;
+    issueId: string;
+    issueIdentifier: string;
+    issueTitle: string;
+  };
+
+  if (!testCaseId || !issueId || !issueIdentifier || !issueTitle) {
+    await logMcpWriteOperation(ctx, {
+      toolName: "link_test_case_to_issue",
+      toolArgs: args,
+      entityType: "test_case",
+      status: "failed",
+      errorMessage: "testCaseId, issueId, issueIdentifier, and issueTitle are required",
+    });
+    return {
+      content: [{ type: "text", text: "Error: testCaseId, issueId, issueIdentifier, and issueTitle are required" }],
+      isError: true,
+    };
+  }
+
+  // Verify test case exists and belongs to org
+  const testCase = await db
+    .select()
+    .from(testCases)
+    .where(
+      and(
+        eq(testCases.id, testCaseId),
+        eq(testCases.organizationId, auth.organizationId)
+      )
+    )
+    .limit(1);
+
+  if (testCase.length === 0) {
+    await logMcpWriteOperation(ctx, {
+      toolName: "link_test_case_to_issue",
+      toolArgs: args,
+      entityType: "test_case",
+      entityId: testCaseId,
+      status: "failed",
+      errorMessage: `Test case not found: ${testCaseId}`,
+    });
+    return {
+      content: [{ type: "text", text: `Error: Test case not found: ${testCaseId}` }],
+      isError: true,
+    };
+  }
+
+  // Check if already linked
+  const existing = await db
+    .select()
+    .from(testCaseLinearIssues)
+    .where(
+      and(
+        eq(testCaseLinearIssues.testCaseId, testCaseId),
+        eq(testCaseLinearIssues.linearIssueId, issueId)
+      )
+    )
+    .limit(1);
+
+  if (existing.length > 0) {
+    return {
+      content: [{ type: "text", text: JSON.stringify({ success: true, message: "Already linked", link: existing[0] }, null, 2) }],
+    };
+  }
+
+  const result = await db
+    .insert(testCaseLinearIssues)
+    .values({
+      testCaseId,
+      linearIssueId: issueId,
+      linearIssueIdentifier: issueIdentifier,
+      linearIssueTitle: issueTitle,
+      linkedBy: auth.userId,
+    })
+    .returning();
+
+  await logMcpWriteOperation(ctx, {
+    toolName: "link_test_case_to_issue",
+    toolArgs: args,
+    entityType: "test_case",
+    entityId: testCaseId,
+    afterState: result[0],
+    status: "success",
+  });
+
+  return {
+    content: [{ type: "text", text: JSON.stringify({ success: true, link: result[0] }, null, 2) }],
   };
 }
