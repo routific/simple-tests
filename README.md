@@ -324,9 +324,10 @@ Test cases can contain multiple scenarios, each with their own Gherkin content. 
 ### Releases
 - **Releases list** - View all releases with status and test run counts
 - **Linear label sync** - Sync releases from Linear labels (Release label group)
+- **Auto-association** - Test runs linked to Linear issues are automatically associated with releases
 - **Release detail page** - View all test runs associated with a release
 - **Complete/Reopen** - Mark releases as complete with confetti celebration
-- **Deep links** - Share direct links to specific releases
+- **Deep links** - Stable UUID-based URLs for sharing release links
 
 ### Dashboard
 - Quick stats (total cases, active cases, folders, runs)
@@ -336,11 +337,11 @@ Test cases can contain multiple scenarios, each with their own Gherkin content. 
 ### Linear Integration
 - **OAuth authentication** - Sign in with your Linear account
 - **Organization scoping** - Data isolated by Linear workspace
-- **Project linking** - Associate test runs with Linear projects
+- **Project linking** - Associate test runs with Linear projects, with search filtering
 - **Milestone tracking** - Link runs to project milestones
-- **Issue attachment** - Connect runs to specific Linear issues
+- **Issue search** - Connect runs to specific Linear issues with partial number matching
 - **Test case linking** - Link Linear issues directly to test cases
-- **Auto token refresh** - Seamless session management with automatic OAuth refresh
+- **Auto token refresh** - Seamless session management with automatic OAuth refresh and reconnect prompts
 
 ### MCP (Model Context Protocol)
 - **AI assistant integration** - Connect Claude Desktop, Claude Code, or Cursor to SimpleTests

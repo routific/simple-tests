@@ -333,6 +333,17 @@ function Kbd({ children }: { children: ReactNode }) {
 // Changelog entries - newest first
 const CHANGELOG = [
   {
+    version: "3a496e9",
+    date: "2026-02-19",
+    changes: [
+      "Auto-associate test runs with releases based on linked Linear issues",
+      "Use stable UUID-based URLs for release deeplinks",
+      "Add reconnect button when Linear OAuth token expires",
+      "Add search filtering in project dropdown",
+      "Support partial issue number matching (e.g., '386' matches 'ROUT-386')",
+    ],
+  },
+  {
     version: "a802149",
     date: "2026-02-17",
     changes: [
