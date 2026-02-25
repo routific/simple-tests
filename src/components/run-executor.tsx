@@ -488,6 +488,16 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
     } else {
       // Stay on current result but update it
       setSelectedResult(updatedResult);
+
+      // Check if all scenarios are now executed (including the one just updated)
+      const wasLastPending = selectedResult.status === "pending" &&
+        results.filter(r => r.status === "pending").length === 1;
+
+      // Prompt to complete the run if this was the last pending scenario
+      if (wasLastPending && run.status === "in_progress") {
+        // Small delay to let the UI update first
+        setTimeout(() => setShowCompleteConfirm(true), 300);
+      }
     }
 
     startTransition(async () => {
@@ -1500,7 +1510,9 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
               onClick={(e) => e.stopPropagation()}
             >
               <div className="px-6 py-4 border-b border-border">
-                <h2 className="text-lg font-semibold">Complete Test Run</h2>
+                <h2 className="text-lg font-semibold">
+                  {stats.pending === 0 ? "All Tests Complete!" : "Complete Test Run"}
+                </h2>
               </div>
               <button
                 onClick={() => setShowCompleteConfirm(false)}
@@ -1510,22 +1522,39 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
               </button>
 
               <div className="px-6 py-4 space-y-3">
-                <p className="text-sm text-foreground">
-                  Are you sure you want to complete this test run?
-                </p>
-                <div className="text-sm text-muted-foreground space-y-2">
-                  <p>This will:</p>
-                  <ul className="list-disc list-inside space-y-1 ml-2">
-                    <li>Mark the test run as completed</li>
-                    <li>Lock the run from further changes</li>
-                    {stats.pending > 0 && (
-                      <li>Leave {stats.pending} scenario{stats.pending !== 1 ? "s" : ""} as pending</li>
-                    )}
-                  </ul>
-                </div>
-                <p className="text-sm font-medium text-amber-600 dark:text-amber-500">
-                  This action cannot be undone.
-                </p>
+                {stats.pending === 0 ? (
+                  <>
+                    <p className="text-sm text-foreground">
+                      Great job! All {stats.total} scenario{stats.total !== 1 ? "s have" : " has"} been tested.
+                    </p>
+                    <div className="flex items-center gap-4 py-2 text-sm">
+                      <span className="text-emerald-600 font-medium">{stats.passed} passed</span>
+                      {stats.failed > 0 && <span className="text-rose-500 font-medium">{stats.failed} failed</span>}
+                      {stats.blocked > 0 && <span className="text-orange-600 font-medium">{stats.blocked} blocked</span>}
+                      {stats.skipped > 0 && <span className="text-gray-500 font-medium">{stats.skipped} skipped</span>}
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Would you like to mark this run as complete?
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm text-foreground">
+                      Are you sure you want to complete this test run?
+                    </p>
+                    <div className="text-sm text-muted-foreground space-y-2">
+                      <p>This will:</p>
+                      <ul className="list-disc list-inside space-y-1 ml-2">
+                        <li>Mark the test run as completed</li>
+                        <li>Lock the run from further changes</li>
+                        <li>Leave {stats.pending} scenario{stats.pending !== 1 ? "s" : ""} as pending</li>
+                      </ul>
+                    </div>
+                    <p className="text-sm font-medium text-amber-600 dark:text-amber-500">
+                      This action cannot be undone.
+                    </p>
+                  </>
+                )}
               </div>
 
               <div className="px-6 py-4 border-t border-border flex items-center justify-end gap-2">
@@ -1533,7 +1562,7 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
                   onClick={() => setShowCompleteConfirm(false)}
                   className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground"
                 >
-                  Cancel
+                  {stats.pending === 0 ? "Not Yet" : "Cancel"}
                 </button>
                 <button
                   onClick={() => {
@@ -1541,9 +1570,14 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
                     handleComplete();
                   }}
                   disabled={isPending}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
+                  className={cn(
+                    "px-4 py-2 text-sm font-medium text-white rounded-md disabled:opacity-50",
+                    stats.pending === 0
+                      ? "bg-emerald-600 hover:bg-emerald-700"
+                      : "bg-blue-600 hover:bg-blue-700"
+                  )}
                 >
-                  Complete Run
+                  {stats.pending === 0 ? "Yes, Complete Run" : "Complete Run"}
                 </button>
               </div>
             </div>
