@@ -333,9 +333,10 @@ function Kbd({ children }: { children: ReactNode }) {
 // Changelog entries - newest first
 const CHANGELOG = [
   {
-    version: "0443eef",
-    date: "2026-02-25",
+    version: "d464410",
+    date: "2026-02-26",
     changes: [
+      "Group test runs by environment (Production, Staging, Dev, Sandbox) within releases",
       "Prompt to complete run when all scenarios are tested",
       "Styled Linear Project and Milestone dropdowns with search and state colors",
     ],

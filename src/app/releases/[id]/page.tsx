@@ -5,7 +5,8 @@ import { notFound, redirect } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { getSessionWithOrg } from "@/lib/auth";
 import { getIssuesByLabel } from "@/lib/linear";
-import { TestRunRow, type TestRunData } from "@/components/test-run-row";
+import { type TestRunData } from "@/components/test-run-row";
+import { EnvironmentGroups } from "@/components/environment-groups";
 import { ReleaseHeader } from "./release-header";
 
 export const dynamic = "force-dynamic";
@@ -287,15 +288,10 @@ export default async function ReleaseDetailPage({ params }: Props) {
             </Card>
           ) : (
             <Card>
-              <div className="divide-y divide-border">
-                {runStats.map((run) => (
-                  <TestRunRow
-                    key={run.id}
-                    run={run}
-                    linearWorkspace={workspace}
-                  />
-                ))}
-              </div>
+              <EnvironmentGroups
+                runs={runStats}
+                linearWorkspace={workspace}
+              />
             </Card>
           )}
         </div>

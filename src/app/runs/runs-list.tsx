@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ReleasePicker } from "@/components/release-picker";
 import { TestRunRow, type TestRunData } from "@/components/test-run-row";
+import { EnvironmentGroups } from "@/components/environment-groups";
 import { completeRelease, reopenRelease, updateRelease } from "@/app/releases/actions";
 import { duplicateTestRun, deleteTestRun } from "@/app/runs/actions";
 
@@ -390,7 +391,7 @@ export function RunsList({ runs, releases, linearWorkspace, initialReleaseId }: 
           )}
         </div>
 
-        {/* Release Runs */}
+        {/* Release Runs - grouped by environment */}
         {isExpanded && (
           <div className="bg-background">
             {releaseRuns.length === 0 ? (
@@ -398,19 +399,12 @@ export function RunsList({ runs, releases, linearWorkspace, initialReleaseId }: 
                 No runs in this release
               </div>
             ) : (
-              <div className="divide-y divide-border">
-                {releaseRuns.map((run) => (
-                  <TestRunRow
-                    key={run.id}
-                    run={run}
-                    linearWorkspace={linearWorkspace}
-                    showActions
-                    onDuplicate={() => handleOpenDuplicate(run)}
-                    onDelete={() => handleDelete(run)}
-                    className="pl-12"
-                  />
-                ))}
-              </div>
+              <EnvironmentGroups
+                runs={releaseRuns}
+                linearWorkspace={linearWorkspace}
+                onDuplicate={handleOpenDuplicate}
+                onDelete={handleDelete}
+              />
             )}
           </div>
         )}
