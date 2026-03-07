@@ -13,6 +13,7 @@ export function EnvironmentGroups({
   onDelete,
   onRunDragStart,
   onRunDragEnd,
+  movingRunId,
 }: {
   runs: TestRunData[];
   linearWorkspace?: string;
@@ -20,6 +21,7 @@ export function EnvironmentGroups({
   onDelete?: (run: TestRunData) => void;
   onRunDragStart?: (e: React.DragEvent, run: TestRunData) => void;
   onRunDragEnd?: (e: React.DragEvent) => void;
+  movingRunId?: number | null;
 }) {
   const [expandedEnvs, setExpandedEnvs] = useState<Set<string>>(() => {
     // Start with all environments expanded
@@ -91,6 +93,7 @@ export function EnvironmentGroups({
             draggable={!!onRunDragStart}
             onDragStart={onRunDragStart ? (e) => onRunDragStart(e, run) : undefined}
             onDragEnd={onRunDragEnd}
+            className={movingRunId === run.id ? "opacity-50 pointer-events-none" : undefined}
           />
         ))}
       </div>

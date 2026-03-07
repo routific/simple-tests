@@ -74,6 +74,8 @@ export function RunsList({ runs, releases, linearWorkspace, initialReleaseId }: 
   // Drag and drop state
   const [dragRunId, setDragRunId] = useState<number | null>(null);
   const [dropTargetId, setDropTargetId] = useState<number | "unassigned" | null>(null);
+  const [movingRunId, setMovingRunId] = useState<number | null>(null);
+  const [movingToReleaseId, setMovingToReleaseId] = useState<number | "unassigned" | null>(null);
 
   // Release edit state
   const [editingReleaseId, setEditingReleaseId] = useState<number | null>(null);
@@ -287,14 +289,18 @@ export function RunsList({ runs, releases, linearWorkspace, initialReleaseId }: 
 
     const newReleaseId = targetReleaseId === "unassigned" ? null : targetReleaseId;
 
+    setMovingRunId(runId);
+    setMovingToReleaseId(targetReleaseId);
+    setDragRunId(null);
+
     startTransition(async () => {
       const result = await updateTestRun({ runId, releaseId: newReleaseId });
+      setMovingRunId(null);
+      setMovingToReleaseId(null);
       if (result.success) {
         router.refresh();
       }
     });
-
-    setDragRunId(null);
   };
 
   const renderReleaseGroup = (release: Release | "unassigned", releaseRuns: RunWithStats[]) => {
@@ -308,6 +314,7 @@ export function RunsList({ runs, releases, linearWorkspace, initialReleaseId }: 
     // Don't highlight the group the run is already in
     const dragRunCurrentRelease = dragRunId !== null ? (runs.find(r => r.id === dragRunId)?.releaseId ?? "unassigned") : null;
     const isValidDropTarget = dragRunId !== null && dragRunCurrentRelease !== id;
+    const isReceivingRun = movingToReleaseId === id;
 
     return (
       <div
@@ -320,7 +327,8 @@ export function RunsList({ runs, releases, linearWorkspace, initialReleaseId }: 
         onDrop={isValidDropTarget ? (e) => handleDrop(e, id) : undefined}
         className={cn(
           "border-b border-border last:border-b-0 transition-colors",
-          isDragTarget && "bg-brand-50 dark:bg-brand-950/20 ring-2 ring-inset ring-brand-500/50"
+          isDragTarget && "bg-brand-50 dark:bg-brand-950/20 ring-2 ring-inset ring-brand-500/50",
+          isReceivingRun && "bg-brand-50/50 dark:bg-brand-950/10"
         )}
       >
         {/* Release Header */}
@@ -426,6 +434,9 @@ export function RunsList({ runs, releases, linearWorkspace, initialReleaseId }: 
               <Badge variant="secondary" className="font-normal">
                 {releaseRuns.length} run{releaseRuns.length !== 1 ? "s" : ""}
               </Badge>
+              {isReceivingRun && (
+                <SpinnerIcon className="w-4 h-4 text-brand-500 animate-spin" />
+              )}
             </div>
           </div>
 
@@ -473,6 +484,7 @@ export function RunsList({ runs, releases, linearWorkspace, initialReleaseId }: 
                 onDelete={handleDelete}
                 onRunDragStart={handleRunDragStart}
                 onRunDragEnd={handleRunDragEnd}
+                movingRunId={movingRunId}
               />
             )}
           </div>
@@ -734,6 +746,15 @@ function OpenIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+    </svg>
+  );
+}
+
+function SpinnerIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={4} />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
     </svg>
   );
 }
