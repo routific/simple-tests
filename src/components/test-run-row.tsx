@@ -34,6 +34,9 @@ interface TestRunRowProps {
   onDuplicate?: () => void;
   onDelete?: () => void;
   className?: string;
+  draggable?: boolean;
+  onDragStart?: (e: React.DragEvent) => void;
+  onDragEnd?: (e: React.DragEvent) => void;
 }
 
 export function TestRunRow({
@@ -43,6 +46,9 @@ export function TestRunRow({
   onDuplicate,
   onDelete,
   className,
+  draggable,
+  onDragStart,
+  onDragEnd,
 }: TestRunRowProps) {
   const router = useRouter();
   const passRate = run.total > 0
@@ -61,8 +67,12 @@ export function TestRunRow({
   return (
     <div
       onClick={handleRowClick}
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
       className={cn(
         "flex items-center justify-between p-4 hover:bg-muted/50 transition-colors group cursor-pointer",
+        draggable && "cursor-grab active:cursor-grabbing",
         className
       )}
     >

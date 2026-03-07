@@ -11,11 +11,15 @@ export function EnvironmentGroups({
   linearWorkspace,
   onDuplicate,
   onDelete,
+  onRunDragStart,
+  onRunDragEnd,
 }: {
   runs: TestRunData[];
   linearWorkspace?: string;
   onDuplicate?: (run: TestRunData) => void;
   onDelete?: (run: TestRunData) => void;
+  onRunDragStart?: (e: React.DragEvent, run: TestRunData) => void;
+  onRunDragEnd?: (e: React.DragEvent) => void;
 }) {
   const [expandedEnvs, setExpandedEnvs] = useState<Set<string>>(() => {
     // Start with all environments expanded
@@ -84,6 +88,9 @@ export function EnvironmentGroups({
             showActions={!!(onDuplicate || onDelete)}
             onDuplicate={onDuplicate ? () => onDuplicate(run) : undefined}
             onDelete={onDelete ? () => onDelete(run) : undefined}
+            draggable={!!onRunDragStart}
+            onDragStart={onRunDragStart ? (e) => onRunDragStart(e, run) : undefined}
+            onDragEnd={onRunDragEnd}
           />
         ))}
       </div>
@@ -133,6 +140,9 @@ export function EnvironmentGroups({
                     showActions={!!(onDuplicate || onDelete)}
                     onDuplicate={onDuplicate ? () => onDuplicate(run) : undefined}
                     onDelete={onDelete ? () => onDelete(run) : undefined}
+                    draggable={!!onRunDragStart}
+                    onDragStart={onRunDragStart ? (e) => onRunDragStart(e, run) : undefined}
+                    onDragEnd={onRunDragEnd}
                   />
                 ))}
               </div>

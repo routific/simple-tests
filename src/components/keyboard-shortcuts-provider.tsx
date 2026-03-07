@@ -333,6 +333,13 @@ function Kbd({ children }: { children: ReactNode }) {
 // Changelog entries - newest first
 const CHANGELOG = [
   {
+    version: "4b1e9ae",
+    date: "2026-03-06",
+    changes: [
+      "Drag and drop test runs between releases on the /runs page",
+    ],
+  },
+  {
     version: "d464410",
     date: "2026-02-26",
     changes: [

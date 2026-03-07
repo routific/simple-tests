@@ -12,7 +12,7 @@ import { ReleasePicker } from "@/components/release-picker";
 import { TestRunRow, type TestRunData } from "@/components/test-run-row";
 import { EnvironmentGroups } from "@/components/environment-groups";
 import { completeRelease, reopenRelease, updateRelease } from "@/app/releases/actions";
-import { duplicateTestRun, deleteTestRun } from "@/app/runs/actions";
+import { duplicateTestRun, deleteTestRun, updateTestRun } from "@/app/runs/actions";
 
 type RunWithStats = TestRunData;
 
@@ -70,6 +70,10 @@ export function RunsList({ runs, releases, linearWorkspace, initialReleaseId }: 
   const [duplicateName, setDuplicateName] = useState("");
   const [duplicateReleaseId, setDuplicateReleaseId] = useState<number | null>(null);
   const [duplicateEnvironment, setDuplicateEnvironment] = useState<"sandbox" | "dev" | "staging" | "prod" | null>(null);
+
+  // Drag and drop state
+  const [dragRunId, setDragRunId] = useState<number | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<number | "unassigned" | null>(null);
 
   // Release edit state
   const [editingReleaseId, setEditingReleaseId] = useState<number | null>(null);
@@ -241,6 +245,58 @@ export function RunsList({ runs, releases, linearWorkspace, initialReleaseId }: 
     });
   };
 
+  const handleRunDragStart = (e: React.DragEvent, run: RunWithStats) => {
+    setDragRunId(run.id);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", String(run.id));
+  };
+
+  const handleRunDragEnd = () => {
+    setDragRunId(null);
+    setDropTargetId(null);
+  };
+
+  const handleDragOver = (e: React.DragEvent, targetId: number | "unassigned") => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDropTargetId(targetId);
+  };
+
+  const handleDragLeave = (e: React.DragEvent, targetId: number | "unassigned") => {
+    // Only clear if we're leaving the container (not entering a child)
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      if (dropTargetId === targetId) {
+        setDropTargetId(null);
+      }
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent, targetReleaseId: number | "unassigned") => {
+    e.preventDefault();
+    setDropTargetId(null);
+
+    const runId = Number(e.dataTransfer.getData("text/plain"));
+    if (!runId) return;
+
+    // Find the run and its current release
+    const run = runs.find(r => r.id === runId);
+    if (!run) return;
+
+    const currentReleaseId = run.releaseId ?? "unassigned";
+    if (currentReleaseId === targetReleaseId) return;
+
+    const newReleaseId = targetReleaseId === "unassigned" ? null : targetReleaseId;
+
+    startTransition(async () => {
+      const result = await updateTestRun({ runId, releaseId: newReleaseId });
+      if (result.success) {
+        router.refresh();
+      }
+    });
+
+    setDragRunId(null);
+  };
+
   const renderReleaseGroup = (release: Release | "unassigned", releaseRuns: RunWithStats[]) => {
     const isUnassigned = release === "unassigned";
     const id = isUnassigned ? "unassigned" : release.id;
@@ -248,13 +304,24 @@ export function RunsList({ runs, releases, linearWorkspace, initialReleaseId }: 
     const status = isUnassigned ? null : release.status;
     const isExpanded = expandedReleases.has(id);
 
+    const isDragTarget = dragRunId !== null && dropTargetId === id;
+    // Don't highlight the group the run is already in
+    const dragRunCurrentRelease = dragRunId !== null ? (runs.find(r => r.id === dragRunId)?.releaseId ?? "unassigned") : null;
+    const isValidDropTarget = dragRunId !== null && dragRunCurrentRelease !== id;
+
     return (
       <div
         key={id}
         ref={(el) => {
           if (el && !isUnassigned) releaseRefs.current.set(id, el);
         }}
-        className="border-b border-border last:border-b-0"
+        onDragOver={isValidDropTarget ? (e) => handleDragOver(e, id) : undefined}
+        onDragLeave={isValidDropTarget ? (e) => handleDragLeave(e, id) : undefined}
+        onDrop={isValidDropTarget ? (e) => handleDrop(e, id) : undefined}
+        className={cn(
+          "border-b border-border last:border-b-0 transition-colors",
+          isDragTarget && "bg-brand-50 dark:bg-brand-950/20 ring-2 ring-inset ring-brand-500/50"
+        )}
       >
         {/* Release Header */}
         <div
@@ -404,6 +471,8 @@ export function RunsList({ runs, releases, linearWorkspace, initialReleaseId }: 
                 linearWorkspace={linearWorkspace}
                 onDuplicate={handleOpenDuplicate}
                 onDelete={handleDelete}
+                onRunDragStart={handleRunDragStart}
+                onRunDragEnd={handleRunDragEnd}
               />
             )}
           </div>
