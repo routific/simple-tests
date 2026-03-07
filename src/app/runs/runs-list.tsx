@@ -471,7 +471,7 @@ export function RunsList({ runs, releases, linearWorkspace, initialReleaseId }: 
 
         {/* Release Runs - grouped by environment */}
         {isExpanded && (
-          <div className="bg-background">
+          <div className="bg-background pl-4">
             {releaseRuns.length === 0 ? (
               <div className="py-8 px-4 text-center text-muted-foreground text-sm">
                 No runs in this release

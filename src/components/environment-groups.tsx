@@ -23,11 +23,7 @@ export function EnvironmentGroups({
   onRunDragEnd?: (e: React.DragEvent) => void;
   movingRunId?: number | null;
 }) {
-  const [expandedEnvs, setExpandedEnvs] = useState<Set<string>>(() => {
-    // Start with all environments expanded
-    const envs = new Set(runs.map(r => r.environment || "unassigned"));
-    return envs;
-  });
+  const [expandedEnvs, setExpandedEnvs] = useState<Set<string>>(new Set());
 
   // Group runs by environment
   const envOrder: (typeof runs[0]["environment"] | "unassigned")[] = ["prod", "staging", "dev", "sandbox", "unassigned"];
