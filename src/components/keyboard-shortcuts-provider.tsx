@@ -338,7 +338,7 @@ const CHANGELOG = [
     changes: [
       "Add demo mode for PR preview deployments — set DEMO_MODE=true to bypass Linear auth and use scaffolded sample data",
       "Added confirmation button when moving test cases to folders to prevent accidental moves",
-      "Added confirmation dialog when moving test cases to folders via drag-and-drop or bulk move modal to prevent accidental moves",
+      "Added confirmation dialog when moving test cases or folders via drag-and-drop or bulk move modal to prevent accidental moves",
     ],
   },
   {
