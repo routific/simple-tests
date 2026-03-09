@@ -222,9 +222,12 @@ export function FolderTree({
       e.preventDefault();
       e.stopPropagation();
 
-      // Check for external test case drag from the list
-      const externalDrag = (window as unknown as { __draggedTestCase?: { id: number; name: string } }).__draggedTestCase;
-      const currentDragState = dragState || (externalDrag ? { type: "testcase" as const, ...externalDrag } : null);
+      // Check for external test case drag from the list (supports multiple cases)
+      const externalMultiDrag = (window as unknown as { __draggedTestCases?: { ids: number[]; names: string[] } }).__draggedTestCases;
+      let currentDragState: DragState | null = dragState;
+      if (!currentDragState && externalMultiDrag) {
+        currentDragState = { type: "testcase", id: externalMultiDrag.ids[0], name: externalMultiDrag.names[0] };
+      }
 
       if (!currentDragState) return;
 
@@ -821,10 +824,10 @@ function FolderItem({
         onDragStart={(e) => onDragStart(e, "folder", folder.id, folder.name)}
         onDragEnd={onDragEnd}
         onDragOver={(e) => {
-          // Check for external test case drag first
-          const externalDrag = (window as unknown as { __draggedTestCase?: { id: number; name: string } }).__draggedTestCase;
-          if (externalDrag) {
-            // Test case being dragged - use drop into folder behavior
+          // Check for external test case drag first (supports multiple cases)
+          const externalMultiDrag = (window as unknown as { __draggedTestCases?: { ids: number[]; names: string[] } }).__draggedTestCases;
+          if (externalMultiDrag) {
+            // Test case(s) being dragged - use drop into folder behavior
             onDragOver(e, folder.id);
           } else {
             // Folder being dragged - handle sort vs drop into based on position
