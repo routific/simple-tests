@@ -337,6 +337,7 @@ const CHANGELOG = [
     date: "2026-03-09",
     changes: [
       "Add demo mode for PR preview deployments — set DEMO_MODE=true to bypass Linear auth and use scaffolded sample data",
+      "Added confirmation button when moving test cases to folders to prevent accidental moves",
     ],
   },
   {
