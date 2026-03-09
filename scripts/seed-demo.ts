@@ -24,15 +24,25 @@ const DEMO_ORG_ID = "demo-org-001";
 const DEMO_USER_ID = "demo-user-001";
 const DEMO_USER_2_ID = "demo-user-002";
 
+const dbUrl = process.env.TURSO_DATABASE_URL || "file:local.db";
+const hasAuthToken = !!process.env.TURSO_AUTH_TOKEN;
+
+console.log(`Database URL: ${dbUrl}`);
+console.log(`Auth token: ${hasAuthToken ? "provided" : "NOT SET (using local mode)"}`);
+
+if (dbUrl === "file:local.db") {
+  console.warn("WARNING: Seeding into local.db — pass TURSO_DATABASE_URL to seed a remote database.");
+}
+
 const client = createClient({
-  url: process.env.TURSO_DATABASE_URL || "file:local.db",
+  url: dbUrl,
   authToken: process.env.TURSO_AUTH_TOKEN,
 });
 
 const db = drizzle(client);
 
 async function seed() {
-  console.log("Seeding demo data...");
+  console.log("\nSeeding demo data...");
 
   // Clean existing demo data (reverse dependency order, raw SQL for subquery deletes)
   console.log("Cleaning existing demo data...");
