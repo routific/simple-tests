@@ -13,6 +13,7 @@ import {
   moveTestCaseToFolder,
   reorderFolders,
 } from "@/app/folders/actions";
+import { bulkMoveTestCasesToFolder } from "@/app/cases/actions";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 
@@ -95,9 +96,11 @@ interface DragState {
 }
 
 interface PendingMove {
-  type: "folder" | "testcase";
+  type: "folder" | "testcase" | "testcases";
   itemId: number;
+  itemIds?: number[];
   itemName: string;
+  itemNames?: string[];
   targetFolderId: number | null;
   targetFolderName: string;
 }
@@ -260,9 +263,18 @@ export function FolderTree({
       e.preventDefault();
       e.stopPropagation();
 
-      // Check for external test case drag from the list
-      const externalDrag = (window as unknown as { __draggedTestCase?: { id: number; name: string } }).__draggedTestCase;
-      const currentDragState = dragState || (externalDrag ? { type: "testcase" as const, ...externalDrag } : null);
+      // Check for external test case drag from the list (supports multiple cases)
+      const externalMultiDrag = (window as unknown as { __draggedTestCases?: { ids: number[]; names: string[] } }).__draggedTestCases;
+      
+      let currentDragState: DragState | { type: "testcases"; ids: number[]; names: string[] } | null = dragState;
+      
+      if (!currentDragState && externalMultiDrag) {
+        if (externalMultiDrag.ids.length === 1) {
+          currentDragState = { type: "testcase", id: externalMultiDrag.ids[0], name: externalMultiDrag.names[0] };
+        } else {
+          currentDragState = { type: "testcases", ...externalMultiDrag };
+        }
+      }
 
       if (!currentDragState) return;
 
@@ -292,10 +304,21 @@ export function FolderTree({
           targetFolderId: newParentId,
           targetFolderName: findFolderName(newParentId),
         });
+      } else if (currentDragState.type === "testcases") {
+        // Multiple test cases being moved
+        setPendingMove({
+          type: "testcases",
+          itemId: currentDragState.ids[0],
+          itemIds: currentDragState.ids,
+          itemName: `${currentDragState.ids.length} test cases`,
+          itemNames: currentDragState.names,
+          targetFolderId: newParentId,
+          targetFolderName: findFolderName(newParentId),
+        });
       }
 
       // Clean up external drag state
-      delete (window as unknown as { __draggedTestCase?: { id: number; name: string } }).__draggedTestCase;
+      delete (window as unknown as { __draggedTestCases?: { ids: number[]; names: string[] } }).__draggedTestCases;
       setDragState(null);
       setDropTarget(null);
     },
@@ -317,7 +340,16 @@ export function FolderTree({
             setExpandedFolders((prev) => new Set([...Array.from(prev), pendingMove.targetFolderId!]));
           }
         }
+      } else if (pendingMove.type === "testcases" && pendingMove.itemIds) {
+        // Bulk move multiple test cases
+        const result = await bulkMoveTestCasesToFolder(pendingMove.itemIds, pendingMove.targetFolderId);
+        if (result.error) {
+          alert(result.error);
+        } else {
+          router.refresh();
+        }
       } else {
+        // Single test case move
         const result = await moveTestCaseToFolder(pendingMove.itemId, pendingMove.targetFolderId);
         if (result.error) {
           alert(result.error);
