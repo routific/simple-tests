@@ -6,6 +6,7 @@ import { eq, and, inArray, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getSessionWithOrg } from "@/lib/auth";
 import { getReleaseLabels, getIssuesByLabel, LinearAuthError } from "@/lib/linear";
+import { isDemoMode } from "@/lib/demo";
 
 interface CreateReleaseInput {
   name: string;
@@ -170,6 +171,10 @@ export async function deleteRelease(id: number) {
 }
 
 export async function syncReleasesFromLinear() {
+  if (isDemoMode()) {
+    return { created: 0, updated: 0, message: "Linear sync is disabled in demo mode." };
+  }
+
   const session = await getSessionWithOrg();
   if (!session) {
     return { error: "Unauthorized" };

@@ -36,9 +36,14 @@ export default function RootLayout({
         />
       </head>
       <body className="font-sans">
+        {process.env.DEMO_MODE === "true" && (
+          <div className="bg-amber-500 text-amber-950 text-center text-xs py-1 font-medium z-50 relative">
+            Demo Mode — Sample data for a fictional &quot;CloudSync&quot; product. Linear integration is disabled.
+          </div>
+        )}
         <AuthProvider>
           <KeyboardShortcutsProvider>
-            <div className="flex h-screen bg-background">
+            <div className={`flex bg-background ${process.env.DEMO_MODE === "true" ? "h-[calc(100vh-28px)]" : "h-screen"}`}>
               <Sidebar />
               <main className="flex-1 overflow-auto">{children}</main>
             </div>

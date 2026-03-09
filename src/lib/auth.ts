@@ -5,6 +5,7 @@ import { db } from "./db";
 import { users, organizations } from "./db/schema";
 import { eq } from "drizzle-orm";
 import { LinearClient } from "@linear/sdk";
+import { isDemoMode, getDemoSession } from "./demo";
 
 // Linear tokens expire after 10 hours by default
 // We'll refresh when there's less than 5 minutes left
@@ -304,6 +305,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
 // Helper to get organization-scoped data
 export async function getSessionWithOrg() {
+  if (isDemoMode()) {
+    return getDemoSession();
+  }
   const session = await auth();
   if (!session?.user?.organizationId) {
     return null;

@@ -13,6 +13,7 @@ const nextConfig = {
   env: {
     NEXT_PUBLIC_GIT_SHA: gitSha,
     NEXT_PUBLIC_BUILD_TIME: new Date().toISOString(),
+    NEXT_PUBLIC_DEMO_MODE: process.env.DEMO_MODE || "",
   },
 };
 

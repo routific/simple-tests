@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { auth, refreshLinearToken } from "./auth";
 import { db } from "./db";
 import { users } from "./db/schema";
+import { isDemoMode } from "./demo";
 
 export class LinearAuthError extends Error {
   constructor(message: string) {
@@ -12,6 +13,9 @@ export class LinearAuthError extends Error {
 }
 
 export async function getLinearClient() {
+  if (isDemoMode()) {
+    throw new LinearAuthError("Linear is not available in demo mode");
+  }
   const session = await auth();
   if (session?.error === "RefreshTokenError" || session?.error === "RefreshTokenMissing") {
     throw new LinearAuthError("Linear session expired");
@@ -211,6 +215,9 @@ export async function deleteAttachmentByUrl(url: string): Promise<boolean> {
 const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
 export async function getLinearClientForUser(userId: string): Promise<LinearClient> {
+  if (isDemoMode()) {
+    throw new LinearAuthError("Linear is not available in demo mode");
+  }
   const user = await db
     .select({
       linearAccessToken: users.linearAccessToken,

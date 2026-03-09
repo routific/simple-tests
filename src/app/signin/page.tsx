@@ -1,9 +1,23 @@
 "use client";
 
 import { signIn } from "next-auth/react";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
 export default function SignInPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    if (process.env.NEXT_PUBLIC_DEMO_MODE === "true") {
+      router.replace("/");
+    }
+  }, [router]);
+
+  if (process.env.NEXT_PUBLIC_DEMO_MODE === "true") {
+    return null;
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-brand-50 dark:from-slate-950 dark:via-slate-900 dark:to-brand-950 flex flex-col">
       {/* Background decoration */}
