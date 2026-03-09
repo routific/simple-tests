@@ -169,6 +169,7 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
   const [releases, setReleases] = useState<Release[]>(initialReleases);
   const [showAddScenarios, setShowAddScenarios] = useState(false);
   const [scenarioSearch, setScenarioSearch] = useState("");
+  const [runSearch, setRunSearch] = useState("");
   const [selectedToAdd, setSelectedToAdd] = useState<Set<number>>(new Set());
   const [selectedToRemove, setSelectedToRemove] = useState<Set<number>>(new Set());
   const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
@@ -271,6 +272,23 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
   const totalAvailableToAdd = useMemo(() => {
     return groupedByTestCase.reduce((sum, group) => sum + group.availableCount, 0);
   }, [groupedByTestCase]);
+
+  // Filter results for run search
+  const filteredResults = useMemo(() => {
+    if (!runSearch) return results;
+    const search = runSearch.toLowerCase();
+    return results.filter(r => {
+      if (r.scenarioTitle.toLowerCase().includes(search)) return true;
+      if (r.testCaseTitle.toLowerCase().includes(search)) return true;
+      if (r.testCaseId.toString() === search) return true;
+      if (r.scenarioId.toString() === search) return true;
+      if (r.folderId) {
+        const folder = folders.find(f => f.id === r.folderId);
+        if (folder && folder.name.toLowerCase().includes(search)) return true;
+      }
+      return false;
+    });
+  }, [results, runSearch, folders]);
 
   const stats = {
     total: results.length,
@@ -975,33 +993,59 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
           storageKey="run-scenario-panel-width"
           className="border-r border-[hsl(var(--border))] overflow-auto flex flex-col h-full"
         >
+          {/* Search bar for run scenarios */}
+          <div className="p-2 border-b border-[hsl(var(--border))] bg-[hsl(var(--muted))]">
+            <div className="relative">
+              <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[hsl(var(--muted-foreground))]" />
+              <Input
+                type="text"
+                value={runSearch}
+                onChange={(e) => setRunSearch(e.target.value)}
+                placeholder="Search by name or ID..."
+                className="w-full pl-8 h-8 text-sm"
+              />
+              {runSearch && (
+                <button
+                  onClick={() => setRunSearch("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+                >
+                  <CloseIcon className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          </div>
+
           {/* List header with actions */}
-          {run.status === "in_progress" && (
-            <div className="p-2 border-b border-[hsl(var(--border))] bg-[hsl(var(--muted))] flex items-center justify-between gap-2">
-              {selectedToRemove.size > 0 ? (
-                <>
-                  <span className="text-sm text-[hsl(var(--muted-foreground))]">
-                    {selectedToRemove.size} selected
-                  </span>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => setSelectedToRemove(new Set())}
-                      className="px-2 py-1 text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleRemoveScenarios}
-                      disabled={isPending}
-                      className="px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded disabled:opacity-50"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <span className="text-sm font-medium">{results.length} scenarios</span>
+          <div className="p-2 border-b border-[hsl(var(--border))] bg-[hsl(var(--muted))]/50 flex items-center justify-between gap-2">
+            {run.status === "in_progress" && selectedToRemove.size > 0 ? (
+              <>
+                <span className="text-sm text-[hsl(var(--muted-foreground))]">
+                  {selectedToRemove.size} selected
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setSelectedToRemove(new Set())}
+                    className="px-2 py-1 text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleRemoveScenarios}
+                    disabled={isPending}
+                    className="px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded disabled:opacity-50"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <span className="text-sm font-medium">
+                  {runSearch && filteredResults.length !== results.length 
+                    ? `${filteredResults.length} of ${results.length}` 
+                    : results.length} scenarios
+                </span>
+                {run.status === "in_progress" && (
                   <button
                     onClick={() => setShowAddScenarios(true)}
                     className="px-2 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/20 rounded flex items-center gap-1"
@@ -1009,14 +1053,18 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
                     <PlusIcon className="w-3 h-3" />
                     Add
                   </button>
-                </>
-              )}
-            </div>
-          )}
+                )}
+              </>
+            )}
+          </div>
 
           {/* Scenario list */}
           <div className="flex-1 overflow-auto">
-            {results.map((result) => (
+            {filteredResults.length === 0 && runSearch ? (
+              <div className="p-4 text-center text-sm text-[hsl(var(--muted-foreground))]">
+                No scenarios match "{runSearch}"
+              </div>
+            ) : filteredResults.map((result) => (
               <div
                 key={result.id}
                 className={cn(
@@ -1687,6 +1735,14 @@ function PlusIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+    </svg>
+  );
+}
+
+function SearchIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
     </svg>
   );
 }

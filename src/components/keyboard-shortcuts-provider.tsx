@@ -333,7 +333,14 @@ function Kbd({ children }: { children: ReactNode }) {
 // Changelog entries - newest first
 const CHANGELOG = [
   {
-    version: "5bbdf84",
+    version: "88d2546",
+    date: "2026-03-09",
+    changes: [
+      "Added search inside test runs to quickly find if a test case or scenario is already included",
+    ],
+  },
+  {
+    version: "86b11d3",
     date: "2026-03-09",
     changes: [
       "Add demo mode for PR preview deployments — set DEMO_MODE=true to bypass Linear auth and use scaffolded sample data",
