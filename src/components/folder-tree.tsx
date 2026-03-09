@@ -94,9 +94,10 @@ interface DragState {
   name: string;
 }
 
-interface PendingTestCaseMove {
-  testCaseId: number;
-  testCaseName: string;
+interface PendingMove {
+  type: "folder" | "testcase";
+  itemId: number;
+  itemName: string;
   targetFolderId: number | null;
   targetFolderName: string;
 }
@@ -164,8 +165,8 @@ export function FolderTree({
   const [newFolderParentId, setNewFolderParentId] = useState<number | null | "root">(null);
   const [newFolderName, setNewFolderName] = useState("");
 
-  // Pending test case move (for confirmation)
-  const [pendingMove, setPendingMove] = useState<PendingTestCaseMove | null>(null);
+  // Pending move (for confirmation) - handles both test cases and folders
+  const [pendingMove, setPendingMove] = useState<PendingMove | null>(null);
   const [isMoving, setIsMoving] = useState(false);
 
   const handleExpandAll = useCallback(() => {
@@ -274,21 +275,20 @@ export function FolderTree({
           if (isDescendantOf(folders, currentDragState.id, targetId)) return;
         }
 
-        const result = await moveFolder(currentDragState.id, newParentId, 0);
-        if (result.error) {
-          alert(result.error);
-        } else {
-          router.refresh();
-          // Expand the target folder
-          if (typeof targetId === "number") {
-            setExpandedFolders((prev) => new Set([...Array.from(prev), targetId]));
-          }
-        }
+        // Show confirmation modal instead of immediately moving
+        setPendingMove({
+          type: "folder",
+          itemId: currentDragState.id,
+          itemName: currentDragState.name,
+          targetFolderId: newParentId,
+          targetFolderName: findFolderName(newParentId),
+        });
       } else if (currentDragState.type === "testcase") {
         // Show confirmation modal instead of immediately moving
         setPendingMove({
-          testCaseId: currentDragState.id,
-          testCaseName: currentDragState.name,
+          type: "testcase",
+          itemId: currentDragState.id,
+          itemName: currentDragState.name,
           targetFolderId: newParentId,
           targetFolderName: findFolderName(newParentId),
         });
@@ -299,18 +299,31 @@ export function FolderTree({
       setDragState(null);
       setDropTarget(null);
     },
-    [dragState, folders, router, findFolderName]
+    [dragState, folders, findFolderName]
   );
 
   const handleConfirmMove = useCallback(async () => {
     if (!pendingMove) return;
     setIsMoving(true);
     try {
-      const result = await moveTestCaseToFolder(pendingMove.testCaseId, pendingMove.targetFolderId);
-      if (result.error) {
-        alert(result.error);
+      if (pendingMove.type === "folder") {
+        const result = await moveFolder(pendingMove.itemId, pendingMove.targetFolderId, 0);
+        if (result.error) {
+          alert(result.error);
+        } else {
+          router.refresh();
+          // Expand the target folder
+          if (pendingMove.targetFolderId !== null) {
+            setExpandedFolders((prev) => new Set([...Array.from(prev), pendingMove.targetFolderId!]));
+          }
+        }
       } else {
-        router.refresh();
+        const result = await moveTestCaseToFolder(pendingMove.itemId, pendingMove.targetFolderId);
+        if (result.error) {
+          alert(result.error);
+        } else {
+          router.refresh();
+        }
       }
     } finally {
       setIsMoving(false);
@@ -625,12 +638,13 @@ export function FolderTree({
         <Modal
           isOpen={true}
           onClose={handleCancelMove}
-          title="Move Test Case"
-          description="Confirm the folder move"
+          title={pendingMove.type === "folder" ? "Move Folder" : "Move Test Case"}
+          description="Confirm the move"
         >
           <div className="p-6">
             <p className="text-sm text-foreground mb-4">
-              Move <span className="font-medium">"{pendingMove.testCaseName}"</span> to{" "}
+              Move {pendingMove.type === "folder" ? "folder" : "test case"}{" "}
+              <span className="font-medium">"{pendingMove.itemName}"</span> to{" "}
               <span className="font-medium">{pendingMove.targetFolderName}</span>?
             </p>
             <div className="flex justify-end gap-3">
