@@ -333,10 +333,10 @@ function Kbd({ children }: { children: ReactNode }) {
 // Changelog entries - newest first
 const CHANGELOG = [
   {
-    version: "0a88f8c",
+    version: "a416240",
     date: "2026-03-09",
     changes: [
-      "Added confirmation button when moving test cases to folders to prevent accidental moves",
+      "Added confirmation dialog when moving test cases to folders via drag-and-drop or bulk move modal to prevent accidental moves",
     ],
   },
   {

@@ -13,6 +13,8 @@ import {
   moveTestCaseToFolder,
   reorderFolders,
 } from "@/app/folders/actions";
+import { Modal } from "@/components/ui/modal";
+import { Button } from "@/components/ui/button";
 
 interface FolderTreeProps {
   folders: FolderWithChildren[];
@@ -92,6 +94,13 @@ interface DragState {
   name: string;
 }
 
+interface PendingTestCaseMove {
+  testCaseId: number;
+  testCaseName: string;
+  targetFolderId: number | null;
+  targetFolderName: string;
+}
+
 interface ContextMenuState {
   x: number;
   y: number;
@@ -154,6 +163,10 @@ export function FolderTree({
   // New folder state
   const [newFolderParentId, setNewFolderParentId] = useState<number | null | "root">(null);
   const [newFolderName, setNewFolderName] = useState("");
+
+  // Pending test case move (for confirmation)
+  const [pendingMove, setPendingMove] = useState<PendingTestCaseMove | null>(null);
+  const [isMoving, setIsMoving] = useState(false);
 
   const handleExpandAll = useCallback(() => {
     setExpandedFolders(new Set(allFolderIds));
@@ -227,6 +240,20 @@ export function FolderTree({
     setDropTarget(null);
   }, []);
 
+  // Helper to find folder name by ID
+  const findFolderName = useCallback((folderId: number | null): string => {
+    if (folderId === null) return "Root (All Cases)";
+    const findInList = (list: FolderWithChildren[]): string | null => {
+      for (const f of list) {
+        if (f.id === folderId) return f.name;
+        const found = findInList(f.children);
+        if (found) return found;
+      }
+      return null;
+    };
+    return findInList(folders) || "Selected folder";
+  }, [folders]);
+
   const handleDrop = useCallback(
     async (e: React.DragEvent, targetId: number | "root") => {
       e.preventDefault();
@@ -258,12 +285,13 @@ export function FolderTree({
           }
         }
       } else if (currentDragState.type === "testcase") {
-        const result = await moveTestCaseToFolder(currentDragState.id, newParentId);
-        if (result.error) {
-          alert(result.error);
-        } else {
-          router.refresh();
-        }
+        // Show confirmation modal instead of immediately moving
+        setPendingMove({
+          testCaseId: currentDragState.id,
+          testCaseName: currentDragState.name,
+          targetFolderId: newParentId,
+          targetFolderName: findFolderName(newParentId),
+        });
       }
 
       // Clean up external drag state
@@ -271,8 +299,28 @@ export function FolderTree({
       setDragState(null);
       setDropTarget(null);
     },
-    [dragState, folders, router]
+    [dragState, folders, router, findFolderName]
   );
+
+  const handleConfirmMove = useCallback(async () => {
+    if (!pendingMove) return;
+    setIsMoving(true);
+    try {
+      const result = await moveTestCaseToFolder(pendingMove.testCaseId, pendingMove.targetFolderId);
+      if (result.error) {
+        alert(result.error);
+      } else {
+        router.refresh();
+      }
+    } finally {
+      setIsMoving(false);
+      setPendingMove(null);
+    }
+  }, [pendingMove, router]);
+
+  const handleCancelMove = useCallback(() => {
+    setPendingMove(null);
+  }, []);
 
   // Sort handlers for reordering within same parent
   const handleSortDragOver = useCallback(
@@ -570,6 +618,31 @@ export function FolderTree({
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 px-3 py-2 bg-foreground text-background rounded-lg shadow-lg text-sm font-medium z-50">
           Moving "{dragState.name}"
         </div>
+      )}
+
+      {/* Move confirmation modal */}
+      {pendingMove && (
+        <Modal
+          isOpen={true}
+          onClose={handleCancelMove}
+          title="Move Test Case"
+          description="Confirm the folder move"
+        >
+          <div className="p-6">
+            <p className="text-sm text-foreground mb-4">
+              Move <span className="font-medium">"{pendingMove.testCaseName}"</span> to{" "}
+              <span className="font-medium">{pendingMove.targetFolderName}</span>?
+            </p>
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" onClick={handleCancelMove} disabled={isMoving}>
+                Cancel
+              </Button>
+              <Button onClick={handleConfirmMove} disabled={isMoving}>
+                {isMoving ? "Moving..." : "Confirm Move"}
+              </Button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );
