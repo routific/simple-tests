@@ -226,37 +226,51 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
   // Get scenario IDs already in this run
   const existingScenarioIds = useMemo(() => new Set(results.map(r => r.scenarioId)), [results]);
 
-  // Filter available scenarios that aren't already in the run
-  const filteredAvailable = useMemo(() => {
-    return availableScenarios
-      .filter(s => !existingScenarioIds.has(s.id))
-      .filter(s => {
-        if (!scenarioSearch) return true;
-        const search = scenarioSearch.toLowerCase();
-        return s.title.toLowerCase().includes(search) ||
-          s.testCaseTitle.toLowerCase().includes(search) ||
-          (s.folderName?.toLowerCase().includes(search) ?? false);
-      });
-  }, [availableScenarios, existingScenarioIds, scenarioSearch]);
-
-  // Group filtered scenarios by test case
+  // Group ALL scenarios by test case, marking which are already in the run
   const groupedByTestCase = useMemo(() => {
-    const groups = new Map<number, { testCaseId: number; testCaseTitle: string; folderName: string | null; scenarios: typeof filteredAvailable }>();
-    for (const scenario of filteredAvailable) {
+    // First apply search filter
+    const searchFiltered = availableScenarios.filter(s => {
+      if (!scenarioSearch) return true;
+      const search = scenarioSearch.toLowerCase();
+      return s.title.toLowerCase().includes(search) ||
+        s.testCaseTitle.toLowerCase().includes(search) ||
+        (s.folderName?.toLowerCase().includes(search) ?? false);
+    });
+
+    const groups = new Map<number, {
+      testCaseId: number;
+      testCaseTitle: string;
+      folderName: string | null;
+      scenarios: Array<AvailableScenario & { inRun: boolean }>;
+      inRunCount: number;
+      availableCount: number;
+    }>();
+
+    for (const scenario of searchFiltered) {
+      const inRun = existingScenarioIds.has(scenario.id);
       const existing = groups.get(scenario.testCaseId);
       if (existing) {
-        existing.scenarios.push(scenario);
+        existing.scenarios.push({ ...scenario, inRun });
+        if (inRun) existing.inRunCount++;
+        else existing.availableCount++;
       } else {
         groups.set(scenario.testCaseId, {
           testCaseId: scenario.testCaseId,
           testCaseTitle: scenario.testCaseTitle,
           folderName: scenario.folderName,
-          scenarios: [scenario],
+          scenarios: [{ ...scenario, inRun }],
+          inRunCount: inRun ? 1 : 0,
+          availableCount: inRun ? 0 : 1,
         });
       }
     }
     return Array.from(groups.values());
-  }, [filteredAvailable]);
+  }, [availableScenarios, existingScenarioIds, scenarioSearch]);
+
+  // Count of scenarios available to add (not already in run)
+  const totalAvailableToAdd = useMemo(() => {
+    return groupedByTestCase.reduce((sum, group) => sum + group.availableCount, 0);
+  }, [groupedByTestCase]);
 
   const stats = {
     total: results.length,
@@ -1393,22 +1407,29 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
             </div>
 
             <div className="flex-1 overflow-auto">
-              {filteredAvailable.length === 0 ? (
+              {groupedByTestCase.length === 0 ? (
                 <div className="p-8 text-center text-[hsl(var(--muted-foreground))]">
-                  {scenarioSearch ? "No matching scenarios found" : "All scenarios are already in this run"}
+                  {scenarioSearch ? "No matching scenarios found" : "No scenarios available"}
+                </div>
+              ) : totalAvailableToAdd === 0 && !scenarioSearch ? (
+                <div className="p-8 text-center text-[hsl(var(--muted-foreground))]">
+                  All scenarios are already in this run
                 </div>
               ) : (
                 <div className="divide-y divide-[hsl(var(--border))]">
                   {groupedByTestCase.map((group) => {
-                    const allSelected = group.scenarios.every(s => selectedToAdd.has(s.id));
-                    const someSelected = group.scenarios.some(s => selectedToAdd.has(s.id));
+                    const availableScenarios = group.scenarios.filter(s => !s.inRun);
+                    const allAvailableSelected = availableScenarios.length > 0 && availableScenarios.every(s => selectedToAdd.has(s.id));
+                    const someAvailableSelected = availableScenarios.some(s => selectedToAdd.has(s.id));
+                    const hasAvailableScenarios = availableScenarios.length > 0;
                     const toggleAll = () => {
+                      if (!hasAvailableScenarios) return;
                       setSelectedToAdd(prev => {
                         const next = new Set(prev);
-                        if (allSelected) {
-                          group.scenarios.forEach(s => next.delete(s.id));
+                        if (allAvailableSelected) {
+                          availableScenarios.forEach(s => next.delete(s.id));
                         } else {
-                          group.scenarios.forEach(s => next.add(s.id));
+                          availableScenarios.forEach(s => next.add(s.id));
                         }
                         return next;
                       });
@@ -1416,18 +1437,24 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
                     return (
                       <div key={group.testCaseId}>
                         {/* Test case header */}
-                        <label
+                        <div
                           className={cn(
-                            "flex items-center gap-3 p-3 cursor-pointer hover:bg-[hsl(var(--muted))] bg-muted/30",
-                            allSelected && "bg-brand-50 dark:bg-brand-900/20"
+                            "flex items-center gap-3 p-3 bg-muted/30",
+                            hasAvailableScenarios && "cursor-pointer hover:bg-[hsl(var(--muted))]",
+                            allAvailableSelected && "bg-brand-50 dark:bg-brand-900/20"
                           )}
+                          onClick={hasAvailableScenarios ? toggleAll : undefined}
                         >
                           <input
                             type="checkbox"
-                            checked={allSelected}
-                            ref={(el) => { if (el) el.indeterminate = someSelected && !allSelected; }}
+                            checked={allAvailableSelected}
+                            disabled={!hasAvailableScenarios}
+                            ref={(el) => { if (el) el.indeterminate = someAvailableSelected && !allAvailableSelected; }}
                             onChange={toggleAll}
-                            className="rounded border-gray-300"
+                            className={cn(
+                              "rounded border-gray-300",
+                              !hasAvailableScenarios && "opacity-50"
+                            )}
                           />
                           <div className="flex-1 min-w-0">
                             <div className="font-medium">{group.testCaseTitle}</div>
@@ -1436,28 +1463,51 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
                             )}
                           </div>
                           <span className="text-xs text-[hsl(var(--muted-foreground))]">
-                            {group.scenarios.length} scenario{group.scenarios.length !== 1 ? "s" : ""}
+                            {group.inRunCount > 0 ? (
+                              <span className="text-brand-600 dark:text-brand-400">
+                                {group.inRunCount} of {group.scenarios.length} in run
+                              </span>
+                            ) : (
+                              <span>{group.scenarios.length} scenario{group.scenarios.length !== 1 ? "s" : ""}</span>
+                            )}
                           </span>
-                        </label>
+                        </div>
                         {/* Scenarios */}
                         {group.scenarios.map((scenario) => (
-                          <label
-                            key={scenario.id}
-                            className={cn(
-                              "flex items-center gap-3 p-3 pl-9 cursor-pointer hover:bg-[hsl(var(--muted))]",
-                              selectedToAdd.has(scenario.id) && "bg-brand-50 dark:bg-brand-900/20"
-                            )}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={selectedToAdd.has(scenario.id)}
-                              onChange={() => toggleAddSelection(scenario.id)}
-                              className="rounded border-gray-300"
-                            />
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm">{scenario.title}</div>
+                          scenario.inRun ? (
+                            <div
+                              key={scenario.id}
+                              className="flex items-center gap-3 p-3 pl-9 bg-muted/20 opacity-60"
+                            >
+                              <div className="w-4 h-4 rounded-full bg-brand-100 dark:bg-brand-900/30 flex items-center justify-center flex-shrink-0">
+                                <CheckIcon className="w-3 h-3 text-brand-600 dark:text-brand-400" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm">{scenario.title}</div>
+                              </div>
+                              <span className="text-xs text-brand-600 dark:text-brand-400 font-medium">
+                                In run
+                              </span>
                             </div>
-                          </label>
+                          ) : (
+                            <label
+                              key={scenario.id}
+                              className={cn(
+                                "flex items-center gap-3 p-3 pl-9 cursor-pointer hover:bg-[hsl(var(--muted))]",
+                                selectedToAdd.has(scenario.id) && "bg-brand-50 dark:bg-brand-900/20"
+                              )}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selectedToAdd.has(scenario.id)}
+                                onChange={() => toggleAddSelection(scenario.id)}
+                                className="rounded border-gray-300"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm">{scenario.title}</div>
+                              </div>
+                            </label>
+                          )
                         ))}
                       </div>
                     );
