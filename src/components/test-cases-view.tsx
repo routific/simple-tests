@@ -884,7 +884,7 @@ function TestCaseListContent({
   const [isPending, startTransition] = useTransition();
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [pendingMoveFolder, setPendingMoveFolder] = useState<{ id: number | null; name: string } | null>(null);
-  const [draggedId, setDraggedId] = useState<number | null>(null);
+  const [draggedIds, setDraggedIds] = useState<Set<number>>(new Set());
   const [dropIndicator, setDropIndicator] = useState<{ id: number; position: "before" | "after" } | null>(null);
   const [showStateModal, setShowStateModal] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -944,12 +944,18 @@ function TestCaseListContent({
   };
 
   const handleDragStart = (id: number) => {
-    setDraggedId(id);
+    // If the dragged case is part of the selection, drag all selected cases
+    if (selectedCases.has(id) && selectedCases.size > 1) {
+      setDraggedIds(new Set(selectedCases));
+    } else {
+      // Otherwise, just drag the single case
+      setDraggedIds(new Set([id]));
+    }
   };
 
   const handleDragOver = (e: React.DragEvent, id: number) => {
     e.preventDefault();
-    if (draggedId === null || draggedId === id) return;
+    if (draggedIds.size === 0 || draggedIds.has(id)) return;
 
     // Calculate if dropping before or after based on mouse position
     const rect = e.currentTarget.getBoundingClientRect();
@@ -969,26 +975,28 @@ function TestCaseListContent({
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    if (draggedId === null || !dropIndicator) {
-      setDraggedId(null);
+    if (draggedIds.size === 0 || !dropIndicator) {
+      setDraggedIds(new Set());
       setDropIndicator(null);
       return;
     }
 
     const targetId = dropIndicator.id;
-    if (draggedId === targetId) {
-      setDraggedId(null);
+    if (draggedIds.has(targetId)) {
+      setDraggedIds(new Set());
       setDropIndicator(null);
       return;
     }
 
     // Calculate new order
     const currentIds = cases.map((c) => c.id);
-    const fromIndex = currentIds.indexOf(draggedId);
+    const draggedIdArray = Array.from(draggedIds);
+    
+    // Find the target index
     let toIndex = currentIds.indexOf(targetId);
 
-    if (fromIndex === -1 || toIndex === -1) {
-      setDraggedId(null);
+    if (toIndex === -1) {
+      setDraggedIds(new Set());
       setDropIndicator(null);
       return;
     }
@@ -997,15 +1005,22 @@ function TestCaseListContent({
     if (dropIndicator.position === "after") {
       toIndex += 1;
     }
-    // If dragging from before to after, adjust for the removal
-    if (fromIndex < toIndex) {
-      toIndex -= 1;
-    }
 
-    // Reorder the array
-    const newIds = [...currentIds];
-    newIds.splice(fromIndex, 1);
-    newIds.splice(toIndex, 0, draggedId);
+    // Remove all dragged items from the list and get their original order
+    const draggedInOrder = currentIds.filter(id => draggedIds.has(id));
+    const remaining = currentIds.filter(id => !draggedIds.has(id));
+    
+    // Find the new insertion point in the remaining list
+    // Count how many dragged items were before the target
+    const draggedBeforeTarget = currentIds.slice(0, toIndex).filter(id => draggedIds.has(id)).length;
+    const adjustedToIndex = toIndex - draggedBeforeTarget;
+    
+    // Insert all dragged items at the new position (maintaining their relative order)
+    const newIds = [
+      ...remaining.slice(0, adjustedToIndex),
+      ...draggedInOrder,
+      ...remaining.slice(adjustedToIndex),
+    ];
 
     // Persist the new order
     startTransition(async () => {
@@ -1013,12 +1028,12 @@ function TestCaseListContent({
       onSelectionAction();
     });
 
-    setDraggedId(null);
+    setDraggedIds(new Set());
     setDropIndicator(null);
   };
 
   const handleDragEnd = () => {
-    setDraggedId(null);
+    setDraggedIds(new Set());
     setDropIndicator(null);
   };
 
@@ -1234,7 +1249,7 @@ function TestCaseListContent({
           currentFolderId={currentFolderId}
           selectedFolderIds={selectedFolderIds}
           selectedCases={selectedCases}
-          draggedId={draggedId}
+          draggedIds={draggedIds}
           dropIndicator={dropIndicator}
           onCaseClick={onCaseClick}
           onToggleSelection={onToggleSelection}
@@ -1268,7 +1283,7 @@ function GroupedTestCaseList({
   currentFolderId,
   selectedFolderIds,
   selectedCases,
-  draggedId,
+  draggedIds,
   dropIndicator,
   onCaseClick,
   onToggleSelection,
@@ -1284,7 +1299,7 @@ function GroupedTestCaseList({
   currentFolderId: number | null;
   selectedFolderIds?: number[] | null;
   selectedCases: Set<number>;
-  draggedId: number | null;
+  draggedIds: Set<number>;
   dropIndicator: { id: number; position: "before" | "after" } | null;
   onCaseClick: (testCase: TestCase) => void;
   onToggleSelection: (id: number, e: React.MouseEvent) => void;
@@ -1452,18 +1467,25 @@ function GroupedTestCaseList({
                   draggable
                   onDragStart={(e) => {
                     e.dataTransfer.effectAllowed = "move";
+                    // If this case is part of a multi-selection, drag all selected
+                    const idsToMove = selectedCases.has(testCase.id) && selectedCases.size > 1
+                      ? Array.from(selectedCases)
+                      : [testCase.id];
+                    const namesToMove = selectedCases.has(testCase.id) && selectedCases.size > 1
+                      ? cases.filter(c => selectedCases.has(c.id)).map(c => c.title)
+                      : [testCase.title];
                     e.dataTransfer.setData(
                       "text/plain",
-                      JSON.stringify({ type: "testcase", id: testCase.id, name: testCase.title })
+                      JSON.stringify({ type: "testcase", ids: idsToMove, names: namesToMove })
                     );
-                    (window as unknown as { __draggedTestCase?: { id: number; name: string } }).__draggedTestCase = {
-                      id: testCase.id,
-                      name: testCase.title,
+                    (window as unknown as { __draggedTestCases?: { ids: number[]; names: string[] } }).__draggedTestCases = {
+                      ids: idsToMove,
+                      names: namesToMove,
                     };
                     onDragStart(testCase.id);
                   }}
                   onDragEnd={() => {
-                    delete (window as unknown as { __draggedTestCase?: { id: number; name: string } }).__draggedTestCase;
+                    delete (window as unknown as { __draggedTestCases?: { ids: number[]; names: string[] } }).__draggedTestCases;
                     onDragEnd();
                   }}
                   onDragOver={(e) => onDragOver(e, testCase.id)}
@@ -1474,7 +1496,7 @@ function GroupedTestCaseList({
                     "w-full flex items-center justify-between py-2.5 px-4 hover:bg-muted/50 transition-colors group text-left",
                     "cursor-grab active:cursor-grabbing",
                     selectedCases.has(testCase.id) && "bg-brand-50 dark:bg-brand-950/50",
-                    draggedId === testCase.id && "opacity-50"
+                    draggedIds.has(testCase.id) && "opacity-50"
                   )}
                 >
                   <div className="flex items-center gap-1 min-w-0 flex-1">
