@@ -883,6 +883,7 @@ function TestCaseListContent({
 }) {
   const [isPending, startTransition] = useTransition();
   const [showMoveModal, setShowMoveModal] = useState(false);
+  const [pendingMoveFolder, setPendingMoveFolder] = useState<{ id: number | null; name: string } | null>(null);
   const [draggedId, setDraggedId] = useState<number | null>(null);
   const [dropIndicator, setDropIndicator] = useState<{ id: number; position: "before" | "after" } | null>(null);
   const [showStateModal, setShowStateModal] = useState(false);
@@ -920,12 +921,26 @@ function TestCaseListContent({
     });
   };
 
-  const handleBulkMove = (folderId: number | null) => {
+  const handleBulkMove = () => {
+    if (pendingMoveFolder === null) return;
     startTransition(async () => {
-      await bulkMoveTestCasesToFolder(Array.from(selectedCases), folderId);
+      await bulkMoveTestCasesToFolder(Array.from(selectedCases), pendingMoveFolder.id);
       setShowMoveModal(false);
+      setPendingMoveFolder(null);
       onSelectionAction();
     });
+  };
+
+  const handleSelectMoveFolder = (folderId: number | null) => {
+    const folderName = folderId
+      ? folders.find(f => f.id === folderId)?.name || "Selected folder"
+      : "No folder (root)";
+    setPendingMoveFolder({ id: folderId, name: folderName });
+  };
+
+  const handleCloseMoveModal = () => {
+    setShowMoveModal(false);
+    setPendingMoveFolder(null);
   };
 
   const handleDragStart = (id: number) => {
@@ -1146,25 +1161,54 @@ function TestCaseListContent({
       {showMoveModal && (
         <Modal
           isOpen={showMoveModal}
-          onClose={() => setShowMoveModal(false)}
+          onClose={handleCloseMoveModal}
           title="Move to Folder"
           description={`Move ${selectedCases.size} test case(s) to a folder`}
         >
-          <div className="p-6 min-h-[400px]">
-            <FolderPicker
-              folders={folders}
-              value={null}
-              onChange={(folderId) => handleBulkMove(folderId)}
-              placeholder="Select folder..."
-            />
-            <div className="mt-4 pt-4 border-t border-border">
-              <button
-                onClick={() => handleBulkMove(null)}
-                disabled={isPending}
-                className="w-full p-3 text-left rounded-lg hover:bg-muted transition-colors text-sm text-muted-foreground"
-              >
-                Remove from folder (move to root)
-              </button>
+          <div className="p-6 min-h-[400px] flex flex-col">
+            <div className="flex-1">
+              <FolderPicker
+                folders={folders}
+                value={pendingMoveFolder?.id ?? null}
+                onChange={handleSelectMoveFolder}
+                placeholder="Select folder..."
+              />
+              <div className="mt-4 pt-4 border-t border-border">
+                <button
+                  onClick={() => handleSelectMoveFolder(null)}
+                  disabled={isPending}
+                  className={cn(
+                    "w-full p-3 text-left rounded-lg transition-colors text-sm",
+                    pendingMoveFolder?.id === null
+                      ? "bg-brand-500/10 text-brand-600 dark:text-brand-400"
+                      : "text-muted-foreground hover:bg-muted"
+                  )}
+                >
+                  Remove from folder (move to root)
+                </button>
+              </div>
+            </div>
+            {/* Confirmation section */}
+            <div className="mt-6 pt-4 border-t border-border">
+              {pendingMoveFolder ? (
+                <div className="flex items-center justify-between gap-4">
+                  <p className="text-sm text-muted-foreground">
+                    Move to: <span className="font-medium text-foreground">{pendingMoveFolder.name}</span>
+                  </p>
+                  <div className="flex gap-2">
+                    <Button variant="outline" onClick={handleCloseMoveModal}>
+                      Cancel
+                    </Button>
+                    <Button onClick={handleBulkMove} disabled={isPending}>
+                      {isPending ? "Moving..." : "Confirm Move"}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center">
+                  Select a folder to move {selectedCases.size} test case(s)
+                </p>
+              )}
             </div>
           </div>
         </Modal>
