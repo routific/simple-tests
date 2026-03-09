@@ -204,11 +204,13 @@ src/
 │   │   └── utils.ts             # Token generation, validation
 │   ├── auth.ts                  # Auth.js + Linear OAuth configuration
 │   ├── linear.ts                # Linear API client
+│   ├── demo.ts                  # Demo mode config and session helpers
 │   ├── folders.ts               # Folder tree utilities
 │   └── utils.ts                 # Utility functions (cn)
 │
 └── scripts/
-    └── import-testmo.ts         # CSV import script
+    ├── import-testmo.ts         # CSV import script
+    └── seed-demo.ts             # Demo data seeding script
 ```
 
 ### Key Design Decisions
@@ -408,6 +410,7 @@ The app runs at http://localhost:3000.
 | `LINEAR_CLIENT_ID` | Yes | Linear OAuth application client ID |
 | `LINEAR_CLIENT_SECRET` | Yes | Linear OAuth application client secret |
 | `AUTH_SECRET` | Yes | NextAuth.js secret (generate with `openssl rand -base64 32`) |
+| `DEMO_MODE` | No | Set to `"true"` to bypass Linear auth and use demo data (for preview deployments) |
 
 ## Security
 
@@ -433,6 +436,8 @@ The app runs at http://localhost:3000.
 | `src/app/settings/connect/` | MCP connection instructions page |
 | `src/components/keyboard-shortcuts-provider.tsx` | Global keyboard shortcuts and version info modal |
 | `scripts/import-testmo.ts` | CSV import script |
+| `scripts/seed-demo.ts` | Demo mode data seeding script |
+| `src/lib/demo.ts` | Demo mode configuration and session helpers |
 | `drizzle.config.ts` | Database migration config |
 
 ## Commands
@@ -443,4 +448,25 @@ npm run build        # Production build
 npm run db:push      # Push schema to database
 npm run db:studio    # Open Drizzle Studio (database UI)
 npm run import       # Import Testmo CSV
+npm run seed:demo    # Seed demo data (for preview deployments)
 ```
+
+## Demo Mode
+
+For PR preview deployments where configuring Linear OAuth callback URLs isn't practical, demo mode bypasses authentication and uses pre-seeded sample data.
+
+### Setup
+
+1. Set `DEMO_MODE=true` in Vercel environment variables (scoped to preview)
+2. Seed the staging database:
+   ```bash
+   TURSO_DATABASE_URL=libsql://your-db.turso.io TURSO_AUTH_TOKEN=xxx npm run seed:demo
+   ```
+3. Deploy — users land directly in the app with sample data for a fictional "CloudSync" file sync product
+
+### What it does
+- Bypasses Linear OAuth — no sign-in required
+- Returns a demo session with a "CloudSync" organization
+- Disables all Linear API calls (projects, milestones, issues, sync)
+- Shows an amber banner indicating demo mode
+- Demo data is scoped to `demo-org-001` and doesn't affect real organizations
