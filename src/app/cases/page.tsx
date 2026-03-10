@@ -77,13 +77,29 @@ export default async function CasesPage({ searchParams }: Props) {
     conditions.push(inArray(testCases.folderId, selectedFolderIds));
   }
   if (search) {
+    // Subquery to find test cases with matching scenario content
+    const matchingScenarioTestCaseIds = db
+      .selectDistinct({ testCaseId: scenarios.testCaseId })
+      .from(scenarios)
+      .where(or(
+        like(scenarios.title, `%${search}%`),
+        like(scenarios.gherkin, `%${search}%`)
+      ));
+
     const searchId = parseInt(search);
     if (!isNaN(searchId)) {
-      // Search by ID or title
-      conditions.push(or(eq(testCases.id, searchId), like(testCases.title, `%${search}%`))!);
+      // Search by ID, title, or scenario content
+      conditions.push(or(
+        eq(testCases.id, searchId),
+        like(testCases.title, `%${search}%`),
+        inArray(testCases.id, matchingScenarioTestCaseIds)
+      )!);
     } else {
-      // Search by title only
-      conditions.push(like(testCases.title, `%${search}%`));
+      // Search by title or scenario content
+      conditions.push(or(
+        like(testCases.title, `%${search}%`),
+        inArray(testCases.id, matchingScenarioTestCaseIds)
+      )!);
     }
   }
   if (stateFilter) {

@@ -333,6 +333,13 @@ function Kbd({ children }: { children: ReactNode }) {
 // Changelog entries - newest first
 const CHANGELOG = [
   {
+    version: "a010772",
+    date: "2026-03-10",
+    changes: [
+      "Search now also matches text inside gherkin scenarios",
+    ],
+  },
+  {
     version: "b986167",
     date: "2026-03-09",
     changes: [
