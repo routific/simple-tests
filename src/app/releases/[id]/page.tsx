@@ -24,25 +24,23 @@ export default async function ReleaseDetailPage({ params }: Props) {
   const { id } = await params;
   const decodedId = decodeURIComponent(id);
 
-  // Try to find by ID first, then by linearLabelId, then by name
+  // Try to find by linearLabelId first (preferred slug for synced releases),
+  // then by numeric ID, then by name
   let release;
-  const numericId = parseInt(decodedId);
 
-  if (!isNaN(numericId)) {
-    // Try numeric ID first
+  // Try by linearLabelId (UUID) first since links prefer this
+  release = await db
+    .select()
+    .from(releases)
+    .where(eq(releases.linearLabelId, decodedId))
+    .get();
+
+  if (!release && /^\d+$/.test(decodedId)) {
+    // Only try numeric ID if the slug is purely numeric
     release = await db
       .select()
       .from(releases)
-      .where(eq(releases.id, numericId))
-      .get();
-  }
-
-  if (!release) {
-    // Try by linearLabelId (UUID)
-    release = await db
-      .select()
-      .from(releases)
-      .where(eq(releases.linearLabelId, decodedId))
+      .where(eq(releases.id, parseInt(decodedId)))
       .get();
   }
 
