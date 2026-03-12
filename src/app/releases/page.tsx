@@ -4,6 +4,7 @@ import { eq, sql, count } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { getSessionWithOrg } from "@/lib/auth";
+import { isValidLinearLabelId } from "@/lib/utils";
 import { getIssuesByLabel } from "@/lib/linear";
 import { SyncButton } from "./sync-button";
 import { ReleasesList } from "./releases-list";
@@ -49,7 +50,7 @@ export default async function ReleasesPage() {
   try {
     const issueCountEntries = await Promise.all(
       allReleases
-        .filter((r) => r.linearLabelId)
+        .filter((r) => isValidLinearLabelId(r.linearLabelId))
         .map(async (r) => {
           const issues = await getIssuesByLabel(r.linearLabelId!);
           return [r.id, issues.length] as const;

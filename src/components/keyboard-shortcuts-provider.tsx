@@ -333,10 +333,10 @@ function Kbd({ children }: { children: ReactNode }) {
 // Changelog entries - newest first
 const CHANGELOG = [
   {
-    version: "cedff6d",
+    version: "08cb3a8",
     date: "2026-03-12",
     changes: [
-      "Fix release deeplinks opening the wrong release when linearLabelId starts with digits",
+      "Fix release deeplinks opening the wrong release or showing invalid slugs",
     ],
   },
   {

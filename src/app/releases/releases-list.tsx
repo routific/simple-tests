@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { cn } from "@/lib/utils";
+import { cn, isValidLinearLabelId } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ReleaseStatusButton } from "./release-status-button";
@@ -15,7 +15,6 @@ export interface ReleaseData {
   runCount: number;
   issueCount: number | null;
 }
-
 interface ReleasesListProps {
   releases: ReleaseData[];
 }
@@ -99,7 +98,7 @@ export function ReleasesList({ releases }: ReleasesListProps) {
           ) : (
             <div className="divide-y divide-border">
               {currentReleases.map((release) => (
-                <Link key={release.id} href={`/releases/${release.linearLabelId || release.id}`}>
+                <Link key={release.id} href={`/releases/${isValidLinearLabelId(release.linearLabelId) ? release.linearLabelId : release.id}`}>
                   <div className="flex items-center justify-between px-6 py-4 hover:bg-muted/50 transition-colors cursor-pointer">
                     <div className="flex items-center gap-3">
                       <TagIcon className="w-5 h-5 text-muted-foreground" />
@@ -116,7 +115,7 @@ export function ReleasesList({ releases }: ReleasesListProps) {
                               {release.issueCount !== 1 ? "s" : ""}
                             </span>
                           )}
-                          {release.linearLabelId && (
+                          {isValidLinearLabelId(release.linearLabelId) && (
                             <span className="ml-2 text-xs text-brand-500">
                               Synced from Linear
                             </span>

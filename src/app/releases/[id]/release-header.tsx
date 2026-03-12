@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import confetti from "canvas-confetti";
-import { cn } from "@/lib/utils";
+import { cn, isValidLinearLabelId } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -124,7 +124,7 @@ export function ReleaseHeader({ release, summary }: ReleaseHeaderProps) {
 
   const handleCopyLink = () => {
     // Use linearLabelId for synced releases (stable), otherwise use numeric ID
-    const slug = release.linearLabelId || release.id;
+    const slug = isValidLinearLabelId(release.linearLabelId) ? release.linearLabelId : release.id;
     const url = `${window.location.origin}/releases/${slug}`;
     navigator.clipboard.writeText(url);
     setLinkCopied(true);
@@ -132,7 +132,7 @@ export function ReleaseHeader({ release, summary }: ReleaseHeaderProps) {
   };
 
   // Synced releases cannot be edited (name comes from Linear)
-  const isSynced = !!release.linearLabelId;
+  const isSynced = isValidLinearLabelId(release.linearLabelId);
 
   return (
     <>

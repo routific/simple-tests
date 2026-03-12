@@ -4,6 +4,7 @@ import { eq, count, sql, inArray } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { getSessionWithOrg } from "@/lib/auth";
+import { isValidLinearLabelId } from "@/lib/utils";
 import { getIssuesByLabel } from "@/lib/linear";
 import { type TestRunData } from "@/components/test-run-row";
 import { EnvironmentGroups } from "@/components/environment-groups";
@@ -64,7 +65,7 @@ export default async function ReleaseDetailPage({ params }: Props) {
   let linearIssues: Awaited<ReturnType<typeof getIssuesByLabel>> = [];
   let linearAuthExpired = false;
 
-  if (release.linearLabelId) {
+  if (isValidLinearLabelId(release.linearLabelId)) {
     try {
       linearIssues = await getIssuesByLabel(release.linearLabelId);
     } catch (error) {
@@ -224,7 +225,7 @@ export default async function ReleaseDetailPage({ params }: Props) {
 
       <div className="space-y-8">
         {/* Linear Issues */}
-        {release.linearLabelId && (
+        {isValidLinearLabelId(release.linearLabelId) && (
           <div>
             <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
               Linear Issues ({linearIssues.length})
