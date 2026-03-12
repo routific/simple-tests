@@ -26,14 +26,18 @@ export default async function ReleaseDetailPage({ params }: Props) {
 
   // Try to find by ID first, then by linearLabelId, then by name
   let release;
-  const numericId = parseInt(decodedId);
+  
+  // Only treat as numeric ID if the entire string is digits
+  // Using parseInt alone is unsafe because parseInt("108abc") returns 108,
+  // which could match a different release's numeric ID
+  const isNumericId = /^\d+$/.test(decodedId);
 
-  if (!isNaN(numericId)) {
+  if (isNumericId) {
     // Try numeric ID first
     release = await db
       .select()
       .from(releases)
-      .where(eq(releases.id, numericId))
+      .where(eq(releases.id, parseInt(decodedId, 10)))
       .get();
   }
 
