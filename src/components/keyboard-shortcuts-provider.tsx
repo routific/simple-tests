@@ -337,6 +337,7 @@ const CHANGELOG = [
     date: "2026-03-25",
     changes: [
       "Releases moved to 'Completed Release' label group in Linear are now automatically marked as completed during sync",
+      "New MCP tool: update_scenario for editing scenario title and gherkin content",
     ],
   },
   {

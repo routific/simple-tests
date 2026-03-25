@@ -236,6 +236,19 @@ export function registerTools(auth: AuthContext): Tool[] {
         },
       },
       {
+        name: "update_scenario",
+        description: "Update an existing scenario's title or gherkin content",
+        inputSchema: {
+          type: "object",
+          properties: {
+            id: { type: "number", description: "Scenario ID" },
+            title: { type: "string", description: "New scenario title" },
+            gherkin: { type: "string", description: "New gherkin content" },
+          },
+          required: ["id"],
+        },
+      },
+      {
         name: "update_test_case",
         description: "Update an existing test case",
         inputSchema: {
@@ -387,6 +400,8 @@ export async function handleToolCall(
       return createTestCase(args, auth, auditCtx);
     case "add_scenario":
       return addScenario(args, auth, auditCtx);
+    case "update_scenario":
+      return updateScenario(args, auth, auditCtx);
     case "update_test_case":
       return updateTestCase(args, auth, auditCtx);
     case "create_test_run":
@@ -1222,6 +1237,112 @@ async function addScenario(
     toolArgs: args,
     entityType: "scenario",
     entityId: scenario.id,
+    afterState: scenario,
+    status: "success",
+  });
+
+  return {
+    content: [{ type: "text", text: JSON.stringify({ success: true, scenario }, null, 2) }],
+  };
+}
+
+async function updateScenario(
+  args: Record<string, unknown>,
+  auth: AuthContext,
+  ctx: McpCallContext
+): Promise<CallToolResult> {
+  const { id, title, gherkin } = args as {
+    id: number;
+    title?: string;
+    gherkin?: string;
+  };
+
+  if (!id) {
+    await logMcpWriteOperation(ctx, {
+      toolName: "update_scenario",
+      toolArgs: args,
+      entityType: "scenario",
+      status: "failed",
+      errorMessage: "id is required",
+    });
+    return {
+      content: [{ type: "text", text: "Error: id is required" }],
+      isError: true,
+    };
+  }
+
+  if (title === undefined && gherkin === undefined) {
+    await logMcpWriteOperation(ctx, {
+      toolName: "update_scenario",
+      toolArgs: args,
+      entityType: "scenario",
+      entityId: id,
+      status: "failed",
+      errorMessage: "At least one of title or gherkin must be provided",
+    });
+    return {
+      content: [{ type: "text", text: "Error: At least one of title or gherkin must be provided" }],
+      isError: true,
+    };
+  }
+
+  // Fetch existing scenario and verify it belongs to the org
+  const existing = await db
+    .select({
+      scenario: scenarios,
+      testCaseOrgId: testCases.organizationId,
+    })
+    .from(scenarios)
+    .innerJoin(testCases, eq(scenarios.testCaseId, testCases.id))
+    .where(eq(scenarios.id, id))
+    .limit(1);
+
+  if (existing.length === 0 || existing[0].testCaseOrgId !== auth.organizationId) {
+    await logMcpWriteOperation(ctx, {
+      toolName: "update_scenario",
+      toolArgs: args,
+      entityType: "scenario",
+      entityId: id,
+      status: "failed",
+      errorMessage: `Scenario not found: ${id}`,
+    });
+    return {
+      content: [{ type: "text", text: `Error: Scenario not found: ${id}` }],
+      isError: true,
+    };
+  }
+
+  const beforeState = existing[0].scenario;
+  const now = new Date();
+
+  const updates: Partial<typeof scenarios.$inferInsert> = {
+    updatedAt: now,
+  };
+
+  if (title !== undefined) updates.title = title;
+  if (gherkin !== undefined) updates.gherkin = gherkin;
+
+  const result = await db
+    .update(scenarios)
+    .set(updates)
+    .where(eq(scenarios.id, id))
+    .returning();
+
+  const scenario = result[0];
+
+  // Update parent test case's updatedAt
+  await db
+    .update(testCases)
+    .set({ updatedAt: now, updatedBy: auth.userId })
+    .where(eq(testCases.id, scenario.testCaseId));
+
+  // Log to MCP write log
+  await logMcpWriteOperation(ctx, {
+    toolName: "update_scenario",
+    toolArgs: args,
+    entityType: "scenario",
+    entityId: id,
+    beforeState,
     afterState: scenario,
     status: "success",
   });
