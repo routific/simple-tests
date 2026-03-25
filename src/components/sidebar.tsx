@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession, signIn, signOut } from "next-auth/react";
@@ -8,6 +8,15 @@ import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { useKeyboardShortcuts } from "@/components/keyboard-shortcuts-provider";
+import { getCurrentUserBadges } from "@/app/leaderboard/actions";
+
+const BADGE_ICONS: Record<string, { icon: string; label: string }> = {
+  first_test_case: { icon: "\uD83C\uDF31", label: "First Test Case" },
+  first_test_run: { icon: "\uD83C\uDFC3", label: "First Run" },
+  first_mcp_use: { icon: "\uD83E\uDD16", label: "MCP Pioneer" },
+  century_club: { icon: "\uD83D\uDCAF", label: "Century Club" },
+  streak_master: { icon: "\uD83D\uDD25", label: "Streak Master" },
+};
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: HomeIcon },
@@ -22,6 +31,13 @@ export function Sidebar() {
   const pathname = usePathname();
   const { data: session, status } = useSession();
   const { sidebarCollapsed: collapsed, toggleSidebar: toggleCollapsed, setShowHelp } = useKeyboardShortcuts();
+  const [badges, setBadges] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (session?.user) {
+      getCurrentUserBadges().then(setBadges);
+    }
+  }, [session?.user]);
 
   return (
     <div
@@ -192,8 +208,27 @@ export function Sidebar() {
                 collapsed ? "w-0 opacity-0" : "w-auto opacity-100"
               )}
             >
-              <div className="text-sm font-medium truncate text-foreground">
-                {session.user.name}
+              <div className="flex items-center gap-1.5">
+                <div className="text-sm font-medium truncate text-foreground">
+                  {session.user.name}
+                </div>
+                {badges.length > 0 && (
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    {badges.map((badge) => {
+                      const config = BADGE_ICONS[badge];
+                      if (!config) return null;
+                      return (
+                        <span
+                          key={badge}
+                          title={config.label}
+                          className="text-xs cursor-default leading-none"
+                        >
+                          {config.icon}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
               <button
                 onClick={() => signOut()}

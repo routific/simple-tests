@@ -106,7 +106,7 @@ function Podium({ entries }: { entries: LeaderboardEntry[] }) {
 
   const podiumOrder = [entries[1], entries[0], entries[2]].filter(Boolean);
   const heights = ["h-28", "h-36", "h-24"];
-  const places = [2, 1, 3];
+  const medals = ["\uD83E\uDD48", "\uD83E\uDD47", "\uD83E\uDD49"]; // 🥈🥇🥉
   const placeColors = [
     "from-zinc-300 to-zinc-400 dark:from-zinc-500 dark:to-zinc-600", // 2nd - silver
     "from-amber-400 to-yellow-500 dark:from-amber-500 dark:to-yellow-600", // 1st - gold
@@ -143,13 +143,8 @@ function Podium({ entries }: { entries: LeaderboardEntry[] }) {
                   size={podiumIdx === 1 ? "xl" : "lg"}
                 />
               </div>
-              <div
-                className={cn(
-                  "absolute -bottom-1 -right-1 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-md bg-gradient-to-br",
-                  placeColors[podiumIdx]
-                )}
-              >
-                {places[podiumIdx]}
+              <div className="absolute -bottom-1 -right-1 text-xl drop-shadow-md">
+                {medals[podiumIdx]}
               </div>
             </div>
             <div className="text-center">
