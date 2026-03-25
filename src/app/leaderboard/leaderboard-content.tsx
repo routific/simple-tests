@@ -82,6 +82,78 @@ export const BADGE_CONFIG: Record<
     variant: "destructive",
     description: "Executed 1,000 test scenarios",
   },
+  architect: {
+    label: "Architect",
+    icon: "\uD83C\uDFD7\uFE0F",
+    variant: "info",
+    description: "Created 50 test cases",
+  },
+  marathon_runner: {
+    label: "Marathon Runner",
+    icon: "\uD83C\uDFC5",
+    variant: "success",
+    description: "Completed 25 test runs",
+  },
+  ship_it: {
+    label: "Ship It",
+    icon: "\uD83D\uDEA2",
+    variant: "info",
+    description: "10 releases completed",
+  },
+  night_owl: {
+    label: "Night Owl",
+    icon: "\uD83E\uDD89",
+    variant: "default",
+    description: "Executed a test between midnight and 5am",
+  },
+  early_bird: {
+    label: "Early Bird",
+    icon: "\uD83D\uDC26",
+    variant: "success",
+    description: "Executed a test before 7am",
+  },
+  thorough: {
+    label: "Thorough",
+    icon: "\uD83D\uDD0D",
+    variant: "info",
+    description: "Executed 30+ scenarios in a single test run",
+  },
+  no_stone_unturned: {
+    label: "No Stone Unturned",
+    icon: "\uD83E\uDEA8",
+    variant: "secondary",
+    description: "Zero skipped scenarios across 10+ runs",
+  },
+  team_player: {
+    label: "Team Player",
+    icon: "\uD83E\uDD1D",
+    variant: "success",
+    description: "Executed scenarios on someone else's test run",
+  },
+  connector: {
+    label: "Connector",
+    icon: "\uD83D\uDD17",
+    variant: "default",
+    description: "Linked 25+ test cases to Linear issues",
+  },
+  speed_demon: {
+    label: "Speed Demon",
+    icon: "\u26A1",
+    variant: "warning",
+    description: "Completed a test run in under 5 minutes",
+  },
+  comeback_kid: {
+    label: "Comeback Kid",
+    icon: "\uD83D\uDD04",
+    variant: "success",
+    description: "Re-tested a failed scenario and it passed",
+  },
+  completionist: {
+    label: "Completionist",
+    icon: "\uD83C\uDFAF",
+    variant: "destructive",
+    description: "Earned every other achievement",
+  },
 };
 
 function Avatar({
