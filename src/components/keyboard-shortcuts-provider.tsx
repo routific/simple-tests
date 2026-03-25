@@ -333,6 +333,13 @@ function Kbd({ children }: { children: ReactNode }) {
 // Changelog entries - newest first
 const CHANGELOG = [
   {
+    version: "HEAD",
+    date: "2026-03-25",
+    changes: [
+      "Add Leaderboard page with podium, rankings, and achievement badges for team activity",
+    ],
+  },
+  {
     version: "1e4f840",
     date: "2026-03-25",
     changes: [

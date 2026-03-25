@@ -434,3 +434,35 @@ export const mcpWriteLog = sqliteTable(
 );
 
 export type McpWriteLog = typeof mcpWriteLog.$inferSelect;
+
+// User badges for leaderboard achievements
+export const userBadges = sqliteTable(
+  "user_badges",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    badgeType: text("badge_type", {
+      enum: [
+        "first_mcp_use",
+        "first_test_case",
+        "first_test_run",
+        "century_club",
+        "streak_master",
+      ],
+    }).notNull(),
+    awardedAt: integer("awarded_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [
+    index("user_badges_org_idx").on(table.organizationId),
+    index("user_badges_user_idx").on(table.userId),
+  ]
+);
+
+export type UserBadge = typeof userBadges.$inferSelect;
