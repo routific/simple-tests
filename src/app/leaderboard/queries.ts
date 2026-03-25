@@ -349,5 +349,31 @@ export async function getLeaderboardData(organizationId: string) {
     },
   ];
 
+  // Build "Achiever" category from badges - rank by badge count
+  const badgeCountByUser = new Map<string, { userName: string; userAvatar: string | null; count: number }>();
+  for (const badge of badges) {
+    const existing = badgeCountByUser.get(badge.userId);
+    if (existing) {
+      existing.count++;
+    } else {
+      badgeCountByUser.set(badge.userId, {
+        userName: badge.userName,
+        userAvatar: badge.userAvatar,
+        count: 1,
+      });
+    }
+  }
+  const achieverEntries: LeaderboardEntry[] = Array.from(badgeCountByUser.entries())
+    .map(([userId, data]) => ({ userId, ...data }))
+    .sort((a, b) => b.count - a.count);
+
+  categories.push({
+    key: "achiever",
+    label: "Achiever",
+    description: "Most achievements unlocked",
+    icon: "trophy",
+    entries: achieverEntries,
+  });
+
   return { categories, badges };
 }

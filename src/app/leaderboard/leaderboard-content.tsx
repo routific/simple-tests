@@ -15,6 +15,7 @@ const CATEGORY_ICONS: Record<string, string> = {
   terminal: "\u2328\uFE0F",
   flag: "\uD83C\uDFC1",
   link: "\uD83D\uDD17",
+  trophy: "\uD83C\uDFC6",
 };
 
 export const BADGE_CONFIG: Record<
@@ -246,9 +247,10 @@ function RankingsTable({ entries }: { entries: LeaderboardEntry[] }) {
   );
 }
 
-function BadgesSection({ badges }: { badges: BadgeEntry[] }) {
+function AchieverDetail({ badges }: { badges: BadgeEntry[] }) {
   if (badges.length === 0) return null;
 
+  // Group badges by user, preserving the order from entries (sorted by count)
   const badgesByUser = new Map<
     string,
     { userName: string; userAvatar: string | null; badges: BadgeEntry[] }
@@ -265,18 +267,23 @@ function BadgesSection({ badges }: { badges: BadgeEntry[] }) {
     badgesByUser.get(badge.userId)!.badges.push(badge);
   }
 
+  // Sort by badge count descending
+  const sorted = Array.from(badgesByUser.entries()).sort(
+    (a, b) => b[1].badges.length - a[1].badges.length
+  );
+
   return (
     <Card>
-      <CardHeader className="pb-4">
-        <CardTitle className="text-lg">Achievements</CardTitle>
-      </CardHeader>
-      <CardContent className="pt-0">
-        <div className="space-y-4">
-          {Array.from(badgesByUser.entries()).map(([userId, user]) => (
-            <div key={userId} className="flex items-center gap-4">
+      <CardContent className="p-0">
+        <div className="divide-y divide-border">
+          {sorted.map(([userId, user], idx) => (
+            <div key={userId} className="flex items-start gap-4 px-4 py-4 hover:bg-muted/50 transition-colors">
+              <div className="text-sm text-muted-foreground tabular-nums w-8 pt-0.5 shrink-0">
+                {idx + 1}
+              </div>
               <Avatar name={user.userName} avatar={user.userAvatar} size="sm" />
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-foreground mb-1">
+                <div className="text-sm font-medium text-foreground mb-1.5">
                   {user.userName}
                 </div>
                 <div className="flex flex-wrap gap-1.5">
@@ -296,6 +303,9 @@ function BadgesSection({ badges }: { badges: BadgeEntry[] }) {
                     );
                   })}
                 </div>
+              </div>
+              <div className="text-sm font-semibold text-foreground tabular-nums shrink-0 pt-0.5">
+                {user.badges.length}
               </div>
             </div>
           ))}
@@ -361,8 +371,8 @@ export function LeaderboardContent({
       {/* Rankings Table (4th place and beyond) */}
       <RankingsTable entries={category.entries} />
 
-      {/* Badges Section */}
-      <BadgesSection badges={badges} />
+      {/* Achiever detail: show badges per user when on the Achiever tab */}
+      {category.key === "achiever" && <AchieverDetail badges={badges} />}
     </div>
   );
 }
