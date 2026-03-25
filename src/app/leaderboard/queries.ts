@@ -5,7 +5,6 @@ import {
   testRuns,
   testRunResults,
   testCaseAuditLog,
-  releases,
   testCaseLinearIssues,
   mcpWriteLog,
   userBadges,
@@ -139,29 +138,6 @@ async function getTestRunsCreated(organizationId: string): Promise<LeaderboardEn
   }));
 }
 
-// Most releases created
-async function getReleasesCreated(organizationId: string): Promise<LeaderboardEntry[]> {
-  const rows = await db
-    .select({
-      userId: releases.createdBy,
-      userName: users.name,
-      userAvatar: users.avatar,
-      count: count(),
-    })
-    .from(releases)
-    .innerJoin(users, eq(releases.createdBy, users.id))
-    .where(and(eq(releases.organizationId, organizationId), isNotNull(releases.createdBy)))
-    .groupBy(releases.createdBy)
-    .orderBy(sql`count(*) DESC`);
-
-  return rows.map((r) => ({
-    userId: r.userId!,
-    userName: r.userName,
-    userAvatar: r.userAvatar,
-    count: r.count,
-  }));
-}
-
 // Bug Hunter - most failed tests found
 async function getBugHunters(organizationId: string): Promise<LeaderboardEntry[]> {
   const rows = await db
@@ -273,7 +249,6 @@ export async function getLeaderboardData(organizationId: string) {
     scenariosExecuted,
     testCaseUpdates,
     testRunsCreated,
-    releasesCreated,
     bugHunters,
     linearLinkers,
     mcpUsers,
@@ -283,7 +258,6 @@ export async function getLeaderboardData(organizationId: string) {
     getScenariosExecuted(organizationId),
     getTestCaseUpdates(organizationId),
     getTestRunsCreated(organizationId),
-    getReleasesCreated(organizationId),
     getBugHunters(organizationId),
     getLinearLinkers(organizationId),
     getMcpUsers(organizationId),
@@ -332,13 +306,6 @@ export async function getLeaderboardData(organizationId: string) {
       description: "Most MCP operations",
       icon: "terminal",
       entries: mcpUsers,
-    },
-    {
-      key: "releases_created",
-      label: "Release Captain",
-      description: "Most releases created",
-      icon: "flag",
-      entries: releasesCreated,
     },
     {
       key: "linear_linkers",
