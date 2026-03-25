@@ -297,6 +297,26 @@ export async function checkAndAwardBadges(organizationId: string) {
     }
   }
 
+  // Check super_thorough: 50+ scenarios executed by a user in a single test run
+  const superThoroughUsers = await db
+    .select({ userId: testRunResults.executedBy })
+    .from(testRunResults)
+    .innerJoin(testRuns, eq(testRunResults.testRunId, testRuns.id))
+    .where(
+      and(
+        eq(testRuns.organizationId, organizationId),
+        isNotNull(testRunResults.executedBy)
+      )
+    )
+    .groupBy(testRunResults.executedBy, testRunResults.testRunId)
+    .having(sql`count(*) >= 50`);
+
+  for (const row of superThoroughUsers) {
+    if (row.userId && !existingSet.has(`${row.userId}:super_thorough`)) {
+      newBadges.push({ userId: row.userId, badgeType: "super_thorough" });
+    }
+  }
+
   // Check team_player: executed a scenario on a run someone else created
   const teamPlayers = await db
     .select({ userId: testRunResults.executedBy })
@@ -429,7 +449,7 @@ export async function checkAndAwardBadges(organizationId: string) {
     "streak_master", "keyboard_hero", "pyrotechnician",
     "scenarios_250", "scenarios_500", "scenarios_1000",
     "architect", "marathon_runner", "ship_it",
-    "night_owl", "early_bird", "thorough",
+    "night_owl", "early_bird", "thorough", "super_thorough",
     "no_stone_unturned", "team_player", "connector",
     "speed_demon", "comeback_kid",
   ];

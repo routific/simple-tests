@@ -469,6 +469,7 @@ export const userBadges = sqliteTable(
         "connector",
         "speed_demon",
         "comeback_kid",
+        "super_thorough",
         "completionist",
       ],
     }).notNull(),

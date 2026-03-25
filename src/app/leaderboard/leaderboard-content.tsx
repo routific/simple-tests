@@ -118,6 +118,12 @@ export const BADGE_CONFIG: Record<
     variant: "info",
     description: "Executed 30+ scenarios in a single test run",
   },
+  super_thorough: {
+    label: "Super Thorough",
+    icon: "\uD83D\uDD2C",
+    variant: "warning",
+    description: "Executed 50+ scenarios in a single test run",
+  },
   no_stone_unturned: {
     label: "No Stone Unturned",
     icon: "\uD83E\uDEA8",
