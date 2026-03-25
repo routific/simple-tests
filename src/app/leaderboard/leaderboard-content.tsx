@@ -368,11 +368,12 @@ export function LeaderboardContent({
         </CardContent>
       </Card>
 
-      {/* Rankings Table (4th place and beyond) */}
-      <RankingsTable entries={category.entries} />
-
-      {/* Achiever detail: show badges per user when on the Achiever tab */}
-      {category.key === "achiever" && <AchieverDetail badges={badges} />}
+      {/* Achiever tab: show badge details; other tabs: show rankings table */}
+      {category.key === "achiever" ? (
+        <AchieverDetail badges={badges} />
+      ) : (
+        <RankingsTable entries={category.entries} />
+      )}
     </div>
   );
 }
