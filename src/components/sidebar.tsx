@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { useKeyboardShortcuts } from "@/components/keyboard-shortcuts-provider";
-import { getCurrentUserBadges } from "@/app/leaderboard/actions";
+import { getCurrentUserBadgesAndMedals, type UserMedalInfo } from "@/app/leaderboard/actions";
 import { BADGE_CONFIG } from "@/app/leaderboard/leaderboard-content";
 
 const navItems = [
@@ -25,10 +25,14 @@ export function Sidebar() {
   const { data: session, status } = useSession();
   const { sidebarCollapsed: collapsed, toggleSidebar: toggleCollapsed, setShowHelp } = useKeyboardShortcuts();
   const [badges, setBadges] = useState<string[]>([]);
+  const [medals, setMedals] = useState<UserMedalInfo[]>([]);
 
   useEffect(() => {
     if (session?.user) {
-      getCurrentUserBadges().then(setBadges);
+      getCurrentUserBadgesAndMedals().then((data) => {
+        setBadges(data.badges);
+        setMedals(data.medals);
+      });
     }
   }, [session?.user]);
 
@@ -172,62 +176,70 @@ export function Sidebar() {
             )}
           </div>
         ) : session?.user ? (
-          <div
-            className={cn(
-              "flex items-center",
-              collapsed ? "justify-center" : "gap-3"
-            )}
-          >
-            {session.user.image ? (
-              <img
-                src={session.user.image}
-                alt=""
-                title={collapsed ? session.user.name || "User" : undefined}
-                className="w-9 h-9 rounded-full ring-2 ring-border shrink-0"
-              />
-            ) : (
-              <div
-                className="w-9 h-9 rounded-full bg-brand-500/10 flex items-center justify-center shrink-0"
-                title={collapsed ? session.user.name || "User" : undefined}
-              >
-                <span className="text-sm font-medium text-brand-600">
-                  {session.user.name?.[0]?.toUpperCase() || "U"}
-                </span>
-              </div>
-            )}
+          <div className="space-y-2">
             <div
               className={cn(
-                "flex-1 min-w-0 overflow-hidden transition-all duration-300",
-                collapsed ? "w-0 opacity-0" : "w-auto opacity-100"
+                "flex items-center",
+                collapsed ? "justify-center" : "gap-3"
               )}
             >
-              <div className="flex items-center gap-1.5">
+              {session.user.image ? (
+                <img
+                  src={session.user.image}
+                  alt=""
+                  title={collapsed ? session.user.name || "User" : undefined}
+                  className="w-9 h-9 rounded-full ring-2 ring-border shrink-0"
+                />
+              ) : (
+                <div
+                  className="w-9 h-9 rounded-full bg-brand-500/10 flex items-center justify-center shrink-0"
+                  title={collapsed ? session.user.name || "User" : undefined}
+                >
+                  <span className="text-sm font-medium text-brand-600">
+                    {session.user.name?.[0]?.toUpperCase() || "U"}
+                  </span>
+                </div>
+              )}
+              <div
+                className={cn(
+                  "flex-1 min-w-0 overflow-hidden transition-all duration-300",
+                  collapsed ? "w-0 opacity-0" : "w-auto opacity-100"
+                )}
+              >
                 <div className="text-sm font-medium truncate text-foreground">
                   {session.user.name}
                 </div>
-                {badges.length > 0 && (
-                  <div className="flex items-center gap-0.5 shrink-0">
-                    {badges.map((badge) => {
-                      const config = BADGE_CONFIG[badge];
-                      if (!config) return null;
-                      return (
-                        <BadgeTooltip key={badge} label={config.label} description={config.description}>
-                          <span className="text-xs cursor-default leading-none hover:scale-125 transition-transform inline-block">
-                            {config.icon}
-                          </span>
-                        </BadgeTooltip>
-                      );
-                    })}
-                  </div>
-                )}
+                <button
+                  onClick={() => signOut()}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Sign out
+                </button>
               </div>
-              <button
-                onClick={() => signOut()}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Sign out
-              </button>
             </div>
+            {/* Badges & Medals - outside overflow-hidden so tooltips work */}
+            {!collapsed && (badges.length > 0 || medals.length > 0) && (
+              <div className="flex flex-wrap items-center gap-1 pl-12">
+                {medals.map((m, i) => (
+                  <BadgeTooltip key={`medal-${i}`} label={m.category} description={`${m.medal} placement`}>
+                    <span className="text-xs cursor-default leading-none hover:scale-125 transition-transform inline-block">
+                      {m.medal}
+                    </span>
+                  </BadgeTooltip>
+                ))}
+                {badges.map((badge) => {
+                  const config = BADGE_CONFIG[badge];
+                  if (!config) return null;
+                  return (
+                    <BadgeTooltip key={badge} label={config.label} description={config.description}>
+                      <span className="text-xs cursor-default leading-none hover:scale-125 transition-transform inline-block">
+                        {config.icon}
+                      </span>
+                    </BadgeTooltip>
+                  );
+                })}
+              </div>
+            )}
           </div>
         ) : collapsed ? (
           <button
@@ -267,7 +279,7 @@ function BadgeTooltip({
       {children}
       {show && (
         <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 pointer-events-none">
-          <span className="block whitespace-nowrap bg-foreground text-background text-xs font-medium px-2.5 py-1.5 rounded-lg shadow-lg">
+          <span className="block whitespace-nowrap bg-foreground text-background text-xs font-medium px-2.5 py-1.5 rounded-lg shadow-lg text-center">
             <span className="block font-semibold">{label}</span>
             <span className="block text-[10px] opacity-80 font-normal">{description}</span>
           </span>
@@ -437,4 +449,3 @@ function KeyboardIcon({ className }: { className?: string }) {
     </svg>
   );
 }
-

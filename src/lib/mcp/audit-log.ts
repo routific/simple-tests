@@ -9,6 +9,7 @@ import {
   testRunResults,
 } from "@/lib/db/schema";
 import type { AuthContext } from "./auth";
+import { checkAndAwardBadges } from "@/app/leaderboard/badges";
 
 export type EntityType = "folder" | "test_case" | "scenario" | "test_run" | "test_result";
 
@@ -53,6 +54,11 @@ export async function logMcpWriteOperation(
       errorMessage: entry.errorMessage,
     })
     .returning({ id: mcpWriteLog.id });
+
+  // Check for new badges (fire-and-forget)
+  if (entry.status === "success") {
+    checkAndAwardBadges(ctx.auth.organizationId).catch(() => {});
+  }
 
   return result[0].id;
 }

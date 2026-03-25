@@ -6,6 +6,7 @@ import { eq, and, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getSessionWithOrg } from "@/lib/auth";
 import { createIssueAttachment, deleteAttachmentByUrl, createIssueComment } from "@/lib/linear";
+import { checkAndAwardBadges } from "@/app/leaderboard/badges";
 
 interface CreateRunInput {
   name: string;
@@ -96,6 +97,9 @@ export async function createTestRun(input: CreateRunInput) {
 
     revalidatePath("/runs");
     revalidatePath("/");
+
+    // Check for new badges (fire-and-forget)
+    checkAndAwardBadges(organizationId).catch(() => {});
 
     return { success: true, id: runId };
   } catch (error) {
@@ -190,6 +194,9 @@ export async function updateTestResult(input: UpdateResultInput) {
       .where(eq(testRunResults.id, input.resultId));
 
     revalidatePath("/runs");
+
+    // Check for new badges (fire-and-forget)
+    checkAndAwardBadges(session.user.organizationId).catch(() => {});
 
     return { success: true };
   } catch (error) {

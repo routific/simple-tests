@@ -6,6 +6,7 @@ import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getSessionWithOrg } from "@/lib/auth";
 import { recordUndo } from "./undo-actions";
+import { checkAndAwardBadges } from "@/app/leaderboard/badges";
 
 interface LinkedIssue {
   id: string;
@@ -136,6 +137,9 @@ export async function saveTestCase(input: SaveTestCaseInput) {
       revalidatePath("/cases");
       revalidatePath(`/cases/${input.id}`);
 
+      // Check for new badges (fire-and-forget)
+      checkAndAwardBadges(organizationId).catch(() => {});
+
       return { success: true, id: input.id };
     } else {
       // Create new
@@ -178,6 +182,9 @@ export async function saveTestCase(input: SaveTestCaseInput) {
       }
 
       revalidatePath("/cases");
+
+      // Check for new badges (fire-and-forget)
+      checkAndAwardBadges(organizationId).catch(() => {});
 
       return { success: true, id: newId };
     }

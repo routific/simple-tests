@@ -458,6 +458,7 @@ export const userBadges = sqliteTable(
     awardedAt: integer("awarded_at", { mode: "timestamp" })
       .notNull()
       .$defaultFn(() => new Date()),
+    seen: integer("seen", { mode: "boolean" }).notNull().default(false),
   },
   (table) => [
     index("user_badges_org_idx").on(table.organizationId),

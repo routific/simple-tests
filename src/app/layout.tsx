@@ -3,6 +3,7 @@ import "./globals.css";
 import { Sidebar } from "@/components/sidebar";
 import { AuthProvider } from "@/components/auth-provider";
 import { KeyboardShortcutsProvider } from "@/components/keyboard-shortcuts-provider";
+import { AchievementNotifier } from "@/components/achievement-notifier";
 
 export const metadata: Metadata = {
   title: "SimpleTests",
@@ -46,6 +47,7 @@ export default function RootLayout({
             <div className={`flex bg-background ${process.env.DEMO_MODE === "true" ? "h-[calc(100vh-28px)]" : "h-screen"}`}>
               <Sidebar />
               <main className="flex-1 overflow-auto">{children}</main>
+              <AchievementNotifier />
             </div>
           </KeyboardShortcutsProvider>
         </AuthProvider>

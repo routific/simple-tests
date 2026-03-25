@@ -12,13 +12,8 @@ export default async function LeaderboardPage() {
     redirect("/signin");
   }
 
-  const newBadges = await checkAndAwardBadges(session.user.organizationId);
+  await checkAndAwardBadges(session.user.organizationId);
   const data = await getLeaderboardData(session.user.organizationId);
-
-  // Filter to only badges the current user just earned
-  const myNewBadges = newBadges
-    .filter((b) => b.userId === session.user.id)
-    .map((b) => b.badgeType);
 
   return (
     <div className="p-8 max-w-6xl animate-fade-in">
@@ -31,11 +26,7 @@ export default async function LeaderboardPage() {
         </p>
       </div>
 
-      <LeaderboardContent
-        categories={data.categories}
-        badges={data.badges}
-        newlyUnlocked={myNewBadges}
-      />
+      <LeaderboardContent categories={data.categories} badges={data.badges} />
     </div>
   );
 }
