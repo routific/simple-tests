@@ -19,7 +19,7 @@ const CATEGORY_ICONS: Record<string, string> = {
 
 export const BADGE_CONFIG: Record<
   string,
-  { label: string; icon: string; variant: "success" | "info" | "warning" | "default" | "destructive"; description: string }
+  { label: string; icon: string; variant: "success" | "info" | "warning" | "default" | "destructive" | "secondary"; description: string }
 > = {
   first_test_case: {
     label: "First Test Case",
@@ -50,6 +50,18 @@ export const BADGE_CONFIG: Record<
     icon: "\uD83D\uDD25",
     variant: "destructive",
     description: "7+ consecutive days of activity",
+  },
+  keyboard_hero: {
+    label: "Keyboard Hero",
+    icon: "\u2328\uFE0F",
+    variant: "secondary",
+    description: "Used a keyboard shortcut for the first time",
+  },
+  pyrotechnician: {
+    label: "Pyrotechnician",
+    icon: "\uD83C\uDF86",
+    variant: "warning",
+    description: "Launched fireworks with the ! shortcut",
   },
 };
 

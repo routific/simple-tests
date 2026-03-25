@@ -453,6 +453,8 @@ export const userBadges = sqliteTable(
         "first_test_run",
         "century_club",
         "streak_master",
+        "keyboard_hero",
+        "pyrotechnician",
       ],
     }).notNull(),
     awardedAt: integer("awarded_at", { mode: "timestamp" })

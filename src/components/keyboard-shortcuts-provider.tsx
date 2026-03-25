@@ -1,7 +1,9 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import confetti from "canvas-confetti";
+import { awardDirectBadge } from "@/app/leaderboard/actions";
 
 interface KeyboardShortcutsContextType {
   showHelp: boolean;
@@ -38,6 +40,39 @@ export function KeyboardShortcutsProvider({ children }: Props) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isAutoCollapsed, setIsAutoCollapsed] = useState(false);
   const [pendingG, setPendingG] = useState(false);
+  const keyboardBadgeAwarded = useRef(false);
+
+  const fireConfetti = useCallback(() => {
+    const duration = 3000;
+    const animationEnd = Date.now() + duration;
+    const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 9999 };
+    const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
+
+    const interval = setInterval(() => {
+      const timeLeft = animationEnd - Date.now();
+      if (timeLeft <= 0) {
+        clearInterval(interval);
+        return;
+      }
+      const particleCount = 50 * (timeLeft / duration);
+      confetti({
+        ...defaults,
+        particleCount,
+        origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 },
+      });
+      confetti({
+        ...defaults,
+        particleCount,
+        origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 },
+      });
+    }, 250);
+  }, []);
+
+  const onShortcutUsed = useCallback(() => {
+    if (keyboardBadgeAwarded.current) return;
+    keyboardBadgeAwarded.current = true;
+    awardDirectBadge("keyboard_hero").catch(() => {});
+  }, []);
 
   // Load sidebar state from localStorage on mount and set up responsive listener
   useEffect(() => {
@@ -119,14 +154,17 @@ export function KeyboardShortcutsProvider({ children }: Props) {
         switch (e.key.toLowerCase()) {
           case "h":
             e.preventDefault();
+            onShortcutUsed();
             router.push("/");
             return;
           case "c":
             e.preventDefault();
+            onShortcutUsed();
             router.push("/cases");
             return;
           case "r":
             e.preventDefault();
+            onShortcutUsed();
             router.push("/runs");
             return;
         }
@@ -141,13 +179,22 @@ export function KeyboardShortcutsProvider({ children }: Props) {
           setTimeout(() => setPendingG(false), 1000);
           return;
 
+        case "!":
+          e.preventDefault();
+          onShortcutUsed();
+          fireConfetti();
+          awardDirectBadge("pyrotechnician").catch(() => {});
+          return;
+
         case "?":
           e.preventDefault();
+          onShortcutUsed();
           setShowHelp(prev => !prev);
           return;
 
         case "[":
           e.preventDefault();
+          onShortcutUsed();
           toggleSidebar();
           return;
 
@@ -155,6 +202,7 @@ export function KeyboardShortcutsProvider({ children }: Props) {
           // Create new - context dependent
           if (e.metaKey || e.ctrlKey) return; // Don't interfere with copy
           e.preventDefault();
+          onShortcutUsed();
           if (pathname.startsWith("/runs")) {
             router.push("/runs/new");
           } else if (pathname.startsWith("/cases") || pathname === "/") {
@@ -166,7 +214,7 @@ export function KeyboardShortcutsProvider({ children }: Props) {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [router, pathname, pendingG, showHelp, showVersionInfo, toggleSidebar]);
+  }, [router, pathname, pendingG, showHelp, showVersionInfo, toggleSidebar, onShortcutUsed, fireConfetti]);
 
   return (
     <KeyboardShortcutsContext.Provider
@@ -230,6 +278,7 @@ function KeyboardShortcutsHelp({ onClose }: { onClose: () => void }) {
             <div className="space-y-2">
               <ShortcutRow keys={["["]} description="Toggle sidebar" />
               <ShortcutRow keys={["?"]} description="Show this help" />
+              <ShortcutRow keys={["!"]} description="Launch fireworks" />
               <ShortcutRow keys={["⌘", "⇧", "I"]} description="Show version info" />
               <ShortcutRow keys={["Esc"]} description="Close modal / cancel" />
             </div>

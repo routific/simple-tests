@@ -163,3 +163,33 @@ export async function getAndMarkUnseenBadges(): Promise<string[]> {
 
   return unseen.map((b) => b.badgeType);
 }
+
+// Award a specific badge directly (idempotent - skips if already awarded)
+type BadgeType = typeof userBadges.$inferInsert["badgeType"];
+
+export async function awardDirectBadge(badgeType: BadgeType): Promise<boolean> {
+  const session = await getSessionWithOrg();
+  if (!session) return false;
+
+  const existing = await db
+    .select({ id: userBadges.id })
+    .from(userBadges)
+    .where(
+      and(
+        eq(userBadges.userId, session.user.id),
+        eq(userBadges.organizationId, session.user.organizationId),
+        eq(userBadges.badgeType, badgeType)
+      )
+    )
+    .get();
+
+  if (existing) return false;
+
+  await db.insert(userBadges).values({
+    userId: session.user.id,
+    organizationId: session.user.organizationId,
+    badgeType,
+  });
+
+  return true;
+}
