@@ -5,7 +5,7 @@ import { releases, testRuns } from "@/lib/db/schema";
 import { eq, and, inArray, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getSessionWithOrg } from "@/lib/auth";
-import { getReleaseLabels, getIssuesByLabel, LinearAuthError } from "@/lib/linear";
+import { getReleaseLabels, getCompletedReleaseLabels, getIssuesByLabel, LinearAuthError } from "@/lib/linear";
 import { isDemoMode } from "@/lib/demo";
 
 interface CreateReleaseInput {
@@ -188,11 +188,17 @@ export async function syncReleasesFromLinear() {
   const userId = session.user.id;
 
   try {
-    const labels = await getReleaseLabels();
+    const [labels, completedLabels] = await Promise.all([
+      getReleaseLabels(),
+      getCompletedReleaseLabels(),
+    ]);
 
-    if (labels.length === 0) {
-      return { created: 0, updated: 0, message: "No labels found in the 'Release' label group in Linear." };
+    if (labels.length === 0 && completedLabels.length === 0) {
+      return { created: 0, updated: 0, message: "No labels found in the 'Release' or 'Completed Release' label groups in Linear." };
     }
+
+    // Build a set of label IDs that are in the "Completed Release" group
+    const completedLabelIds = new Set(completedLabels.map((l) => l.id));
 
     // Fetch existing releases for this org that have a linearLabelId
     const existingReleases = await db
@@ -208,7 +214,9 @@ export async function syncReleasesFromLinear() {
 
     let created = 0;
     let updated = 0;
+    let completed = 0;
 
+    // Process active release labels
     for (const label of labels) {
       const existing = existingByLabelId.get(label.id);
 
@@ -229,6 +237,36 @@ export async function syncReleasesFromLinear() {
           linearLabelId: label.id,
           createdBy: userId,
           status: "active",
+        });
+        created++;
+      }
+    }
+
+    // Process completed release labels - mark matching releases as completed
+    for (const label of completedLabels) {
+      const existing = existingByLabelId.get(label.id);
+
+      if (existing) {
+        const updates: { name?: string; status?: "active" | "completed" } = {};
+        if (existing.name !== label.name) updates.name = label.name;
+        if (existing.status !== "completed") updates.status = "completed";
+
+        if (Object.keys(updates).length > 0) {
+          await db
+            .update(releases)
+            .set(updates)
+            .where(eq(releases.id, existing.id));
+          if (updates.status) completed++;
+          if (updates.name) updated++;
+        }
+      } else {
+        // Label is in "Completed Release" but we haven't seen it before - create as completed
+        await db.insert(releases).values({
+          name: label.name,
+          organizationId,
+          linearLabelId: label.id,
+          createdBy: userId,
+          status: "completed",
         });
         created++;
       }
@@ -300,7 +338,7 @@ export async function syncReleasesFromLinear() {
     revalidatePath("/releases");
     revalidatePath("/runs");
 
-    return { created, updated, runsAssociated };
+    return { created, updated, completed, runsAssociated };
   } catch (error) {
     if (error instanceof LinearAuthError) {
       return { error: "auth_expired" };

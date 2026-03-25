@@ -339,6 +339,34 @@ export async function getReleaseLabels(): Promise<LinearLabel[]> {
   }
 }
 
+export async function getCompletedReleaseLabels(): Promise<LinearLabel[]> {
+  try {
+    const client = await getLinearClient();
+
+    // Query for labels whose parent is named "Completed Release"
+    const children = await client.issueLabels({
+      first: 250,
+      filter: { parent: { name: { eq: "Completed Release" } } },
+    });
+
+    const seen = new Set<string>();
+    return children.nodes
+      .filter((l) => {
+        if (seen.has(l.id)) return false;
+        seen.add(l.id);
+        return true;
+      })
+      .map((l) => ({
+        id: l.id,
+        name: l.name,
+      }));
+  } catch (error) {
+    if (error instanceof LinearAuthError) throw error;
+    console.error("Failed to fetch Linear completed release labels:", error);
+    return [];
+  }
+}
+
 export async function getIssuesByLabel(labelId: string): Promise<LinearIssue[]> {
   // Validate that labelId is a valid UUID before making the API call
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

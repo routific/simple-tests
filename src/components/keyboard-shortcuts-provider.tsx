@@ -333,6 +333,13 @@ function Kbd({ children }: { children: ReactNode }) {
 // Changelog entries - newest first
 const CHANGELOG = [
   {
+    version: "1e4f840",
+    date: "2026-03-25",
+    changes: [
+      "Releases moved to 'Completed Release' label group in Linear are now automatically marked as completed during sync",
+    ],
+  },
+  {
     version: "08cb3a8",
     date: "2026-03-12",
     changes: [
