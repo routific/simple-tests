@@ -9,14 +9,7 @@ import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { useKeyboardShortcuts } from "@/components/keyboard-shortcuts-provider";
 import { getCurrentUserBadges } from "@/app/leaderboard/actions";
-
-const BADGE_ICONS: Record<string, { icon: string; label: string }> = {
-  first_test_case: { icon: "\uD83C\uDF31", label: "First Test Case" },
-  first_test_run: { icon: "\uD83C\uDFC3", label: "First Run" },
-  first_mcp_use: { icon: "\uD83E\uDD16", label: "MCP Pioneer" },
-  century_club: { icon: "\uD83D\uDCAF", label: "Century Club" },
-  streak_master: { icon: "\uD83D\uDD25", label: "Streak Master" },
-};
+import { BADGE_CONFIG } from "@/app/leaderboard/leaderboard-content";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: HomeIcon },
@@ -215,16 +208,14 @@ export function Sidebar() {
                 {badges.length > 0 && (
                   <div className="flex items-center gap-0.5 shrink-0">
                     {badges.map((badge) => {
-                      const config = BADGE_ICONS[badge];
+                      const config = BADGE_CONFIG[badge];
                       if (!config) return null;
                       return (
-                        <span
-                          key={badge}
-                          title={config.label}
-                          className="text-xs cursor-default leading-none"
-                        >
-                          {config.icon}
-                        </span>
+                        <BadgeTooltip key={badge} label={config.label} description={config.description}>
+                          <span className="text-xs cursor-default leading-none hover:scale-125 transition-transform inline-block">
+                            {config.icon}
+                          </span>
+                        </BadgeTooltip>
                       );
                     })}
                   </div>
@@ -253,6 +244,37 @@ export function Sidebar() {
         )}
       </div>
     </div>
+  );
+}
+
+function BadgeTooltip({
+  label,
+  description,
+  children,
+}: {
+  label: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  const [show, setShow] = useState(false);
+
+  return (
+    <span
+      className="relative inline-flex"
+      onMouseEnter={() => setShow(true)}
+      onMouseLeave={() => setShow(false)}
+    >
+      {children}
+      {show && (
+        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 pointer-events-none">
+          <span className="block whitespace-nowrap bg-foreground text-background text-xs font-medium px-2.5 py-1.5 rounded-lg shadow-lg">
+            <span className="block font-semibold">{label}</span>
+            <span className="block text-[10px] opacity-80 font-normal">{description}</span>
+          </span>
+          <span className="block w-2 h-2 bg-foreground rotate-45 mx-auto -mt-1" />
+        </span>
+      )}
+    </span>
   );
 }
 

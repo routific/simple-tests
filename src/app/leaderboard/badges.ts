@@ -165,5 +165,5 @@ export async function checkAndAwardBadges(organizationId: string) {
     );
   }
 
-  return newBadges.length;
+  return newBadges;
 }
