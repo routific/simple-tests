@@ -455,6 +455,9 @@ export const userBadges = sqliteTable(
         "streak_master",
         "keyboard_hero",
         "pyrotechnician",
+        "scenarios_250",
+        "scenarios_500",
+        "scenarios_1000",
       ],
     }).notNull(),
     awardedAt: integer("awarded_at", { mode: "timestamp" })

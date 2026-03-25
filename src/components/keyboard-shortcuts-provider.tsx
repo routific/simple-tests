@@ -71,7 +71,9 @@ export function KeyboardShortcutsProvider({ children }: Props) {
   const onShortcutUsed = useCallback(() => {
     if (keyboardBadgeAwarded.current) return;
     keyboardBadgeAwarded.current = true;
-    awardDirectBadge("keyboard_hero").catch(() => {});
+    awardDirectBadge("keyboard_hero").then((awarded) => {
+      if (awarded) window.dispatchEvent(new Event("badge-awarded"));
+    }).catch(() => {});
   }, []);
 
   // Load sidebar state from localStorage on mount and set up responsive listener
@@ -183,7 +185,9 @@ export function KeyboardShortcutsProvider({ children }: Props) {
           e.preventDefault();
           onShortcutUsed();
           fireConfetti();
-          awardDirectBadge("pyrotechnician").catch(() => {});
+          awardDirectBadge("pyrotechnician").then((awarded) => {
+            if (awarded) window.dispatchEvent(new Event("badge-awarded"));
+          }).catch(() => {});
           return;
 
         case "?":

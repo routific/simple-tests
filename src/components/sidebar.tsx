@@ -27,13 +27,24 @@ export function Sidebar() {
   const [badges, setBadges] = useState<string[]>([]);
   const [medals, setMedals] = useState<UserMedalInfo[]>([]);
 
-  useEffect(() => {
+  const refreshBadges = () => {
     if (session?.user) {
       getCurrentUserBadgesAndMedals().then((data) => {
         setBadges(data.badges);
         setMedals(data.medals);
       });
     }
+  };
+
+  useEffect(() => {
+    refreshBadges();
+  }, [session?.user]);
+
+  // Refresh when new badges are awarded
+  useEffect(() => {
+    const handler = () => refreshBadges();
+    window.addEventListener("badges-changed", handler);
+    return () => window.removeEventListener("badges-changed", handler);
   }, [session?.user]);
 
   return (

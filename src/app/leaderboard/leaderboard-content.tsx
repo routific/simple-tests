@@ -63,6 +63,24 @@ export const BADGE_CONFIG: Record<
     variant: "warning",
     description: "Launched fireworks with the ! shortcut",
   },
+  scenarios_250: {
+    label: "250 Club",
+    icon: "\uD83C\uDF1F",
+    variant: "info",
+    description: "Executed 250 test scenarios",
+  },
+  scenarios_500: {
+    label: "500 Club",
+    icon: "\u2B50",
+    variant: "warning",
+    description: "Executed 500 test scenarios",
+  },
+  scenarios_1000: {
+    label: "Legendary",
+    icon: "\uD83C\uDF1F",
+    variant: "destructive",
+    description: "Executed 1,000 test scenarios",
+  },
 };
 
 function Avatar({

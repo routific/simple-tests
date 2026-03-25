@@ -10,7 +10,7 @@ import {
 } from "@/lib/db/schema";
 import { count, eq, sql, and, isNotNull, inArray } from "drizzle-orm";
 
-type BadgeType = "first_mcp_use" | "first_test_case" | "first_test_run" | "century_club" | "streak_master";
+type BadgeType = typeof userBadges.$inferInsert["badgeType"];
 
 export async function checkAndAwardBadges(organizationId: string) {
   // Fetch all existing badges for this org
@@ -87,6 +87,37 @@ export async function checkAndAwardBadges(organizationId: string) {
   for (const row of centurions) {
     if (row.userId && !existingSet.has(`${row.userId}:century_club`)) {
       newBadges.push({ userId: row.userId, badgeType: "century_club" });
+    }
+  }
+
+  // Check scenario milestones: 250, 500, 1000
+  const scenarioCounts = await db
+    .select({
+      userId: testRunResults.executedBy,
+      count: count(),
+    })
+    .from(testRunResults)
+    .innerJoin(testRuns, eq(testRunResults.testRunId, testRuns.id))
+    .where(
+      and(
+        eq(testRuns.organizationId, organizationId),
+        isNotNull(testRunResults.executedBy)
+      )
+    )
+    .groupBy(testRunResults.executedBy);
+
+  const milestones: { threshold: number; badge: BadgeType }[] = [
+    { threshold: 250, badge: "scenarios_250" },
+    { threshold: 500, badge: "scenarios_500" },
+    { threshold: 1000, badge: "scenarios_1000" },
+  ];
+
+  for (const row of scenarioCounts) {
+    if (!row.userId) continue;
+    for (const { threshold, badge } of milestones) {
+      if (row.count >= threshold && !existingSet.has(`${row.userId}:${badge}`)) {
+        newBadges.push({ userId: row.userId, badgeType: badge });
+      }
     }
   }
 

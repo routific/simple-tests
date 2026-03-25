@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import confetti from "canvas-confetti";
 import { getAndMarkUnseenBadges } from "@/app/leaderboard/actions";
@@ -14,22 +14,37 @@ export function AchievementNotifier() {
   const [showModal, setShowModal] = useState(false);
   const hasFireRef = useRef(false);
 
-  // Check for unseen badges on route changes
-  useEffect(() => {
+  const checkForBadges = useCallback(async () => {
     if (!session?.user) return;
+    const unseen = await getAndMarkUnseenBadges();
+    if (unseen.length > 0) {
+      setUnlockedBadges(unseen);
+      setShowModal(true);
+      hasFireRef.current = false;
+      // Also notify sidebar to refresh
+      window.dispatchEvent(new Event("badges-changed"));
+    }
+  }, [session?.user]);
 
-    // Small delay so the page action completes first
-    const timeout = setTimeout(async () => {
-      const unseen = await getAndMarkUnseenBadges();
-      if (unseen.length > 0) {
-        setUnlockedBadges(unseen);
-        setShowModal(true);
-        hasFireRef.current = false;
-      }
-    }, 500);
-
+  // Check on route changes
+  useEffect(() => {
+    const timeout = setTimeout(checkForBadges, 500);
     return () => clearTimeout(timeout);
-  }, [pathname, session?.user]);
+  }, [pathname, checkForBadges]);
+
+  // Check immediately when a badge is awarded via direct action or focus returns
+  useEffect(() => {
+    const handler = () => {
+      // Small delay to let the server action complete
+      setTimeout(checkForBadges, 300);
+    };
+    window.addEventListener("badge-awarded", handler);
+    window.addEventListener("focus", handler);
+    return () => {
+      window.removeEventListener("badge-awarded", handler);
+      window.removeEventListener("focus", handler);
+    };
+  }, [checkForBadges]);
 
   if (!showModal || unlockedBadges.length === 0) return null;
 
