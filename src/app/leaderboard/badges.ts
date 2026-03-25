@@ -510,15 +510,13 @@ export async function checkAndAwardBadges(organizationId: string) {
     }
   }
 
-  // Insert all new badges
-  if (newBadges.length > 0) {
-    await db.insert(userBadges).values(
-      newBadges.map((b) => ({
-        userId: b.userId,
-        organizationId,
-        badgeType: b.badgeType,
-      }))
-    );
+  // Insert all new badges (one at a time to handle conflicts gracefully)
+  for (const b of newBadges) {
+    await db.insert(userBadges).values({
+      userId: b.userId,
+      organizationId,
+      badgeType: b.badgeType,
+    }).onConflictDoNothing();
   }
 
   return newBadges;

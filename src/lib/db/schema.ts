@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 // Forward declaration for scenarios table (defined after testCases)
 
@@ -484,6 +484,7 @@ export const userBadges = sqliteTable(
   (table) => [
     index("user_badges_org_idx").on(table.organizationId),
     index("user_badges_user_idx").on(table.userId),
+    uniqueIndex("user_badges_unique_idx").on(table.userId, table.organizationId, table.badgeType),
   ]
 );
 

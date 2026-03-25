@@ -189,7 +189,7 @@ export async function awardDirectBadge(badgeType: BadgeType): Promise<boolean> {
     userId: session.user.id,
     organizationId: session.user.organizationId,
     badgeType,
-  });
+  }).onConflictDoNothing();
 
   return true;
 }
