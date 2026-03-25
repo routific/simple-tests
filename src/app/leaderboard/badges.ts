@@ -124,6 +124,38 @@ export async function checkAndAwardBadges(organizationId: string) {
     }
   }
 
+  // Check bug hunt milestones: 5, 10, 20 failed tests found
+  const bugHuntCounts = await db
+    .select({
+      userId: testRunResults.executedBy,
+      count: count(),
+    })
+    .from(testRunResults)
+    .innerJoin(testRuns, eq(testRunResults.testRunId, testRuns.id))
+    .where(
+      and(
+        eq(testRuns.organizationId, organizationId),
+        eq(testRunResults.status, "failed"),
+        isNotNull(testRunResults.executedBy)
+      )
+    )
+    .groupBy(testRunResults.executedBy);
+
+  const bugMilestones: { threshold: number; badge: BadgeType }[] = [
+    { threshold: 5, badge: "bug_spotter" },
+    { threshold: 10, badge: "bug_catcher" },
+    { threshold: 20, badge: "exterminator" },
+  ];
+
+  for (const row of bugHuntCounts) {
+    if (!row.userId) continue;
+    for (const { threshold, badge } of bugMilestones) {
+      if (row.count >= threshold && !existingSet.has(`${row.userId}:${badge}`)) {
+        newBadges.push({ userId: row.userId, badgeType: badge });
+      }
+    }
+  }
+
   // Check streak_master: users with 7+ consecutive active days
   // Get all distinct activity dates per user from audit log and test results
   const auditDates = await db
@@ -449,6 +481,7 @@ export async function checkAndAwardBadges(organizationId: string) {
     "streak_master", "keyboard_hero", "pyrotechnician",
     "scenarios_250", "scenarios_500", "scenarios_1000",
     "architect", "marathon_runner", "ship_it",
+    "bug_spotter", "bug_catcher", "exterminator",
     "night_owl", "early_bird", "thorough", "super_thorough",
     "no_stone_unturned", "team_player", "connector",
     "speed_demon", "comeback_kid",

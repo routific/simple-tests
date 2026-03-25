@@ -112,6 +112,24 @@ export const BADGE_CONFIG: Record<
     variant: "success",
     description: "Executed a test before 7am",
   },
+  bug_spotter: {
+    label: "Bug Spotter",
+    icon: "\uD83D\uDC1B",
+    variant: "success",
+    description: "Found 5 failed tests",
+  },
+  bug_catcher: {
+    label: "Bug Catcher",
+    icon: "\uD83E\uDD9F",
+    variant: "warning",
+    description: "Found 10 failed tests",
+  },
+  exterminator: {
+    label: "Exterminator",
+    icon: "\uD83D\uDEAB",
+    variant: "destructive",
+    description: "Found 20 failed tests",
+  },
   thorough: {
     label: "Thorough",
     icon: "\uD83D\uDD0D",
