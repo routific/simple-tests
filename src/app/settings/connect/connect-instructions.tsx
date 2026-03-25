@@ -227,97 +227,87 @@ export function ConnectInstructions({ baseUrl }: ConnectInstructionsProps) {
         <div className="grid gap-3 sm:grid-cols-2">
           <ToolCard
             title="list_folders"
-            description="List all folders in your organization"
+            description="List all folders in your organization, optionally filtered by parent"
             type="read"
           />
           <ToolCard
             title="get_folder"
-            description="Get folder details with test cases"
+            description="Get a specific folder with its test cases and child folders"
             type="read"
           />
           <ToolCard
             title="list_test_cases"
-            description="List test cases with filters"
+            description="List test cases with optional filters for folder, state, and priority"
             type="read"
           />
           <ToolCard
             title="get_test_case"
-            description="Get test case with all scenarios"
+            description="Get a specific test case with all its scenarios"
             type="read"
           />
           <ToolCard
             title="search_test_cases"
-            description="Search by title or content"
-            type="read"
-          />
-          <ToolCard
-            title="create_folder"
-            description="Create a new folder"
-            type="write"
-          />
-          <ToolCard
-            title="rename_folder"
-            description="Rename an existing folder"
-            type="write"
-          />
-          <ToolCard
-            title="move_folder"
-            description="Move a folder to a new parent"
-            type="write"
-          />
-          <ToolCard
-            title="delete_folder"
-            description="Delete an empty folder"
-            type="write"
-          />
-          <ToolCard
-            title="create_test_case"
-            description="Create a new test case"
-            type="write"
-          />
-          <ToolCard
-            title="update_test_case"
-            description="Update an existing test case"
-            type="write"
-          />
-          <ToolCard
-            title="delete_test_case"
-            description="Delete a test case"
-            type="write"
-          />
-          <ToolCard
-            title="get_linked_issues"
-            description="Get Linear issues linked to a test case"
+            description="Search test cases by title or gherkin scenario content"
             type="read"
           />
           <ToolCard
             title="list_test_runs"
-            description="List test runs with summaries"
+            description="List test runs with result summaries, optionally filtered by status"
             type="read"
           />
           <ToolCard
             title="get_test_run"
-            description="Get test run with results"
+            description="Get a specific test run with all its results and summary counts"
             type="read"
           />
           <ToolCard
-            title="create_test_run"
-            description="Create a new test run"
+            title="create_folder"
+            description="Create a new folder for organizing test cases"
             type="write"
           />
           <ToolCard
-            title="update_test_result"
-            description="Update test result status"
+            title="create_test_case"
+            description="Create a new test case with one or more scenarios"
+            type="write"
+          />
+          <ToolCard
+            title="update_test_case"
+            description="Update a test case's title, folder, state, or priority"
+            type="write"
+          />
+          <ToolCard
+            title="add_scenario"
+            description="Add a new scenario to an existing test case"
+            type="write"
+          />
+          <ToolCard
+            title="update_scenario"
+            description="Update an existing scenario's title or gherkin content"
+            type="write"
+          />
+          <ToolCard
+            title="create_test_run"
+            description="Create a new test run with selected scenarios"
             type="write"
           />
           <ToolCard
             title="update_test_run"
-            description="Update test run name, status, or Linear links"
+            description="Update a test run's name, status, or Linear issue/project/milestone links"
+            type="write"
+          />
+          <ToolCard
+            title="update_test_result"
+            description="Update the result status and notes for a scenario in a test run"
             type="write"
           />
           <ToolCard
             title="link_test_run_to_issue"
             description="Link a test run to a Linear issue"
+            type="write"
+          />
+          <ToolCard
+            title="link_test_case_to_issue"
+            description="Link a test case to a Linear issue"
             type="write"
           />
         </div>
