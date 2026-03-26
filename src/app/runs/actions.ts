@@ -113,6 +113,7 @@ interface UpdateResultInput {
   resultId: number;
   status: "pending" | "passed" | "failed" | "blocked" | "skipped";
   notes?: string;
+  screenshotUrl?: string | null;
 }
 
 export async function updateTestResult(input: UpdateResultInput) {
@@ -129,6 +130,7 @@ export async function updateTestResult(input: UpdateResultInput) {
       .select({
         status: testRunResults.status,
         notes: testRunResults.notes,
+        screenshotUrl: testRunResults.screenshotUrl,
         executedAt: testRunResults.executedAt,
         executedBy: testRunResults.executedBy,
         scenarioId: testRunResults.scenarioId,
@@ -148,6 +150,7 @@ export async function updateTestResult(input: UpdateResultInput) {
         resultId: input.resultId,
         status: currentResult.status,
         notes: currentResult.notes,
+        screenshotUrl: currentResult.screenshotUrl,
         executedAt: currentResult.executedAt,
         executedBy: currentResult.executedBy,
       });
@@ -157,6 +160,7 @@ export async function updateTestResult(input: UpdateResultInput) {
     const updateData: {
       status: typeof input.status;
       notes: string | null;
+      screenshotUrl?: string | null;
       executedAt: Date;
       executedBy: string;
       scenarioTitleSnapshot?: string;
@@ -168,6 +172,10 @@ export async function updateTestResult(input: UpdateResultInput) {
       executedAt: new Date(),
       executedBy: userId,
     };
+
+    if (input.screenshotUrl !== undefined) {
+      updateData.screenshotUrl = input.screenshotUrl;
+    }
 
     // Capture snapshot if moving to a non-pending status and no snapshot exists yet
     if (input.status !== "pending" && !currentResult.scenarioTitleSnapshot) {
@@ -215,6 +223,7 @@ export async function getResultHistory(resultId: number) {
       id: testResultHistory.id,
       status: testResultHistory.status,
       notes: testResultHistory.notes,
+      screenshotUrl: testResultHistory.screenshotUrl,
       executedAt: testResultHistory.executedAt,
       executedBy: testResultHistory.executedBy,
       archivedAt: testResultHistory.archivedAt,
@@ -719,6 +728,7 @@ export async function deleteAttempt(input: DeleteAttemptInput) {
         .set({
           status: "pending",
           notes: null,
+          screenshotUrl: null,
           executedAt: null,
           executedBy: null,
         })

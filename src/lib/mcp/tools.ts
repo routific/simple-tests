@@ -1607,6 +1607,7 @@ async function updateTestResult(
       resultId,
       status: currentResult.status,
       notes: currentResult.notes,
+      screenshotUrl: currentResult.screenshotUrl,
       executedAt: currentResult.executedAt,
       executedBy: currentResult.executedBy,
     });

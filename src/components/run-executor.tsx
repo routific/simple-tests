@@ -45,6 +45,7 @@ interface Result {
   testCaseId: number;
   testCaseTitle: string;
   folderId: number | null;
+  screenshotUrl: string | null;
   // Snapshot fields - captured when test was completed
   scenarioTitleSnapshot: string | null;
   scenarioGherkinSnapshot: string | null;
@@ -82,6 +83,7 @@ interface HistoryEntry {
   id: number;
   status: string;
   notes: string | null;
+  screenshotUrl: string | null;
   executedAt: Date | null;
   executedBy: string | null;
   archivedAt: Date;
@@ -116,6 +118,9 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
     return initialResults.find((r) => r.status === "pending") || initialResults[0] || null;
   });
   const [notes, setNotes] = useState("");
+  const [screenshotDataUrl, setScreenshotDataUrl] = useState<string | null>(null);
+  const [screenshotLightbox, setScreenshotLightbox] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [resultHistory, setResultHistory] = useState<HistoryEntry[]>([]);
 
@@ -160,6 +165,76 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
       setResultHistory([]);
     }
   }, [selectedResult?.id, selectedResult?.status]);
+
+  // Compress image to JPEG data URL
+  const compressImage = useCallback((file: File, maxWidth = 1920, quality = 0.8): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let { width, height } = img;
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width;
+          width = maxWidth;
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL("image/jpeg", quality);
+        URL.revokeObjectURL(img.src);
+        if (dataUrl.length > 3 * 1024 * 1024) {
+          reject(new Error("Image too large even after compression"));
+          return;
+        }
+        resolve(dataUrl);
+      };
+      img.onerror = reject;
+      img.src = URL.createObjectURL(file);
+    });
+  }, []);
+
+  // Handle paste events for screenshots
+  useEffect(() => {
+    if (run.status !== "in_progress" || !selectedResult) return;
+
+    const handlePaste = async (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith("image/")) {
+          e.preventDefault();
+          const file = item.getAsFile();
+          if (!file) continue;
+          try {
+            const dataUrl = await compressImage(file);
+            setScreenshotDataUrl(dataUrl);
+          } catch {
+            alert("Image too large. Please use a smaller screenshot.");
+          }
+          return;
+        }
+      }
+    };
+
+    document.addEventListener("paste", handlePaste);
+    return () => document.removeEventListener("paste", handlePaste);
+  }, [run.status, selectedResult, compressImage]);
+
+  // Handle file input change
+  const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const dataUrl = await compressImage(file);
+      setScreenshotDataUrl(dataUrl);
+    } catch {
+      alert("Image too large. Please use a smaller screenshot.");
+    }
+    // Reset input so same file can be selected again
+    e.target.value = "";
+  }, [compressImage]);
 
   // Edit mode state
   const [isEditing, setIsEditing] = useState(false);
@@ -491,11 +566,14 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
     const executedAt = new Date();
     const currentNotes = notes.trim() || null;
 
+    const currentScreenshot = screenshotDataUrl || null;
+
     // Optimistically update local state
     const updatedResult: Result = {
       ...selectedResult,
       status,
       notes: currentNotes,
+      screenshotUrl: currentScreenshot,
       executedAt,
       executedBy: currentUser.id,
       // Capture snapshots (same as server does)
@@ -518,6 +596,7 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
     if (nextPending) {
       setSelectedResult(nextPending);
       setNotes("");
+      setScreenshotDataUrl(null);
     } else {
       // Stay on current result but update it
       setSelectedResult(updatedResult);
@@ -538,6 +617,7 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
         resultId: selectedResult.id,
         status,
         notes: currentNotes || undefined,
+        screenshotUrl: currentScreenshot,
       });
 
       router.refresh();
@@ -1295,10 +1375,10 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
                                     // Update local state
                                     setResults(prev => prev.map(r =>
                                       r.id === selectedResult.id
-                                        ? { ...r, status: "pending", notes: null, executedAt: null, executedBy: null }
+                                        ? { ...r, status: "pending", notes: null, screenshotUrl: null, executedAt: null, executedBy: null }
                                         : r
                                     ));
-                                    setSelectedResult(prev => prev ? { ...prev, status: "pending", notes: null, executedAt: null, executedBy: null } : null);
+                                    setSelectedResult(prev => prev ? { ...prev, status: "pending", notes: null, screenshotUrl: null, executedAt: null, executedBy: null } : null);
                                     setResultHistory([]);
                                     router.refresh();
                                   }
@@ -1314,6 +1394,18 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
                       </div>
                       {selectedResult.notes && (
                         <p className="mt-1 text-muted-foreground">{selectedResult.notes}</p>
+                      )}
+                      {selectedResult.screenshotUrl && (
+                        <button
+                          onClick={() => setScreenshotLightbox(selectedResult.screenshotUrl)}
+                          className="mt-2 block"
+                        >
+                          <img
+                            src={selectedResult.screenshotUrl}
+                            alt="Screenshot"
+                            className="max-h-32 rounded border border-[hsl(var(--border))] hover:opacity-80 transition-opacity cursor-zoom-in"
+                          />
+                        </button>
                       )}
                     </div>
                     {/* Previous attempts */}
@@ -1386,6 +1478,18 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
                         {entry.notes && (
                           <p className="mt-1 text-muted-foreground">{entry.notes}</p>
                         )}
+                        {entry.screenshotUrl && (
+                          <button
+                            onClick={() => setScreenshotLightbox(entry.screenshotUrl)}
+                            className="mt-2 block"
+                          >
+                            <img
+                              src={entry.screenshotUrl}
+                              alt="Screenshot"
+                              className="max-h-24 rounded border border-[hsl(var(--border))] hover:opacity-80 transition-opacity cursor-zoom-in"
+                            />
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -1403,6 +1507,46 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
                       placeholder="Add any notes about this test..."
                       className="w-full px-3 py-2 border border-[hsl(var(--border))] rounded-md text-sm h-24 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 bg-[hsl(var(--background))]"
                     />
+                  </div>
+
+                  {/* Screenshot attachment */}
+                  <div>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileSelect}
+                      className="hidden"
+                    />
+                    {screenshotDataUrl ? (
+                      <div className="relative inline-block group">
+                        <img
+                          src={screenshotDataUrl}
+                          alt="Screenshot preview"
+                          className="max-h-28 rounded border border-[hsl(var(--border))] cursor-zoom-in"
+                          onClick={() => setScreenshotLightbox(screenshotDataUrl)}
+                        />
+                        <button
+                          onClick={() => setScreenshotDataUrl(null)}
+                          className="absolute -top-2 -right-2 w-5 h-5 bg-rose-500 text-white rounded-full flex items-center justify-center text-xs hover:bg-rose-600 shadow-sm"
+                          title="Remove screenshot"
+                        >
+                          &times;
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        className="text-xs text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z" />
+                        </svg>
+                        Attach screenshot
+                        <span className="opacity-50">(or paste)</span>
+                      </button>
+                    )}
                   </div>
 
                   <div className="flex gap-2">
@@ -1720,6 +1864,21 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Screenshot Lightbox */}
+      {screenshotLightbox && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-8 cursor-zoom-out"
+          onClick={() => setScreenshotLightbox(null)}
+        >
+          <img
+            src={screenshotLightbox}
+            alt="Screenshot"
+            className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
         </div>
       )}
 

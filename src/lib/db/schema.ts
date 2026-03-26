@@ -207,6 +207,7 @@ export const testRunResults = sqliteTable(
       .notNull()
       .default("pending"),
     notes: text("notes"),
+    screenshotUrl: text("screenshot_url"),
     order: integer("order").notNull().default(0),
     executedAt: integer("executed_at", { mode: "timestamp" }),
     executedBy: text("executed_by").references(() => users.id),
@@ -230,6 +231,7 @@ export const testResultHistory = sqliteTable(
       enum: ["pending", "passed", "failed", "blocked", "skipped"],
     }).notNull(),
     notes: text("notes"),
+    screenshotUrl: text("screenshot_url"),
     executedAt: integer("executed_at", { mode: "timestamp" }),
     executedBy: text("executed_by").references(() => users.id),
     // When this history entry was created (when it was superseded)

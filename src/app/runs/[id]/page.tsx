@@ -35,6 +35,7 @@ export default async function RunDetailPage({ params, searchParams }: Props) {
       id: testRunResults.id,
       status: testRunResults.status,
       notes: testRunResults.notes,
+      screenshotUrl: testRunResults.screenshotUrl,
       executedAt: testRunResults.executedAt,
       executedBy: testRunResults.executedBy,
       scenarioId: testRunResults.scenarioId,
