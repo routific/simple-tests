@@ -265,9 +265,15 @@ export async function createIssueAttachmentForUser(
   input: CreateAttachmentInput
 ): Promise<boolean> {
   try {
+    console.log("[Linear] Getting client for user attachment creation...", { userId });
     const client = await getLinearClientForUser(userId);
     const title = input.subtitle ? `${input.title} - ${input.subtitle}` : input.title;
+    console.log("[Linear] Creating attachment for user:", { issueId: input.issueId, url: input.url, title });
     const result = await client.attachmentLinkURL(input.issueId, input.url, { title });
+    console.log("[Linear] User attachment creation result:", result.success);
+    if (!result.success) {
+      console.error("[Linear] User attachment creation returned success=false");
+    }
     return result.success;
   } catch (error) {
     console.error("[Linear] Failed to create attachment for user:", error instanceof Error ? error.message : error);

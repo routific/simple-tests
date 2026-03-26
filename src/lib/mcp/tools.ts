@@ -1848,7 +1848,7 @@ async function linkTestRunToIssue(
   // Create attachment on the Linear issue
   const run = beforeState as Record<string, unknown>;
   const resultsArray = (run.results as Array<unknown>) || [];
-  await createLinearAttachmentForRun({
+  const attachmentCreated = await createLinearAttachmentForRun({
     userId: auth.userId,
     issueId,
     runId: testRunId,
@@ -1857,6 +1857,10 @@ async function linkTestRunToIssue(
     environment: (run.environment as string | null) ?? null,
     scenarioCount: resultsArray.length,
   });
+
+  if (!attachmentCreated) {
+    console.warn("[MCP] link_test_run_to_issue: Linear attachment creation failed for issue", issueId);
+  }
 
   const afterState = await getEntityState("test_run", testRunId, auth.organizationId);
 
@@ -1872,7 +1876,7 @@ async function linkTestRunToIssue(
   });
 
   return {
-    content: [{ type: "text", text: JSON.stringify({ success: true, testRun: result[0] }, null, 2) }],
+    content: [{ type: "text", text: JSON.stringify({ success: true, testRun: result[0], linearAttachmentCreated: attachmentCreated }, null, 2) }],
   };
 }
 
