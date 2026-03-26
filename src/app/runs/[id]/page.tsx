@@ -53,7 +53,7 @@ export default async function RunDetailPage({ params, searchParams }: Props) {
     .innerJoin(testCases, eq(scenarios.testCaseId, testCases.id))
     .leftJoin(folders, eq(testCases.folderId, folders.id))
     .where(eq(testRunResults.testRunId, runId))
-    .orderBy(folders.name, testCases.title, scenarios.order);
+    .orderBy(testRunResults.order);
 
   // Fetch all folders for breadcrumb display
   const allFolders = await db

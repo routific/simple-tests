@@ -207,6 +207,7 @@ export const testRunResults = sqliteTable(
       .notNull()
       .default("pending"),
     notes: text("notes"),
+    order: integer("order").notNull().default(0),
     executedAt: integer("executed_at", { mode: "timestamp" }),
     executedBy: text("executed_by").references(() => users.id),
     // Snapshot fields - captured when scenario is marked complete

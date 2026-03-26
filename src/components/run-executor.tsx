@@ -11,7 +11,7 @@ import { ReleasePicker } from "./release-picker";
 import { Input } from "./ui/input";
 import { ResizablePanel } from "./ui/resizable-panel";
 import { LinearProjectPicker, LinearMilestonePicker, LinearIssuePicker } from "./linear-pickers";
-import { updateTestResult, completeTestRun, deleteTestRun, updateTestRun, addScenariosToRun, removeScenariosFromRun, getResultHistory, deleteAttempt } from "@/app/runs/actions";
+import { updateTestResult, completeTestRun, deleteTestRun, updateTestRun, addScenariosToRun, removeScenariosFromRun, getResultHistory, deleteAttempt, reorderRunScenarios } from "@/app/runs/actions";
 import type { TestRun } from "@/lib/db/schema";
 
 interface LinearProject {
@@ -173,6 +173,7 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
   const [selectedToAdd, setSelectedToAdd] = useState<Set<number>>(new Set());
   const [selectedToRemove, setSelectedToRemove] = useState<Set<number>>(new Set());
   const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
+  const [draggedResultId, setDraggedResultId] = useState<number | null>(null);
 
   // Linear edit state
   const [projects, setProjects] = useState<LinearProject[]>([]);
@@ -637,6 +638,35 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
     });
   };
 
+  const handleResultDragStart = (e: React.DragEvent, resultId: number) => {
+    setDraggedResultId(resultId);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleResultDragOver = (e: React.DragEvent, targetId: number) => {
+    e.preventDefault();
+    if (draggedResultId === null || draggedResultId === targetId) return;
+
+    const draggedIndex = results.findIndex(r => r.id === draggedResultId);
+    const targetIndex = results.findIndex(r => r.id === targetId);
+    if (draggedIndex === targetIndex) return;
+
+    const newResults = [...results];
+    const [removed] = newResults.splice(draggedIndex, 1);
+    newResults.splice(targetIndex, 0, removed);
+    setResults(newResults);
+  };
+
+  const handleResultDragEnd = () => {
+    if (draggedResultId !== null && isEditing) {
+      startTransition(async () => {
+        const ids = results.map(r => r.id);
+        await reorderRunScenarios(run.id, ids);
+      });
+    }
+    setDraggedResultId(null);
+  };
+
   const toggleAddSelection = (scenarioId: number) => {
     setSelectedToAdd(prev => {
       const next = new Set(prev);
@@ -1067,18 +1097,28 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
             ) : filteredResults.map((result) => (
               <div
                 key={result.id}
+                draggable={isEditing && run.status === "in_progress" && !runSearch}
+                onDragStart={(e) => handleResultDragStart(e, result.id)}
+                onDragOver={(e) => handleResultDragOver(e, result.id)}
+                onDragEnd={handleResultDragEnd}
                 className={cn(
                   "w-full text-left p-3 border-b border-[hsl(var(--border))] hover:bg-[hsl(var(--muted))] flex items-start gap-2",
-                  selectedResult?.id === result.id && "bg-brand-50 dark:bg-brand-950/50 ring-2 ring-brand-500 ring-inset"
+                  selectedResult?.id === result.id && "bg-brand-50 dark:bg-brand-950/50 ring-2 ring-brand-500 ring-inset",
+                  draggedResultId === result.id && "opacity-50"
                 )}
               >
                 {run.status === "in_progress" && isEditing && (
-                  <input
-                    type="checkbox"
-                    checked={selectedToRemove.has(result.id)}
-                    onChange={() => toggleRemoveSelection(result.id)}
-                    className="mt-1 rounded border-gray-300"
-                  />
+                  <>
+                    <div className="cursor-grab active:cursor-grabbing mt-1 text-[hsl(var(--muted-foreground))]">
+                      <DragHandleIcon className="w-4 h-4" />
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={selectedToRemove.has(result.id)}
+                      onChange={() => toggleRemoveSelection(result.id)}
+                      className="mt-1 rounded border-gray-300"
+                    />
+                  </>
                 )}
                 <button
                   onClick={() => {
@@ -1843,6 +1883,14 @@ function WarningIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+    </svg>
+  );
+}
+
+function DragHandleIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
     </svg>
   );
 }

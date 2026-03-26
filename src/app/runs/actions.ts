@@ -55,10 +55,11 @@ export async function createTestRun(input: CreateRunInput) {
     const runId = result[0].id;
 
     await db.insert(testRunResults).values(
-      input.scenarioIds.map((scenarioId) => ({
+      input.scenarioIds.map((scenarioId, index) => ({
         testRunId: runId,
         scenarioId,
         status: "pending" as const,
+        order: index,
       }))
     );
 
@@ -551,11 +552,14 @@ export async function addScenariosToRun(input: AddScenariosInput) {
     const newScenarioIds = input.scenarioIds.filter((id) => !existingIds.has(id));
 
     if (newScenarioIds.length > 0) {
+      // Set order to continue after existing results
+      const maxOrder = existing.length > 0 ? existing.length : 0;
       await db.insert(testRunResults).values(
-        newScenarioIds.map((scenarioId) => ({
+        newScenarioIds.map((scenarioId, index) => ({
           testRunId: input.runId,
           scenarioId,
           status: "pending" as const,
+          order: maxOrder + index,
         }))
       );
     }
@@ -817,5 +821,49 @@ export async function removeScenariosFromRun(input: RemoveScenariosInput) {
   } catch (error) {
     console.error("Failed to remove scenarios from run:", error);
     return { error: "Failed to remove scenarios from run" };
+  }
+}
+
+export async function reorderRunScenarios(runId: number, resultIds: number[]) {
+  const session = await getSessionWithOrg();
+  if (!session) {
+    return { error: "Unauthorized" };
+  }
+
+  const { organizationId } = session.user;
+
+  try {
+    const run = await db
+      .select()
+      .from(testRuns)
+      .where(
+        and(eq(testRuns.id, runId), eq(testRuns.organizationId, organizationId))
+      )
+      .get();
+
+    if (!run) {
+      return { error: "Test run not found" };
+    }
+
+    // Update each result's order
+    await Promise.all(
+      resultIds.map((resultId, index) =>
+        db
+          .update(testRunResults)
+          .set({ order: index })
+          .where(
+            and(
+              eq(testRunResults.id, resultId),
+              eq(testRunResults.testRunId, runId)
+            )
+          )
+      )
+    );
+
+    revalidatePath(`/runs/${runId}`);
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to reorder run scenarios:", error);
+    return { error: "Failed to reorder scenarios" };
   }
 }
