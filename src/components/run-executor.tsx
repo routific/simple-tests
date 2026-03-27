@@ -457,6 +457,13 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
 
       // Navigation shortcuts work even in inputs
       if (e.key === "Escape") {
+        if (showBugSpawnModal) {
+          setShowBugSpawnModal(false);
+          setBugSpawnTargetResultId(null);
+          setBugSpawnError(null);
+          e.preventDefault();
+          return;
+        }
         if (showCompleteConfirm) {
           setShowCompleteConfirm(false);
           e.preventDefault();
@@ -486,7 +493,7 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
       if (isInput) return;
 
       // Only enable execution shortcuts when run is in progress and not editing
-      if (run.status !== "in_progress" || isEditing || showAddScenarios) return;
+      if (run.status !== "in_progress" || isEditing || showAddScenarios || showBugSpawnModal) return;
 
       switch (e.key.toLowerCase()) {
         case "p":
@@ -565,7 +572,7 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [run.status, isEditing, showAddScenarios, showCompleteConfirm, selectedResult, results, isPending]);
+  }, [run.status, isEditing, showAddScenarios, showCompleteConfirm, showBugSpawnModal, selectedResult, results, isPending]);
 
   const handleStatusUpdate = (status: "passed" | "failed" | "blocked" | "skipped") => {
     if (!selectedResult) return;
@@ -621,10 +628,9 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
 
     // Prompt to spawn a bug ticket when failing a test on a run linked to a Linear issue
     if (status === "failed" && run.linearIssueId && !selectedResult.bugLinearIssueId) {
-      const targetId = selectedResult.id;
-      setBugSpawnTargetResultId(targetId);
+      setBugSpawnTargetResultId(selectedResult.id);
       setBugSpawnError(null);
-      setTimeout(() => setShowBugSpawnModal(true), 400);
+      setShowBugSpawnModal(true);
     }
 
     startTransition(async () => {
@@ -1343,30 +1349,6 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
                   >
                     View case
                   </Link>
-                  {selectedResult.bugLinearIssueIdentifier && linearWorkspace ? (
-                    <a
-                      href={`https://linear.app/${linearWorkspace}/issue/${selectedResult.bugLinearIssueIdentifier}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-rose-600 hover:underline inline-flex items-center gap-1"
-                    >
-                      <BugIcon className="w-3.5 h-3.5" />
-                      {selectedResult.bugLinearIssueIdentifier}
-                      <ExternalLinkIcon className="w-3 h-3" />
-                    </a>
-                  ) : selectedResult.status === "failed" && run.linearIssueId && !selectedResult.bugLinearIssueId ? (
-                    <button
-                      onClick={() => {
-                        setBugSpawnTargetResultId(selectedResult.id);
-                        setBugSpawnError(null);
-                        setShowBugSpawnModal(true);
-                      }}
-                      className="text-sm text-rose-600 hover:underline inline-flex items-center gap-1"
-                    >
-                      <BugIcon className="w-3.5 h-3.5" />
-                      Spawn bug issue
-                    </button>
-                  ) : null}
                 </div>
               </div>
 
@@ -1478,6 +1460,35 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
                           ))}
                         </div>
                       )}
+                      {/* Bug ticket: link or spawn button */}
+                      {selectedResult.bugLinearIssueIdentifier && linearWorkspace ? (
+                        <div className="mt-2">
+                          <a
+                            href={`https://linear.app/${linearWorkspace}/issue/${selectedResult.bugLinearIssueIdentifier}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-rose-600 hover:underline inline-flex items-center gap-1"
+                          >
+                            <BugIcon className="w-3.5 h-3.5" />
+                            {selectedResult.bugLinearIssueIdentifier}
+                            <ExternalLinkIcon className="w-3 h-3" />
+                          </a>
+                        </div>
+                      ) : selectedResult.status === "failed" && run.linearIssueId && !selectedResult.bugLinearIssueId ? (
+                        <div className="mt-2">
+                          <button
+                            onClick={() => {
+                              setBugSpawnTargetResultId(selectedResult.id);
+                              setBugSpawnError(null);
+                              setShowBugSpawnModal(true);
+                            }}
+                            className="text-xs text-rose-600 hover:text-rose-700 hover:underline inline-flex items-center gap-1"
+                          >
+                            <BugIcon className="w-3.5 h-3.5" />
+                            Spawn bug issue
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                     {/* Previous attempts */}
                     {resultHistory.map((entry) => (
