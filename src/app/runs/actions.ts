@@ -950,16 +950,12 @@ export async function spawnBugIssue(input: { resultId: number; runId: number }) 
     const gherkin = result.scenarioGherkinSnapshot || result.scenarioGherkin;
 
     const lines: string[] = [];
-    lines.push("## Failed Test Scenario");
+    lines.push("## Steps");
     lines.push("");
-    lines.push(`**Test Case:** ${testCaseTitle}`);
-    lines.push(`**Scenario:** ${scenarioTitle}`);
     if (run.environment) {
       lines.push(`**Environment:** ${run.environment.charAt(0).toUpperCase() + run.environment.slice(1)}`);
+      lines.push("");
     }
-    lines.push("");
-    lines.push("### Steps (Gherkin)");
-    lines.push("");
     lines.push("```gherkin");
     lines.push(gherkin);
     lines.push("```");
