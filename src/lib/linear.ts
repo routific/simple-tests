@@ -315,6 +315,72 @@ export async function createIssueComment(input: CreateCommentInput): Promise<boo
   }
 }
 
+/**
+ * Upload base64 data URL screenshots to Linear's cloud storage.
+ * Returns an array of hosted asset URLs.
+ */
+export async function uploadScreenshotsToLinear(dataUrls: string[]): Promise<string[]> {
+  if (dataUrls.length === 0) return [];
+
+  const client = await getLinearClient();
+  const assetUrls: string[] = [];
+
+  for (let i = 0; i < dataUrls.length; i++) {
+    try {
+      const dataUrl = dataUrls[i];
+      // Parse data URL: data:image/jpeg;base64,/9j/4AAQ...
+      const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+      if (!match) {
+        console.warn(`[Linear] Screenshot ${i + 1}: not a valid base64 data URL, skipping`);
+        continue;
+      }
+
+      const contentType = match[1];
+      const base64Data = match[2];
+      const buffer = Buffer.from(base64Data, "base64");
+      const ext = contentType.split("/")[1] || "jpg";
+      const filename = `screenshot-${i + 1}.${ext}`;
+
+      // Request a signed upload URL from Linear
+      const uploadPayload = await client.fileUpload(contentType, filename, buffer.length);
+      if (!uploadPayload.success || !uploadPayload.uploadFile) {
+        console.error(`[Linear] Screenshot ${i + 1}: fileUpload request failed`);
+        continue;
+      }
+
+      const { uploadUrl, assetUrl, headers } = uploadPayload.uploadFile;
+
+      // Build headers for the PUT request
+      const putHeaders: Record<string, string> = {
+        "Content-Type": contentType,
+        "Cache-Control": "public, max-age=31536000",
+      };
+      for (const h of headers) {
+        putHeaders[h.key] = h.value;
+      }
+
+      // Upload the file to the signed URL
+      const putResponse = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: putHeaders,
+        body: buffer,
+      });
+
+      if (!putResponse.ok) {
+        console.error(`[Linear] Screenshot ${i + 1}: PUT upload failed with status ${putResponse.status}`);
+        continue;
+      }
+
+      assetUrls.push(assetUrl);
+      console.log(`[Linear] Screenshot ${i + 1}: uploaded to ${assetUrl}`);
+    } catch (error) {
+      console.error(`[Linear] Screenshot ${i + 1}: upload error:`, error instanceof Error ? error.message : error);
+    }
+  }
+
+  return assetUrls;
+}
+
 export interface CreateBugSubIssueInput {
   parentIssueId: string;
   title: string;

@@ -5,9 +5,9 @@ import { testRuns, testRunResults, testResultHistory, releases, scenarios, testC
 import { eq, and, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getSessionWithOrg } from "@/lib/auth";
-import { createIssueAttachment, deleteAttachmentByUrl, createIssueComment, createBugSubIssue } from "@/lib/linear";
+import { createIssueAttachment, deleteAttachmentByUrl, createIssueComment, createBugSubIssue, uploadScreenshotsToLinear } from "@/lib/linear";
 import { checkAndAwardBadges } from "@/app/leaderboard/badges";
-import { serializeScreenshots } from "@/lib/utils";
+import { parseScreenshots, serializeScreenshots } from "@/lib/utils";
 
 interface CreateRunInput {
   name: string;
@@ -971,11 +971,29 @@ export async function spawnBugIssue(input: { resultId: number; runId: number }) 
       lines.push(`> ${result.notes}`);
     }
 
-    if (result.screenshotUrl) {
-      lines.push("");
-      lines.push("### Screenshots");
-      lines.push("");
-      lines.push("Screenshot(s) attached to the test result — see link below.");
+    // Upload screenshots to Linear if present
+    const screenshots = parseScreenshots(result.screenshotUrl);
+    if (screenshots.length > 0) {
+      let uploadedUrls: string[] = [];
+      try {
+        uploadedUrls = await uploadScreenshotsToLinear(screenshots);
+      } catch (error) {
+        console.error("Failed to upload screenshots to Linear:", error);
+      }
+
+      if (uploadedUrls.length > 0) {
+        lines.push("");
+        lines.push("### Screenshots");
+        lines.push("");
+        for (let i = 0; i < uploadedUrls.length; i++) {
+          lines.push(`![Screenshot ${i + 1}](${uploadedUrls[i]})`);
+        }
+      } else if (screenshots.length > 0) {
+        lines.push("");
+        lines.push("### Screenshots");
+        lines.push("");
+        lines.push(`${screenshots.length} screenshot(s) attached to the test result — see link below.`);
+      }
     }
 
     lines.push("");
