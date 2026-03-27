@@ -386,13 +386,13 @@ function Kbd({ children }: { children: ReactNode }) {
 // Changelog entries - newest first
 const CHANGELOG = [
   {
-    version: "c2fa06e",
+    version: "c4a6414",
     date: "2026-03-26",
     changes: [
-      "Spawn bug tickets in Linear directly from failed test scenarios",
-      "Bug tickets are created as sub-issues with 'Bug' label, including Gherkin steps, notes, and screenshot references",
-      "Auto-prompt to spawn a bug ticket when marking a test as failed",
-      "Bug ticket links displayed on failed test results",
+      "Spawn bug tickets in Linear directly from failed test scenarios — creates a sub-issue with 'Bug' label, Gherkin steps, notes, and uploaded screenshots",
+      "Auto-prompt modal when marking a test as failed (on runs linked to a Linear issue)",
+      "Bug ticket links displayed inline on failed test results",
+      "Screenshots uploaded to Linear's cloud storage and embedded as images in bug tickets",
     ],
   },
   {

@@ -119,7 +119,7 @@ SimpleTests delivers these core features with a fast, lightweight interface that
 - **Scenarios** - Multiple Gherkin scenarios per test case, ordered within the case
 - **Releases** - Logical groupings for organizing test runs (e.g., "v2.0", "Sprint 15")
 - **Test runs** - Collections of scenarios to execute, optionally linked to a release and Linear project/milestone/issue
-- **Test run results** - Track pass/fail status and notes for each scenario in a run
+- **Test run results** - Track pass/fail status, notes, screenshots, and linked bug tickets for each scenario in a run
 - **Audit log** - Records all changes to test cases with field-level diffs
 - **Undo stack** - Enables undo/redo for folder and scenario operations
 
@@ -320,6 +320,8 @@ Test cases can contain multiple scenarios, each with their own Gherkin content. 
 - **Linear integration** - Link to projects, milestones, and issues
 - **Execute runs** - Step through scenarios, mark Pass/Fail/Blocked/Skipped
 - **Add notes** - Capture observations during testing
+- **Screenshot evidence** - Paste or attach screenshots to test results
+- **Spawn bug tickets** - Create Linear sub-issues from failed scenarios with Bug label, Gherkin steps, notes, and uploaded screenshots
 - **Progress tracking** - Visual progress bar, status counts
 - **Delete attempts** - Remove your own test results if recorded by mistake
 
@@ -343,6 +345,7 @@ Test cases can contain multiple scenarios, each with their own Gherkin content. 
 - **Milestone tracking** - Link runs to project milestones
 - **Issue search** - Connect runs to specific Linear issues with partial number matching
 - **Test case linking** - Link Linear issues directly to test cases
+- **Bug ticket spawning** - Create sub-issues with Bug label from failed test scenarios, with screenshots uploaded to Linear
 - **Auto token refresh** - Seamless session management with automatic OAuth refresh and reconnect prompts
 
 ### MCP (Model Context Protocol)
