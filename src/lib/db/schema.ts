@@ -215,6 +215,9 @@ export const testRunResults = sqliteTable(
     scenarioTitleSnapshot: text("scenario_title_snapshot"),
     scenarioGherkinSnapshot: text("scenario_gherkin_snapshot"),
     testCaseTitleSnapshot: text("test_case_title_snapshot"),
+    // Bug ticket fields - linked Linear sub-issue for failed scenarios
+    bugLinearIssueId: text("bug_linear_issue_id"),
+    bugLinearIssueIdentifier: text("bug_linear_issue_identifier"),
   },
   (table) => [index("test_run_results_run_idx").on(table.testRunId)]
 );

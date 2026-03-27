@@ -386,6 +386,16 @@ function Kbd({ children }: { children: ReactNode }) {
 // Changelog entries - newest first
 const CHANGELOG = [
   {
+    version: "c2fa06e",
+    date: "2026-03-26",
+    changes: [
+      "Spawn bug tickets in Linear directly from failed test scenarios",
+      "Bug tickets are created as sub-issues with 'Bug' label, including Gherkin steps, notes, and screenshot references",
+      "Auto-prompt to spawn a bug ticket when marking a test as failed",
+      "Bug ticket links displayed on failed test results",
+    ],
+  },
+  {
     version: "660e7ee",
     date: "2026-03-26",
     changes: [

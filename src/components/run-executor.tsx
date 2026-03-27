@@ -11,7 +11,7 @@ import { ReleasePicker } from "./release-picker";
 import { Input } from "./ui/input";
 import { ResizablePanel } from "./ui/resizable-panel";
 import { LinearProjectPicker, LinearMilestonePicker, LinearIssuePicker } from "./linear-pickers";
-import { updateTestResult, completeTestRun, deleteTestRun, updateTestRun, addScenariosToRun, removeScenariosFromRun, getResultHistory, deleteAttempt, reorderRunScenarios } from "@/app/runs/actions";
+import { updateTestResult, completeTestRun, deleteTestRun, updateTestRun, addScenariosToRun, removeScenariosFromRun, getResultHistory, deleteAttempt, reorderRunScenarios, spawnBugIssue } from "@/app/runs/actions";
 import type { TestRun } from "@/lib/db/schema";
 
 interface LinearProject {
@@ -50,6 +50,9 @@ interface Result {
   scenarioTitleSnapshot: string | null;
   scenarioGherkinSnapshot: string | null;
   testCaseTitleSnapshot: string | null;
+  // Bug ticket fields
+  bugLinearIssueId: string | null;
+  bugLinearIssueIdentifier: string | null;
 }
 
 interface Folder {
@@ -249,6 +252,10 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
   const [selectedToRemove, setSelectedToRemove] = useState<Set<number>>(new Set());
   const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
   const [draggedResultId, setDraggedResultId] = useState<number | null>(null);
+  const [showBugSpawnModal, setShowBugSpawnModal] = useState(false);
+  const [bugSpawnTargetResultId, setBugSpawnTargetResultId] = useState<number | null>(null);
+  const [bugSpawnPending, setBugSpawnPending] = useState(false);
+  const [bugSpawnError, setBugSpawnError] = useState<string | null>(null);
 
   // Linear edit state
   const [projects, setProjects] = useState<LinearProject[]>([]);
@@ -612,6 +619,14 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
       }
     }
 
+    // Prompt to spawn a bug ticket when failing a test on a run linked to a Linear issue
+    if (status === "failed" && run.linearIssueId && !selectedResult.bugLinearIssueId) {
+      const targetId = selectedResult.id;
+      setBugSpawnTargetResultId(targetId);
+      setBugSpawnError(null);
+      setTimeout(() => setShowBugSpawnModal(true), 400);
+    }
+
     startTransition(async () => {
       await updateTestResult({
         resultId: selectedResult.id,
@@ -622,6 +637,33 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
 
       router.refresh();
     });
+  };
+
+  const handleSpawnBug = async () => {
+    if (!bugSpawnTargetResultId) return;
+    setBugSpawnPending(true);
+    setBugSpawnError(null);
+    const result = await spawnBugIssue({
+      resultId: bugSpawnTargetResultId,
+      runId: run.id,
+    });
+    if (result.success && result.bugIssueIdentifier) {
+      // Update local results state with bug issue info
+      setResults(prev => prev.map(r =>
+        r.id === bugSpawnTargetResultId
+          ? { ...r, bugLinearIssueId: result.bugIssueId!, bugLinearIssueIdentifier: result.bugIssueIdentifier! }
+          : r
+      ));
+      if (selectedResult?.id === bugSpawnTargetResultId) {
+        setSelectedResult(prev => prev ? { ...prev, bugLinearIssueId: result.bugIssueId!, bugLinearIssueIdentifier: result.bugIssueIdentifier! } : null);
+      }
+      setShowBugSpawnModal(false);
+      setBugSpawnTargetResultId(null);
+      router.refresh();
+    } else if (result.error) {
+      setBugSpawnError(result.error);
+    }
+    setBugSpawnPending(false);
   };
 
   const handleComplete = () => {
@@ -1301,6 +1343,30 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
                   >
                     View case
                   </Link>
+                  {selectedResult.bugLinearIssueIdentifier && linearWorkspace ? (
+                    <a
+                      href={`https://linear.app/${linearWorkspace}/issue/${selectedResult.bugLinearIssueIdentifier}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-rose-600 hover:underline inline-flex items-center gap-1"
+                    >
+                      <BugIcon className="w-3.5 h-3.5" />
+                      {selectedResult.bugLinearIssueIdentifier}
+                      <ExternalLinkIcon className="w-3 h-3" />
+                    </a>
+                  ) : selectedResult.status === "failed" && run.linearIssueId && !selectedResult.bugLinearIssueId ? (
+                    <button
+                      onClick={() => {
+                        setBugSpawnTargetResultId(selectedResult.id);
+                        setBugSpawnError(null);
+                        setShowBugSpawnModal(true);
+                      }}
+                      className="text-sm text-rose-600 hover:underline inline-flex items-center gap-1"
+                    >
+                      <BugIcon className="w-3.5 h-3.5" />
+                      Spawn bug issue
+                    </button>
+                  ) : null}
                 </div>
               </div>
 
@@ -1375,10 +1441,10 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
                                     // Update local state
                                     setResults(prev => prev.map(r =>
                                       r.id === selectedResult.id
-                                        ? { ...r, status: "pending", notes: null, screenshotUrl: null, executedAt: null, executedBy: null }
+                                        ? { ...r, status: "pending", notes: null, screenshotUrl: null, executedAt: null, executedBy: null, bugLinearIssueId: null, bugLinearIssueIdentifier: null }
                                         : r
                                     ));
-                                    setSelectedResult(prev => prev ? { ...prev, status: "pending", notes: null, screenshotUrl: null, executedAt: null, executedBy: null } : null);
+                                    setSelectedResult(prev => prev ? { ...prev, status: "pending", notes: null, screenshotUrl: null, executedAt: null, executedBy: null, bugLinearIssueId: null, bugLinearIssueIdentifier: null } : null);
                                     setResultHistory([]);
                                     router.refresh();
                                   }
@@ -1878,6 +1944,78 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
         </div>
       )}
 
+      {/* Bug Spawn Modal */}
+      {showBugSpawnModal && (
+        <div className="fixed inset-0 z-50">
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => { setShowBugSpawnModal(false); setBugSpawnTargetResultId(null); setBugSpawnError(null); }}
+          />
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <div
+              className="relative bg-background rounded-xl shadow-xl border border-border w-full max-w-md"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="px-6 py-4 border-b border-border">
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  <BugIcon className="w-5 h-5 text-rose-500" />
+                  Spawn a Bug Ticket?
+                </h2>
+              </div>
+              <button
+                onClick={() => { setShowBugSpawnModal(false); setBugSpawnTargetResultId(null); setBugSpawnError(null); }}
+                className="absolute top-4 right-4 w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              >
+                <CloseIcon className="w-4 h-4" />
+              </button>
+
+              <div className="px-6 py-4 space-y-3">
+                <p className="text-sm text-foreground">
+                  This will create a sub-issue on <span className="font-medium">{run.linearIssueIdentifier}</span> in Linear with:
+                </p>
+                <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1 ml-2">
+                  <li>A <span className="font-medium text-rose-600">&quot;Bug&quot;</span> label</li>
+                  <li>The failing scenario&apos;s Gherkin steps</li>
+                  <li>Any notes and screenshot references</li>
+                  <li>A link back to this test result</li>
+                </ul>
+                {bugSpawnError && (
+                  <p className="text-sm text-rose-600 bg-rose-50 dark:bg-rose-900/20 rounded-md px-3 py-2">
+                    {bugSpawnError}
+                  </p>
+                )}
+              </div>
+
+              <div className="px-6 py-4 border-t border-border flex items-center justify-end gap-2">
+                <button
+                  onClick={() => { setShowBugSpawnModal(false); setBugSpawnTargetResultId(null); setBugSpawnError(null); }}
+                  className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+                >
+                  Not Now
+                </button>
+                <button
+                  onClick={handleSpawnBug}
+                  disabled={bugSpawnPending}
+                  className="px-4 py-2 text-sm font-medium text-white rounded-md bg-rose-600 hover:bg-rose-700 disabled:opacity-50 inline-flex items-center gap-1.5"
+                >
+                  {bugSpawnPending ? (
+                    <>
+                      <LoadingIcon className="w-4 h-4 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    <>
+                      <BugIcon className="w-4 h-4" />
+                      Spawn Bug Ticket
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Screenshot Lightbox */}
       {screenshotLightbox && (
         <div
@@ -2061,6 +2199,22 @@ function DragHandleIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+    </svg>
+  );
+}
+
+function BugIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 12.75c1.148 0 2.278.08 3.383.237 1.037.146 1.866.966 1.866 2.013 0 3.728-2.35 6.75-5.25 6.75S6.75 18.728 6.75 15c0-1.046.83-1.867 1.866-2.013A24.204 24.204 0 0112 12.75zm0 0c2.883 0 5.647.508 8.207 1.44a23.91 23.91 0 01-1.152-6.135 3.001 3.001 0 00-2.32-2.862 7.516 7.516 0 00-1.59-.29A7.496 7.496 0 0012 4.5a7.496 7.496 0 00-3.145.803 7.516 7.516 0 00-1.59.29 3.001 3.001 0 00-2.32 2.862 23.91 23.91 0 01-1.152 6.135A23.893 23.893 0 0112 12.75zM2.695 18.103a21.116 21.116 0 01.713-6.162A4.503 4.503 0 001.5 8.25a.75.75 0 01.75-.75 4.5 4.5 0 014.243 3M21.305 18.103a21.116 21.116 0 00-.713-6.162A4.503 4.503 0 0022.5 8.25a.75.75 0 00-.75-.75 4.5 4.5 0 00-4.243 3" />
+    </svg>
+  );
+}
+
+function ExternalLinkIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
     </svg>
   );
 }

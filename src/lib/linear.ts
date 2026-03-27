@@ -315,6 +315,80 @@ export async function createIssueComment(input: CreateCommentInput): Promise<boo
   }
 }
 
+export interface CreateBugSubIssueInput {
+  parentIssueId: string;
+  title: string;
+  description: string;
+}
+
+export interface CreatedBugIssue {
+  id: string;
+  identifier: string;
+  title: string;
+}
+
+export async function createBugSubIssue(input: CreateBugSubIssueInput): Promise<CreatedBugIssue | null> {
+  try {
+    const client = await getLinearClient();
+
+    // Get parent issue to determine team
+    const parentIssue = await client.issue(input.parentIssueId);
+    const team = await parentIssue.team;
+    if (!team) {
+      console.error("[Linear] Parent issue has no team");
+      return null;
+    }
+
+    // Find "Bug" label
+    let bugLabelId: string | undefined;
+    try {
+      const labels = await client.issueLabels({
+        first: 50,
+        filter: { name: { eqIgnoreCase: "Bug" } },
+      });
+      if (labels.nodes.length > 0) {
+        bugLabelId = labels.nodes[0].id;
+      } else {
+        console.warn("[Linear] No 'Bug' label found in workspace, creating issue without label");
+      }
+    } catch {
+      console.warn("[Linear] Failed to search for Bug label, creating issue without label");
+    }
+
+    const createPayload = await client.createIssue({
+      title: input.title,
+      description: input.description,
+      teamId: team.id,
+      parentId: input.parentIssueId,
+      ...(bugLabelId ? { labelIds: [bugLabelId] } : {}),
+    });
+
+    if (!createPayload.success) {
+      console.error("[Linear] createIssue returned success=false");
+      return null;
+    }
+
+    const issue = await createPayload.issue;
+    if (!issue) {
+      console.error("[Linear] createIssue returned no issue");
+      return null;
+    }
+
+    return {
+      id: issue.id,
+      identifier: issue.identifier,
+      title: issue.title,
+    };
+  } catch (error) {
+    if (error instanceof LinearAuthError) {
+      console.error("[Linear] Auth error creating bug sub-issue:", error.message);
+    } else {
+      console.error("[Linear] Failed to create bug sub-issue:", error instanceof Error ? error.message : error);
+    }
+    return null;
+  }
+}
+
 export async function getReleaseLabels(): Promise<LinearLabel[]> {
   try {
     const client = await getLinearClient();

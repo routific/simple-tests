@@ -48,6 +48,8 @@ export default async function RunDetailPage({ params, searchParams }: Props) {
       scenarioTitleSnapshot: testRunResults.scenarioTitleSnapshot,
       scenarioGherkinSnapshot: testRunResults.scenarioGherkinSnapshot,
       testCaseTitleSnapshot: testRunResults.testCaseTitleSnapshot,
+      bugLinearIssueId: testRunResults.bugLinearIssueId,
+      bugLinearIssueIdentifier: testRunResults.bugLinearIssueIdentifier,
     })
     .from(testRunResults)
     .innerJoin(scenarios, eq(testRunResults.scenarioId, scenarios.id))

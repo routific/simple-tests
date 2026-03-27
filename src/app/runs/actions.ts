@@ -5,7 +5,7 @@ import { testRuns, testRunResults, testResultHistory, releases, scenarios, testC
 import { eq, and, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getSessionWithOrg } from "@/lib/auth";
-import { createIssueAttachment, deleteAttachmentByUrl, createIssueComment } from "@/lib/linear";
+import { createIssueAttachment, deleteAttachmentByUrl, createIssueComment, createBugSubIssue } from "@/lib/linear";
 import { checkAndAwardBadges } from "@/app/leaderboard/badges";
 import { serializeScreenshots } from "@/lib/utils";
 
@@ -732,6 +732,8 @@ export async function deleteAttempt(input: DeleteAttemptInput) {
           screenshotUrl: null,
           executedAt: null,
           executedBy: null,
+          bugLinearIssueId: null,
+          bugLinearIssueIdentifier: null,
         })
         .where(eq(testRunResults.id, input.resultId));
 
@@ -876,5 +878,143 @@ export async function reorderRunScenarios(runId: number, resultIds: number[]) {
   } catch (error) {
     console.error("Failed to reorder run scenarios:", error);
     return { error: "Failed to reorder scenarios" };
+  }
+}
+
+export async function spawnBugIssue(input: { resultId: number; runId: number }) {
+  const session = await getSessionWithOrg();
+  if (!session) {
+    return { error: "Unauthorized" };
+  }
+
+  const { organizationId } = session.user;
+
+  try {
+    // Fetch the test run to get the linked Linear issue
+    const run = await db
+      .select()
+      .from(testRuns)
+      .where(
+        and(eq(testRuns.id, input.runId), eq(testRuns.organizationId, organizationId))
+      )
+      .get();
+
+    if (!run) {
+      return { error: "Test run not found" };
+    }
+
+    if (!run.linearIssueId) {
+      return { error: "Test run is not linked to a Linear issue" };
+    }
+
+    // Fetch the test result with scenario data
+    const result = await db
+      .select({
+        id: testRunResults.id,
+        status: testRunResults.status,
+        notes: testRunResults.notes,
+        screenshotUrl: testRunResults.screenshotUrl,
+        scenarioId: testRunResults.scenarioId,
+        scenarioTitleSnapshot: testRunResults.scenarioTitleSnapshot,
+        scenarioGherkinSnapshot: testRunResults.scenarioGherkinSnapshot,
+        testCaseTitleSnapshot: testRunResults.testCaseTitleSnapshot,
+        bugLinearIssueId: testRunResults.bugLinearIssueId,
+        scenarioTitle: scenarios.title,
+        scenarioGherkin: scenarios.gherkin,
+        testCaseTitle: testCases.title,
+      })
+      .from(testRunResults)
+      .innerJoin(scenarios, eq(testRunResults.scenarioId, scenarios.id))
+      .innerJoin(testCases, eq(scenarios.testCaseId, testCases.id))
+      .where(
+        and(
+          eq(testRunResults.id, input.resultId),
+          eq(testRunResults.testRunId, input.runId)
+        )
+      )
+      .get();
+
+    if (!result) {
+      return { error: "Test result not found" };
+    }
+
+    if (result.bugLinearIssueId) {
+      return { error: "A bug ticket has already been created for this result" };
+    }
+
+    // Build bug description
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://simple-tests.routific.com";
+    const resultUrl = `${baseUrl}/runs/${input.runId}?scenario=${result.scenarioId}`;
+    const scenarioTitle = result.scenarioTitleSnapshot || result.scenarioTitle;
+    const testCaseTitle = result.testCaseTitleSnapshot || result.testCaseTitle;
+    const gherkin = result.scenarioGherkinSnapshot || result.scenarioGherkin;
+
+    const lines: string[] = [];
+    lines.push("## Failed Test Scenario");
+    lines.push("");
+    lines.push(`**Test Case:** ${testCaseTitle}`);
+    lines.push(`**Scenario:** ${scenarioTitle}`);
+    if (run.environment) {
+      lines.push(`**Environment:** ${run.environment.charAt(0).toUpperCase() + run.environment.slice(1)}`);
+    }
+    lines.push("");
+    lines.push("### Steps (Gherkin)");
+    lines.push("");
+    lines.push("```gherkin");
+    lines.push(gherkin);
+    lines.push("```");
+
+    if (result.notes) {
+      lines.push("");
+      lines.push("### Notes");
+      lines.push("");
+      lines.push(`> ${result.notes}`);
+    }
+
+    if (result.screenshotUrl) {
+      lines.push("");
+      lines.push("### Screenshots");
+      lines.push("");
+      lines.push("Screenshot(s) attached to the test result — see link below.");
+    }
+
+    lines.push("");
+    lines.push("---");
+    lines.push("");
+    lines.push(`[View failed test result →](${resultUrl})`);
+
+    const description = lines.join("\n");
+    const title = `Bug: ${scenarioTitle}`;
+
+    const bugIssue = await createBugSubIssue({
+      parentIssueId: run.linearIssueId,
+      title,
+      description,
+    });
+
+    if (!bugIssue) {
+      return { error: "Failed to create bug ticket in Linear. Check that your Linear connection is active." };
+    }
+
+    // Store bug issue reference on the test result
+    await db
+      .update(testRunResults)
+      .set({
+        bugLinearIssueId: bugIssue.id,
+        bugLinearIssueIdentifier: bugIssue.identifier,
+      })
+      .where(eq(testRunResults.id, input.resultId));
+
+    revalidatePath("/runs");
+    revalidatePath(`/runs/${input.runId}`);
+
+    return {
+      success: true,
+      bugIssueId: bugIssue.id,
+      bugIssueIdentifier: bugIssue.identifier,
+    };
+  } catch (error) {
+    console.error("Failed to spawn bug issue:", error);
+    return { error: "Failed to create bug ticket" };
   }
 }
