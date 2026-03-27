@@ -1952,58 +1952,86 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
       )}
 
       {/* Bug Spawn Modal */}
-      {showBugSpawnModal && (
+      {showBugSpawnModal && (() => {
+        const targetResult = results.find(r => r.id === bugSpawnTargetResultId);
+        const targetTitle = targetResult
+          ? (targetResult.scenarioTitleSnapshot || targetResult.scenarioTitle)
+          : "this scenario";
+        return (
         <div className="fixed inset-0 z-50">
           <div
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-fade-in"
             onClick={() => { setShowBugSpawnModal(false); setBugSpawnTargetResultId(null); setBugSpawnError(null); }}
           />
           <div className="absolute inset-0 flex items-center justify-center p-4">
             <div
-              className="relative bg-background rounded-xl shadow-xl border border-border w-full max-w-md"
+              className="relative bg-background rounded-2xl shadow-xl border border-border w-full max-w-md animate-slide-up overflow-hidden"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="px-6 py-4 border-b border-border">
-                <h2 className="text-lg font-semibold flex items-center gap-2">
-                  <BugIcon className="w-5 h-5 text-rose-500" />
-                  Spawn a Bug Ticket?
-                </h2>
-              </div>
+              {/* Accent top bar */}
+              <div className="h-1 bg-gradient-to-r from-brand-500 via-rose-500 to-rose-400" />
+
               <button
                 onClick={() => { setShowBugSpawnModal(false); setBugSpawnTargetResultId(null); setBugSpawnError(null); }}
-                className="absolute top-4 right-4 w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                className="absolute top-4 right-4 w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors z-10"
               >
                 <CloseIcon className="w-4 h-4" />
               </button>
 
-              <div className="px-6 py-4 space-y-3">
-                <p className="text-sm text-foreground">
-                  This will create a sub-issue on <span className="font-medium">{run.linearIssueIdentifier}</span> in Linear with:
-                </p>
-                <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1 ml-2">
-                  <li>A <span className="font-medium text-rose-600">&quot;Bug&quot;</span> label</li>
-                  <li>The failing scenario&apos;s Gherkin steps</li>
-                  <li>Any notes and screenshot references</li>
-                  <li>A link back to this test result</li>
-                </ul>
+              <div className="px-6 pt-5 pb-4">
+                {/* Icon + Title */}
+                <div className="flex items-start gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-900/40 flex items-center justify-center flex-shrink-0">
+                    <BugIcon className="w-5 h-5 text-rose-600 dark:text-rose-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <h2 className="text-base font-semibold text-foreground">Log a bug for this failure?</h2>
+                    <p className="text-sm text-muted-foreground mt-0.5 truncate" title={targetTitle}>{targetTitle}</p>
+                  </div>
+                </div>
+
+                {/* What will happen */}
+                <div className="rounded-lg bg-muted/50 border border-border px-4 py-3 space-y-2.5">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">What happens</p>
+                  <div className="space-y-2">
+                    <div className="flex items-start gap-2.5 text-sm">
+                      <LinearIcon className="w-4 h-4 text-brand-500 flex-shrink-0 mt-0.5" />
+                      <span className="text-foreground">A sub-issue is created on <span className="font-medium text-brand-600 dark:text-brand-400">{run.linearIssueIdentifier}</span></span>
+                    </div>
+                    <div className="flex items-start gap-2.5 text-sm">
+                      <span className="w-4 h-4 flex items-center justify-center flex-shrink-0 mt-0.5 text-rose-500">
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" /><path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" /></svg>
+                      </span>
+                      <span className="text-foreground">Tagged with the <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300">Bug</span> label</span>
+                    </div>
+                    <div className="flex items-start gap-2.5 text-sm">
+                      <span className="w-4 h-4 flex items-center justify-center flex-shrink-0 mt-0.5 text-muted-foreground">
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
+                      </span>
+                      <span className="text-foreground">Includes steps, notes &amp; screenshot references</span>
+                    </div>
+                  </div>
+                </div>
+
                 {bugSpawnError && (
-                  <p className="text-sm text-rose-600 bg-rose-50 dark:bg-rose-900/20 rounded-md px-3 py-2">
-                    {bugSpawnError}
-                  </p>
+                  <div className="mt-3 flex items-start gap-2 text-sm text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 rounded-lg px-3 py-2.5 border border-rose-200 dark:border-rose-800/50">
+                    <WarningIcon className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                    <span>{bugSpawnError}</span>
+                  </div>
                 )}
               </div>
 
-              <div className="px-6 py-4 border-t border-border flex items-center justify-end gap-2">
+              <div className="px-6 py-4 border-t border-border flex items-center justify-end gap-2 bg-muted/30">
                 <button
                   onClick={() => { setShowBugSpawnModal(false); setBugSpawnTargetResultId(null); setBugSpawnError(null); }}
-                  className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+                  className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-colors"
                 >
-                  Not Now
+                  Not now
                 </button>
                 <button
                   onClick={handleSpawnBug}
                   disabled={bugSpawnPending}
-                  className="px-4 py-2 text-sm font-medium text-white rounded-md bg-rose-600 hover:bg-rose-700 disabled:opacity-50 inline-flex items-center gap-1.5"
+                  className="px-4 py-2 text-sm font-medium text-white rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 inline-flex items-center gap-1.5 shadow-sm transition-colors"
                 >
                   {bugSpawnPending ? (
                     <>
@@ -2013,7 +2041,7 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
                   ) : (
                     <>
                       <BugIcon className="w-4 h-4" />
-                      Spawn Bug Ticket
+                      Create bug ticket
                     </>
                   )}
                 </button>
@@ -2021,7 +2049,8 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Screenshot Lightbox */}
       {screenshotLightbox && (
