@@ -1462,32 +1462,28 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
                       )}
                       {/* Bug ticket: link or spawn button */}
                       {selectedResult.bugLinearIssueIdentifier && linearWorkspace ? (
-                        <div className="mt-2">
-                          <a
-                            href={`https://linear.app/${linearWorkspace}/issue/${selectedResult.bugLinearIssueIdentifier}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs text-rose-600 hover:underline inline-flex items-center gap-1"
-                          >
-                            <BugIcon className="w-3.5 h-3.5" />
-                            {selectedResult.bugLinearIssueIdentifier}
-                            <ExternalLinkIcon className="w-3 h-3" />
-                          </a>
-                        </div>
+                        <a
+                          href={`https://linear.app/${linearWorkspace}/issue/${selectedResult.bugLinearIssueIdentifier}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-2 px-2.5 py-1.5 rounded-md border border-rose-200 dark:border-rose-800/50 bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400 text-xs font-medium inline-flex items-center gap-1.5 hover:bg-rose-100 dark:hover:bg-rose-950/50 transition-colors"
+                        >
+                          <BugIcon className="w-3.5 h-3.5" />
+                          {selectedResult.bugLinearIssueIdentifier}
+                          <ExternalLinkIcon className="w-3 h-3 opacity-60" />
+                        </a>
                       ) : selectedResult.status === "failed" && run.linearIssueId && !selectedResult.bugLinearIssueId ? (
-                        <div className="mt-2">
-                          <button
-                            onClick={() => {
-                              setBugSpawnTargetResultId(selectedResult.id);
-                              setBugSpawnError(null);
-                              setShowBugSpawnModal(true);
-                            }}
-                            className="text-xs text-rose-600 hover:text-rose-700 hover:underline inline-flex items-center gap-1"
-                          >
-                            <BugIcon className="w-3.5 h-3.5" />
-                            Spawn bug issue
-                          </button>
-                        </div>
+                        <button
+                          onClick={() => {
+                            setBugSpawnTargetResultId(selectedResult.id);
+                            setBugSpawnError(null);
+                            setShowBugSpawnModal(true);
+                          }}
+                          className="mt-2 px-2.5 py-1.5 rounded-md border border-rose-200 dark:border-rose-800/50 text-rose-600 dark:text-rose-400 text-xs font-medium inline-flex items-center gap-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+                        >
+                          <BugIcon className="w-3.5 h-3.5" />
+                          Spawn bug issue
+                        </button>
                       ) : null}
                     </div>
                     {/* Previous attempts */}
