@@ -169,6 +169,17 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
     }
   }, [selectedResult?.id, selectedResult?.status]);
 
+  // Show bug spawn modal after transition settles (avoids race with router.refresh)
+  useEffect(() => {
+    if (!isPending && pendingBugSpawnRef.current !== null) {
+      const targetId = pendingBugSpawnRef.current;
+      pendingBugSpawnRef.current = null;
+      setBugSpawnTargetResultId(targetId);
+      setBugSpawnError(null);
+      setShowBugSpawnModal(true);
+    }
+  }, [isPending]);
+
   // Compress image to JPEG data URL
   const compressImage = useCallback((file: File, maxWidth = 1920, quality = 0.8): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -256,6 +267,7 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
   const [bugSpawnTargetResultId, setBugSpawnTargetResultId] = useState<number | null>(null);
   const [bugSpawnPending, setBugSpawnPending] = useState(false);
   const [bugSpawnError, setBugSpawnError] = useState<string | null>(null);
+  const pendingBugSpawnRef = useRef<number | null>(null);
 
   // Linear edit state
   const [projects, setProjects] = useState<LinearProject[]>([]);
@@ -626,11 +638,9 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
       }
     }
 
-    // Prompt to spawn a bug ticket when failing a test on a run linked to a Linear issue
+    // Flag intent to show bug spawn modal — actual show happens after transition settles
     if (status === "failed" && run.linearIssueId && !selectedResult.bugLinearIssueId) {
-      setBugSpawnTargetResultId(selectedResult.id);
-      setBugSpawnError(null);
-      setShowBugSpawnModal(true);
+      pendingBugSpawnRef.current = selectedResult.id;
     }
 
     startTransition(async () => {
