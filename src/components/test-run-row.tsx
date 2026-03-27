@@ -51,8 +51,9 @@ export function TestRunRow({
   onDragEnd,
 }: TestRunRowProps) {
   const router = useRouter();
-  const passRate = run.total > 0
-    ? Math.round(((run.stats.passed || 0) / run.total) * 100)
+  const executed = (run.stats.passed || 0) + (run.stats.failed || 0) + (run.stats.blocked || 0) + (run.stats.skipped || 0);
+  const progress = run.total > 0
+    ? Math.round((executed / run.total) * 100)
     : 0;
 
   const handleRowClick = (e: React.MouseEvent) => {
@@ -141,12 +142,12 @@ export function TestRunRow({
           <div className="flex items-center gap-3">
             <div className="w-28 h-2 bg-muted rounded-full overflow-hidden">
               <div
-                className="h-full bg-gradient-to-r from-green-500 to-emerald-500 transition-all duration-500"
-                style={{ width: `${passRate}%` }}
+                className="h-full bg-gradient-to-r from-blue-500 to-blue-400 transition-all duration-500"
+                style={{ width: `${progress}%` }}
               />
             </div>
             <span className="text-sm font-medium text-muted-foreground w-10 tabular-nums">
-              {passRate}%
+              {progress}%
             </span>
           </div>
         )}
