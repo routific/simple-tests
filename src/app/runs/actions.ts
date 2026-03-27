@@ -881,7 +881,7 @@ export async function reorderRunScenarios(runId: number, resultIds: number[]) {
   }
 }
 
-export async function spawnBugIssue(input: { resultId: number; runId: number }) {
+export async function spawnBugIssue(input: { resultId: number; runId: number; title?: string }) {
   const session = await getSessionWithOrg();
   if (!session) {
     return { error: "Unauthorized" };
@@ -998,7 +998,7 @@ export async function spawnBugIssue(input: { resultId: number; runId: number }) 
     lines.push(`[View failed test result →](${resultUrl})`);
 
     const description = lines.join("\n");
-    const title = `Bug: ${scenarioTitle}`;
+    const title = input.title || `Bug: ${scenarioTitle}`;
 
     const bugIssue = await createBugSubIssue({
       parentIssueId: run.linearIssueId,

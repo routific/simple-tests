@@ -174,11 +174,16 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
     if (!isPending && pendingBugSpawnRef.current !== null) {
       const targetId = pendingBugSpawnRef.current;
       pendingBugSpawnRef.current = null;
+      const targetResult = results.find(r => r.id === targetId);
+      const defaultTitle = targetResult
+        ? `Bug: ${targetResult.scenarioTitleSnapshot || targetResult.scenarioTitle}`
+        : "Bug";
       setBugSpawnTargetResultId(targetId);
       setBugSpawnError(null);
+      setBugSpawnTitle(defaultTitle);
       setShowBugSpawnModal(true);
     }
-  }, [isPending]);
+  }, [isPending, results]);
 
   // Compress image to JPEG data URL
   const compressImage = useCallback((file: File, maxWidth = 1920, quality = 0.8): Promise<string> => {
@@ -267,6 +272,7 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
   const [bugSpawnTargetResultId, setBugSpawnTargetResultId] = useState<number | null>(null);
   const [bugSpawnPending, setBugSpawnPending] = useState(false);
   const [bugSpawnError, setBugSpawnError] = useState<string | null>(null);
+  const [bugSpawnTitle, setBugSpawnTitle] = useState("");
   const pendingBugSpawnRef = useRef<number | null>(null);
 
   // Linear edit state
@@ -664,6 +670,7 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
     const result = await spawnBugIssue({
       resultId: bugSpawnTargetResultId,
       runId: run.id,
+      title: bugSpawnTitle.trim() || undefined,
     });
     if (result.success && result.bugIssueIdentifier) {
       // Update local results state with bug issue info
@@ -1489,6 +1496,7 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
                           onClick={() => {
                             setBugSpawnTargetResultId(selectedResult.id);
                             setBugSpawnError(null);
+                            setBugSpawnTitle(`Bug: ${selectedResult.scenarioTitleSnapshot || selectedResult.scenarioTitle}`);
                             setShowBugSpawnModal(true);
                           }}
                           className="mt-2 px-2.5 py-1.5 rounded-md border border-rose-200 dark:border-rose-800/50 text-rose-600 dark:text-rose-400 text-xs font-medium inline-flex items-center gap-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
@@ -2002,6 +2010,18 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
                   </div>
                 </div>
 
+                {/* Title field */}
+                <div className="mb-4">
+                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Ticket title</label>
+                  <input
+                    type="text"
+                    value={bugSpawnTitle}
+                    onChange={(e) => setBugSpawnTitle(e.target.value)}
+                    placeholder="Bug: ..."
+                    className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-background focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                  />
+                </div>
+
                 {/* What will happen */}
                 <div className="rounded-lg bg-muted/50 border border-border px-4 py-3 space-y-2.5">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">What happens</p>
@@ -2026,9 +2046,20 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
                 </div>
 
                 {bugSpawnError && (
-                  <div className="mt-3 flex items-start gap-2 text-sm text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 rounded-lg px-3 py-2.5 border border-rose-200 dark:border-rose-800/50">
-                    <WarningIcon className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                    <span>{bugSpawnError}</span>
+                  <div className="mt-3 text-sm text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 rounded-lg px-3 py-2.5 border border-rose-200 dark:border-rose-800/50 space-y-2">
+                    <div className="flex items-start gap-2">
+                      <WarningIcon className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                      <span>{bugSpawnError}</span>
+                    </div>
+                    {bugSpawnError.toLowerCase().includes("linear") && (
+                      <button
+                        onClick={() => signIn("linear")}
+                        className="ml-6 text-xs font-medium text-brand-600 dark:text-brand-400 hover:underline inline-flex items-center gap-1"
+                      >
+                        <LinearIcon className="w-3.5 h-3.5" />
+                        Re-auth with Linear
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
