@@ -626,6 +626,8 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
     } else {
       // Stay on current result but update it
       setSelectedResult(updatedResult);
+      setNotes("");
+      setScreenshotDataUrls([]);
 
       // Check if all scenarios are now executed (including the one just updated)
       const wasLastPending = selectedResult.status === "pending" &&
