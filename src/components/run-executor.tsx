@@ -4,7 +4,7 @@ import { useState, useTransition, useMemo, useEffect, useCallback, useRef } from
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import Link from "next/link";
-import { cn } from "@/lib/utils";
+import { cn, parseScreenshots, serializeScreenshots } from "@/lib/utils";
 import { buildFolderBreadcrumb, formatBreadcrumb } from "@/lib/folders";
 import { GherkinDisplay } from "./gherkin-editor";
 import { ReleasePicker } from "./release-picker";
@@ -118,7 +118,7 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
     return initialResults.find((r) => r.status === "pending") || initialResults[0] || null;
   });
   const [notes, setNotes] = useState("");
-  const [screenshotDataUrl, setScreenshotDataUrl] = useState<string | null>(null);
+  const [screenshotDataUrls, setScreenshotDataUrls] = useState<string[]>([]);
   const [screenshotLightbox, setScreenshotLightbox] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -209,7 +209,7 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
           if (!file) continue;
           try {
             const dataUrl = await compressImage(file);
-            setScreenshotDataUrl(dataUrl);
+            setScreenshotDataUrls(prev => [...prev, dataUrl]);
           } catch {
             alert("Image too large. Please use a smaller screenshot.");
           }
@@ -228,7 +228,7 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
     if (!file) return;
     try {
       const dataUrl = await compressImage(file);
-      setScreenshotDataUrl(dataUrl);
+      setScreenshotDataUrls(prev => [...prev, dataUrl]);
     } catch {
       alert("Image too large. Please use a smaller screenshot.");
     }
@@ -566,14 +566,14 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
     const executedAt = new Date();
     const currentNotes = notes.trim() || null;
 
-    const currentScreenshot = screenshotDataUrl || null;
+    const currentScreenshots = [...screenshotDataUrls];
 
     // Optimistically update local state
     const updatedResult: Result = {
       ...selectedResult,
       status,
       notes: currentNotes,
-      screenshotUrl: currentScreenshot,
+      screenshotUrl: serializeScreenshots(currentScreenshots),
       executedAt,
       executedBy: currentUser.id,
       // Capture snapshots (same as server does)
@@ -596,7 +596,7 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
     if (nextPending) {
       setSelectedResult(nextPending);
       setNotes("");
-      setScreenshotDataUrl(null);
+      setScreenshotDataUrls([]);
     } else {
       // Stay on current result but update it
       setSelectedResult(updatedResult);
@@ -617,7 +617,7 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
         resultId: selectedResult.id,
         status,
         notes: currentNotes || undefined,
-        screenshotUrl: currentScreenshot,
+        screenshotUrls: currentScreenshots,
       });
 
       router.refresh();
@@ -1395,17 +1395,22 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
                       {selectedResult.notes && (
                         <p className="mt-1 text-muted-foreground">{selectedResult.notes}</p>
                       )}
-                      {selectedResult.screenshotUrl && (
-                        <button
-                          onClick={() => setScreenshotLightbox(selectedResult.screenshotUrl)}
-                          className="mt-2 block"
-                        >
-                          <img
-                            src={selectedResult.screenshotUrl}
-                            alt="Screenshot"
-                            className="max-h-32 rounded border border-[hsl(var(--border))] hover:opacity-80 transition-opacity cursor-zoom-in"
-                          />
-                        </button>
+                      {parseScreenshots(selectedResult.screenshotUrl).length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {parseScreenshots(selectedResult.screenshotUrl).map((url, i) => (
+                            <button
+                              key={i}
+                              onClick={() => setScreenshotLightbox(url)}
+                              className="block"
+                            >
+                              <img
+                                src={url}
+                                alt={`Screenshot ${i + 1}`}
+                                className="max-h-32 rounded border border-[hsl(var(--border))] hover:opacity-80 transition-opacity cursor-zoom-in"
+                              />
+                            </button>
+                          ))}
+                        </div>
                       )}
                     </div>
                     {/* Previous attempts */}
@@ -1478,17 +1483,22 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
                         {entry.notes && (
                           <p className="mt-1 text-muted-foreground">{entry.notes}</p>
                         )}
-                        {entry.screenshotUrl && (
-                          <button
-                            onClick={() => setScreenshotLightbox(entry.screenshotUrl)}
-                            className="mt-2 block"
-                          >
-                            <img
-                              src={entry.screenshotUrl}
-                              alt="Screenshot"
-                              className="max-h-24 rounded border border-[hsl(var(--border))] hover:opacity-80 transition-opacity cursor-zoom-in"
-                            />
-                          </button>
+                        {parseScreenshots(entry.screenshotUrl).length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {parseScreenshots(entry.screenshotUrl).map((url, i) => (
+                              <button
+                                key={i}
+                                onClick={() => setScreenshotLightbox(url)}
+                                className="block"
+                              >
+                                <img
+                                  src={url}
+                                  alt={`Screenshot ${i + 1}`}
+                                  className="max-h-24 rounded border border-[hsl(var(--border))] hover:opacity-80 transition-opacity cursor-zoom-in"
+                                />
+                              </button>
+                            ))}
+                          </div>
                         )}
                       </div>
                     ))}
@@ -1518,23 +1528,24 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
                       onChange={handleFileSelect}
                       className="hidden"
                     />
-                    {screenshotDataUrl ? (
-                      <div className="relative inline-block group">
-                        <img
-                          src={screenshotDataUrl}
-                          alt="Screenshot preview"
-                          className="max-h-28 rounded border border-[hsl(var(--border))] cursor-zoom-in"
-                          onClick={() => setScreenshotLightbox(screenshotDataUrl)}
-                        />
-                        <button
-                          onClick={() => setScreenshotDataUrl(null)}
-                          className="absolute -top-2 -right-2 w-5 h-5 bg-rose-500 text-white rounded-full flex items-center justify-center text-xs hover:bg-rose-600 shadow-sm"
-                          title="Remove screenshot"
-                        >
-                          &times;
-                        </button>
-                      </div>
-                    ) : (
+                    <div className="flex flex-wrap gap-2 items-end">
+                      {screenshotDataUrls.map((url, i) => (
+                        <div key={i} className="relative inline-block group">
+                          <img
+                            src={url}
+                            alt={`Screenshot ${i + 1}`}
+                            className="max-h-28 rounded border border-[hsl(var(--border))] cursor-zoom-in"
+                            onClick={() => setScreenshotLightbox(url)}
+                          />
+                          <button
+                            onClick={() => setScreenshotDataUrls(prev => prev.filter((_, j) => j !== i))}
+                            className="absolute -top-2 -right-2 w-5 h-5 bg-rose-500 text-white rounded-full flex items-center justify-center text-xs hover:bg-rose-600 shadow-sm"
+                            title="Remove screenshot"
+                          >
+                            &times;
+                          </button>
+                        </div>
+                      ))}
                       <button
                         onClick={() => fileInputRef.current?.click()}
                         className="text-xs text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1"
@@ -1543,10 +1554,10 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
                           <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
                           <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z" />
                         </svg>
-                        Attach screenshot
-                        <span className="opacity-50">(or paste)</span>
+                        {screenshotDataUrls.length > 0 ? "Add another" : "Attach screenshot"}
+                        {screenshotDataUrls.length === 0 && <span className="opacity-50">(or paste)</span>}
                       </button>
-                    )}
+                    </div>
                   </div>
 
                   <div className="flex gap-2">

@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { getSessionWithOrg } from "@/lib/auth";
 import { createIssueAttachment, deleteAttachmentByUrl, createIssueComment } from "@/lib/linear";
 import { checkAndAwardBadges } from "@/app/leaderboard/badges";
+import { serializeScreenshots } from "@/lib/utils";
 
 interface CreateRunInput {
   name: string;
@@ -113,7 +114,7 @@ interface UpdateResultInput {
   resultId: number;
   status: "pending" | "passed" | "failed" | "blocked" | "skipped";
   notes?: string;
-  screenshotUrl?: string | null;
+  screenshotUrls?: string[];
 }
 
 export async function updateTestResult(input: UpdateResultInput) {
@@ -173,8 +174,8 @@ export async function updateTestResult(input: UpdateResultInput) {
       executedBy: userId,
     };
 
-    if (input.screenshotUrl !== undefined) {
-      updateData.screenshotUrl = input.screenshotUrl;
+    if (input.screenshotUrls !== undefined) {
+      updateData.screenshotUrl = serializeScreenshots(input.screenshotUrls);
     }
 
     // Capture snapshot if moving to a non-pending status and no snapshot exists yet

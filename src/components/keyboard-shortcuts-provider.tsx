@@ -386,6 +386,13 @@ function Kbd({ children }: { children: ReactNode }) {
 // Changelog entries - newest first
 const CHANGELOG = [
   {
+    version: "PENDING",
+    date: "2026-03-26",
+    changes: [
+      "Support multiple screenshots per test result — paste or attach as many as needed",
+    ],
+  },
+  {
     version: "68fb851",
     date: "2026-03-26",
     changes: [
