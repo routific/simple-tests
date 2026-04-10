@@ -386,7 +386,7 @@ function Kbd({ children }: { children: ReactNode }) {
 // Changelog entries - newest first
 const CHANGELOG = [
   {
-    version: "HEAD",
+    version: "740ab72",
     date: "2026-04-10",
     changes: [
       "MCP: add_scenarios_to_run tool — add new test cases to an existing test run via the MCP server",
