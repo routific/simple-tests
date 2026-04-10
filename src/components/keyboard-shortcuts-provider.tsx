@@ -386,6 +386,13 @@ function Kbd({ children }: { children: ReactNode }) {
 // Changelog entries - newest first
 const CHANGELOG = [
   {
+    version: "5427dad",
+    date: "2026-04-10",
+    changes: [
+      "Add Scenarios modal: browse test cases by folder hierarchy instead of only searching",
+    ],
+  },
+  {
     version: "740ab72",
     date: "2026-04-10",
     changes: [
