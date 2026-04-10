@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import Link from "next/link";
 import { cn, parseScreenshots, serializeScreenshots } from "@/lib/utils";
-import { buildFolderBreadcrumb, formatBreadcrumb } from "@/lib/folders";
+import { buildFolderBreadcrumb, buildFolderTree, formatBreadcrumb } from "@/lib/folders";
+import type { FolderWithChildren } from "@/lib/folders";
 import { GherkinDisplay } from "./gherkin-editor";
 import { ReleasePicker } from "./release-picker";
 import { Input } from "./ui/input";
@@ -79,6 +80,7 @@ interface AvailableScenario {
   title: string;
   testCaseId: number;
   testCaseTitle: string;
+  folderId: number | null;
   folderName: string | null;
 }
 
@@ -263,6 +265,9 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
   const [releases, setReleases] = useState<Release[]>(initialReleases);
   const [showAddScenarios, setShowAddScenarios] = useState(false);
   const [scenarioSearch, setScenarioSearch] = useState("");
+  const [addScenariosMode, setAddScenariosMode] = useState<"search" | "browse">("search");
+  const [expandedFolders, setExpandedFolders] = useState<Set<number | "root">>(new Set());
+  const [expandedTestCases, setExpandedTestCases] = useState<Set<number>>(new Set());
   const [runSearch, setRunSearch] = useState("");
   const [selectedToAdd, setSelectedToAdd] = useState<Set<number>>(new Set());
   const [selectedToRemove, setSelectedToRemove] = useState<Set<number>>(new Set());
@@ -373,6 +378,46 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
   const totalAvailableToAdd = useMemo(() => {
     return groupedByTestCase.reduce((sum, group) => sum + group.availableCount, 0);
   }, [groupedByTestCase]);
+
+  // Build folder tree for browse mode
+  const browseTree = useMemo(() => {
+    // Group scenarios by test case, with inRun flag
+    const testCaseMap = new Map<number, {
+      testCaseId: number;
+      testCaseTitle: string;
+      folderId: number | null;
+      scenarios: Array<AvailableScenario & { inRun: boolean }>;
+    }>();
+    for (const s of availableScenarios) {
+      const inRun = existingScenarioIds.has(s.id);
+      const existing = testCaseMap.get(s.testCaseId);
+      if (existing) {
+        existing.scenarios.push({ ...s, inRun });
+      } else {
+        testCaseMap.set(s.testCaseId, {
+          testCaseId: s.testCaseId,
+          testCaseTitle: s.testCaseTitle,
+          folderId: s.folderId,
+          scenarios: [{ ...s, inRun }],
+        });
+      }
+    }
+    const testCases = Array.from(testCaseMap.values());
+
+    // Build folder tree from the folders prop, adding caseCount
+    const foldersWithCount = folders.map(f => ({
+      ...f,
+      order: 0,
+      organizationId: "",
+      caseCount: testCases.filter(tc => tc.folderId === f.id).length,
+    }));
+    const tree = buildFolderTree(foldersWithCount);
+
+    // Test cases without a folder (root level)
+    const rootTestCases = testCases.filter(tc => tc.folderId === null);
+
+    return { tree, testCases, rootTestCases };
+  }, [availableScenarios, existingScenarioIds, folders]);
 
   // Filter results for run search
   const filteredResults = useMemo(() => {
@@ -1708,6 +1753,7 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
               setShowAddScenarios(false);
               setSelectedToAdd(new Set());
               setScenarioSearch("");
+              setAddScenariosMode("search");
             }}
           />
           {/* Modal */}
@@ -1717,20 +1763,52 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
               onClick={(e) => e.stopPropagation()}
             >
               <div className="px-6 py-4 border-b border-border">
-                <h2 className="text-lg font-semibold">Add Scenarios</h2>
-                <p className="text-sm text-muted-foreground mt-1">Select scenarios to add to this test run</p>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold">Add Scenarios</h2>
+                    <p className="text-sm text-muted-foreground mt-1">Select scenarios to add to this test run</p>
+                  </div>
+                  <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5 mr-8">
+                    <button
+                      onClick={() => setAddScenariosMode("search")}
+                      className={cn(
+                        "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
+                        addScenariosMode === "search"
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      <SearchIcon className="w-3.5 h-3.5 inline-block mr-1" />
+                      Search
+                    </button>
+                    <button
+                      onClick={() => setAddScenariosMode("browse")}
+                      className={cn(
+                        "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
+                        addScenariosMode === "browse"
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      <FolderIcon className="w-3.5 h-3.5 inline-block mr-1" />
+                      Browse
+                    </button>
+                  </div>
+                </div>
               </div>
               <button
                 onClick={() => {
                   setShowAddScenarios(false);
                   setSelectedToAdd(new Set());
                   setScenarioSearch("");
+                  setAddScenariosMode("search");
                 }}
                 className="absolute top-4 right-4 w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
               >
                 <CloseIcon className="w-4 h-4" />
               </button>
 
+            {addScenariosMode === "search" && (
             <div className="px-6 py-4 border-b border-border">
               <Input
                 type="text"
@@ -1741,113 +1819,133 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
                 autoFocus
               />
             </div>
+            )}
 
             <div className="flex-1 overflow-auto">
-              {groupedByTestCase.length === 0 ? (
-                <div className="p-8 text-center text-[hsl(var(--muted-foreground))]">
-                  {scenarioSearch ? "No matching scenarios found" : "No scenarios available"}
-                </div>
-              ) : totalAvailableToAdd === 0 && !scenarioSearch ? (
-                <div className="p-8 text-center text-[hsl(var(--muted-foreground))]">
-                  All scenarios are already in this run
-                </div>
-              ) : (
-                <div className="divide-y divide-[hsl(var(--border))]">
-                  {groupedByTestCase.map((group) => {
-                    const availableScenarios = group.scenarios.filter(s => !s.inRun);
-                    const allAvailableSelected = availableScenarios.length > 0 && availableScenarios.every(s => selectedToAdd.has(s.id));
-                    const someAvailableSelected = availableScenarios.some(s => selectedToAdd.has(s.id));
-                    const hasAvailableScenarios = availableScenarios.length > 0;
-                    const toggleAll = () => {
-                      if (!hasAvailableScenarios) return;
-                      setSelectedToAdd(prev => {
-                        const next = new Set(prev);
-                        if (allAvailableSelected) {
-                          availableScenarios.forEach(s => next.delete(s.id));
-                        } else {
-                          availableScenarios.forEach(s => next.add(s.id));
-                        }
-                        return next;
-                      });
-                    };
-                    return (
-                      <div key={group.testCaseId}>
-                        {/* Test case header */}
-                        <div
-                          className={cn(
-                            "flex items-center gap-3 p-3 bg-muted/30",
-                            hasAvailableScenarios && "cursor-pointer hover:bg-[hsl(var(--muted))]",
-                            allAvailableSelected && "bg-brand-50 dark:bg-brand-900/20"
-                          )}
-                          onClick={hasAvailableScenarios ? toggleAll : undefined}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={allAvailableSelected}
-                            disabled={!hasAvailableScenarios}
-                            ref={(el) => { if (el) el.indeterminate = someAvailableSelected && !allAvailableSelected; }}
-                            onChange={toggleAll}
+              {addScenariosMode === "search" ? (
+                /* Search mode */
+                groupedByTestCase.length === 0 ? (
+                  <div className="p-8 text-center text-[hsl(var(--muted-foreground))]">
+                    {scenarioSearch ? "No matching scenarios found" : "No scenarios available"}
+                  </div>
+                ) : totalAvailableToAdd === 0 && !scenarioSearch ? (
+                  <div className="p-8 text-center text-[hsl(var(--muted-foreground))]">
+                    All scenarios are already in this run
+                  </div>
+                ) : (
+                  <div className="divide-y divide-[hsl(var(--border))]">
+                    {groupedByTestCase.map((group) => {
+                      const availableScenarios = group.scenarios.filter(s => !s.inRun);
+                      const allAvailableSelected = availableScenarios.length > 0 && availableScenarios.every(s => selectedToAdd.has(s.id));
+                      const someAvailableSelected = availableScenarios.some(s => selectedToAdd.has(s.id));
+                      const hasAvailableScenarios = availableScenarios.length > 0;
+                      const toggleAll = () => {
+                        if (!hasAvailableScenarios) return;
+                        setSelectedToAdd(prev => {
+                          const next = new Set(prev);
+                          if (allAvailableSelected) {
+                            availableScenarios.forEach(s => next.delete(s.id));
+                          } else {
+                            availableScenarios.forEach(s => next.add(s.id));
+                          }
+                          return next;
+                        });
+                      };
+                      return (
+                        <div key={group.testCaseId}>
+                          {/* Test case header */}
+                          <div
                             className={cn(
-                              "rounded border-gray-300",
-                              !hasAvailableScenarios && "opacity-50"
+                              "flex items-center gap-3 p-3 bg-muted/30",
+                              hasAvailableScenarios && "cursor-pointer hover:bg-[hsl(var(--muted))]",
+                              allAvailableSelected && "bg-brand-50 dark:bg-brand-900/20"
                             )}
-                          />
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium">{group.testCaseTitle}</div>
-                            {group.folderName && (
-                              <div className="text-xs text-[hsl(var(--muted-foreground))]">{group.folderName}</div>
-                            )}
-                          </div>
-                          <span className="text-xs text-[hsl(var(--muted-foreground))]">
-                            {group.inRunCount > 0 ? (
-                              <span className="text-brand-600 dark:text-brand-400">
-                                {group.inRunCount} of {group.scenarios.length} in run
-                              </span>
-                            ) : (
-                              <span>{group.scenarios.length} scenario{group.scenarios.length !== 1 ? "s" : ""}</span>
-                            )}
-                          </span>
-                        </div>
-                        {/* Scenarios */}
-                        {group.scenarios.map((scenario) => (
-                          scenario.inRun ? (
-                            <div
-                              key={scenario.id}
-                              className="flex items-center gap-3 p-3 pl-9 bg-muted/20 opacity-60"
-                            >
-                              <div className="w-4 h-4 rounded-full bg-brand-100 dark:bg-brand-900/30 flex items-center justify-center flex-shrink-0">
-                                <CheckIcon className="w-3 h-3 text-brand-600 dark:text-brand-400" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="text-sm">{scenario.title}</div>
-                              </div>
-                              <span className="text-xs text-brand-600 dark:text-brand-400 font-medium">
-                                In run
-                              </span>
-                            </div>
-                          ) : (
-                            <label
-                              key={scenario.id}
+                            onClick={hasAvailableScenarios ? toggleAll : undefined}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={allAvailableSelected}
+                              disabled={!hasAvailableScenarios}
+                              ref={(el) => { if (el) el.indeterminate = someAvailableSelected && !allAvailableSelected; }}
+                              onChange={toggleAll}
                               className={cn(
-                                "flex items-center gap-3 p-3 pl-9 cursor-pointer hover:bg-[hsl(var(--muted))]",
-                                selectedToAdd.has(scenario.id) && "bg-brand-50 dark:bg-brand-900/20"
+                                "rounded border-gray-300",
+                                !hasAvailableScenarios && "opacity-50"
                               )}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={selectedToAdd.has(scenario.id)}
-                                onChange={() => toggleAddSelection(scenario.id)}
-                                className="rounded border-gray-300"
-                              />
-                              <div className="flex-1 min-w-0">
-                                <div className="text-sm">{scenario.title}</div>
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium">{group.testCaseTitle}</div>
+                              {group.folderName && (
+                                <div className="text-xs text-[hsl(var(--muted-foreground))]">{group.folderName}</div>
+                              )}
+                            </div>
+                            <span className="text-xs text-[hsl(var(--muted-foreground))]">
+                              {group.inRunCount > 0 ? (
+                                <span className="text-brand-600 dark:text-brand-400">
+                                  {group.inRunCount} of {group.scenarios.length} in run
+                                </span>
+                              ) : (
+                                <span>{group.scenarios.length} scenario{group.scenarios.length !== 1 ? "s" : ""}</span>
+                              )}
+                            </span>
+                          </div>
+                          {/* Scenarios */}
+                          {group.scenarios.map((scenario) => (
+                            scenario.inRun ? (
+                              <div
+                                key={scenario.id}
+                                className="flex items-center gap-3 p-3 pl-9 bg-muted/20 opacity-60"
+                              >
+                                <div className="w-4 h-4 rounded-full bg-brand-100 dark:bg-brand-900/30 flex items-center justify-center flex-shrink-0">
+                                  <CheckIcon className="w-3 h-3 text-brand-600 dark:text-brand-400" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-sm">{scenario.title}</div>
+                                </div>
+                                <span className="text-xs text-brand-600 dark:text-brand-400 font-medium">
+                                  In run
+                                </span>
                               </div>
-                            </label>
-                          )
-                        ))}
-                      </div>
-                    );
-                  })}
+                            ) : (
+                              <label
+                                key={scenario.id}
+                                className={cn(
+                                  "flex items-center gap-3 p-3 pl-9 cursor-pointer hover:bg-[hsl(var(--muted))]",
+                                  selectedToAdd.has(scenario.id) && "bg-brand-50 dark:bg-brand-900/20"
+                                )}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={selectedToAdd.has(scenario.id)}
+                                  onChange={() => toggleAddSelection(scenario.id)}
+                                  className="rounded border-gray-300"
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-sm">{scenario.title}</div>
+                                </div>
+                              </label>
+                            )
+                          ))}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )
+              ) : (
+                /* Browse mode - folder hierarchy */
+                <div className="py-1">
+                  <BrowseTreeView
+                    tree={browseTree.tree}
+                    testCases={browseTree.testCases}
+                    rootTestCases={browseTree.rootTestCases}
+                    selectedToAdd={selectedToAdd}
+                    setSelectedToAdd={setSelectedToAdd}
+                    existingScenarioIds={existingScenarioIds}
+                    expandedFolders={expandedFolders}
+                    setExpandedFolders={setExpandedFolders}
+                    expandedTestCases={expandedTestCases}
+                    setExpandedTestCases={setExpandedTestCases}
+                  />
                 </div>
               )}
             </div>
@@ -1862,6 +1960,7 @@ export function RunExecutor({ run, results: initialResults, folders, releases: i
                     setShowAddScenarios(false);
                     setSelectedToAdd(new Set());
                     setScenarioSearch("");
+                    setAddScenariosMode("search");
                   }}
                   className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground"
                 >
@@ -2296,5 +2395,231 @@ function ExternalLinkIcon({ className }: { className?: string }) {
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
     </svg>
+  );
+}
+
+function ChevronRightIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+    </svg>
+  );
+}
+
+function TestCaseIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+    </svg>
+  );
+}
+
+// Browse tree view component for the Add Scenarios modal
+function BrowseTreeView({
+  tree,
+  testCases,
+  rootTestCases,
+  selectedToAdd,
+  setSelectedToAdd,
+  existingScenarioIds,
+  expandedFolders,
+  setExpandedFolders,
+  expandedTestCases,
+  setExpandedTestCases,
+}: {
+  tree: FolderWithChildren[];
+  testCases: Array<{
+    testCaseId: number;
+    testCaseTitle: string;
+    folderId: number | null;
+    scenarios: Array<AvailableScenario & { inRun: boolean }>;
+  }>;
+  rootTestCases: Array<{
+    testCaseId: number;
+    testCaseTitle: string;
+    folderId: number | null;
+    scenarios: Array<AvailableScenario & { inRun: boolean }>;
+  }>;
+  selectedToAdd: Set<number>;
+  setSelectedToAdd: React.Dispatch<React.SetStateAction<Set<number>>>;
+  existingScenarioIds: Set<number>;
+  expandedFolders: Set<number | "root">;
+  setExpandedFolders: React.Dispatch<React.SetStateAction<Set<number | "root">>>;
+  expandedTestCases: Set<number>;
+  setExpandedTestCases: React.Dispatch<React.SetStateAction<Set<number>>>;
+}) {
+  const toggleFolder = (folderId: number | "root") => {
+    setExpandedFolders(prev => {
+      const next = new Set(prev);
+      if (next.has(folderId)) next.delete(folderId);
+      else next.add(folderId);
+      return next;
+    });
+  };
+
+  const toggleTestCase = (tcId: number) => {
+    setExpandedTestCases(prev => {
+      const next = new Set(prev);
+      if (next.has(tcId)) next.delete(tcId);
+      else next.add(tcId);
+      return next;
+    });
+  };
+
+  const renderScenario = (scenario: AvailableScenario & { inRun: boolean }, depth: number) => {
+    const pl = 12 + depth * 20;
+    if (scenario.inRun) {
+      return (
+        <div
+          key={scenario.id}
+          className="flex items-center gap-3 py-1.5 px-3 bg-muted/20 opacity-60"
+          style={{ paddingLeft: `${pl}px` }}
+        >
+          <div className="w-4 h-4 rounded-full bg-brand-100 dark:bg-brand-900/30 flex items-center justify-center flex-shrink-0">
+            <CheckIcon className="w-3 h-3 text-brand-600 dark:text-brand-400" />
+          </div>
+          <div className="text-sm truncate">{scenario.title}</div>
+          <span className="text-xs text-brand-600 dark:text-brand-400 font-medium ml-auto flex-shrink-0">
+            In run
+          </span>
+        </div>
+      );
+    }
+    return (
+      <label
+        key={scenario.id}
+        className={cn(
+          "flex items-center gap-3 py-1.5 px-3 cursor-pointer hover:bg-[hsl(var(--muted))]",
+          selectedToAdd.has(scenario.id) && "bg-brand-50 dark:bg-brand-900/20"
+        )}
+        style={{ paddingLeft: `${pl}px` }}
+      >
+        <input
+          type="checkbox"
+          checked={selectedToAdd.has(scenario.id)}
+          onChange={() => {
+            setSelectedToAdd(prev => {
+              const next = new Set(prev);
+              if (next.has(scenario.id)) next.delete(scenario.id);
+              else next.add(scenario.id);
+              return next;
+            });
+          }}
+          className="rounded border-gray-300"
+        />
+        <div className="text-sm truncate">{scenario.title}</div>
+      </label>
+    );
+  };
+
+  const renderTestCase = (tc: typeof testCases[number], depth: number) => {
+    const isExpanded = expandedTestCases.has(tc.testCaseId);
+    const availableInTc = tc.scenarios.filter(s => !s.inRun);
+    const allSelected = availableInTc.length > 0 && availableInTc.every(s => selectedToAdd.has(s.id));
+    const someSelected = availableInTc.some(s => selectedToAdd.has(s.id));
+    const inRunCount = tc.scenarios.filter(s => s.inRun).length;
+    const pl = 8 + depth * 20;
+
+    return (
+      <div key={tc.testCaseId}>
+        <div
+          className={cn(
+            "flex items-center gap-2 py-1.5 px-3 cursor-pointer hover:bg-[hsl(var(--muted))] select-none",
+            allSelected && "bg-brand-50 dark:bg-brand-900/20"
+          )}
+          style={{ paddingLeft: `${pl}px` }}
+          onClick={() => toggleTestCase(tc.testCaseId)}
+        >
+          <ChevronRightIcon className={cn("w-3.5 h-3.5 text-muted-foreground transition-transform flex-shrink-0", isExpanded && "rotate-90")} />
+          <TestCaseIcon className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+          <input
+            type="checkbox"
+            checked={allSelected}
+            disabled={availableInTc.length === 0}
+            ref={(el) => { if (el) el.indeterminate = someSelected && !allSelected; }}
+            onChange={(e) => {
+              e.stopPropagation();
+              setSelectedToAdd(prev => {
+                const next = new Set(prev);
+                if (allSelected) {
+                  availableInTc.forEach(s => next.delete(s.id));
+                } else {
+                  availableInTc.forEach(s => next.add(s.id));
+                }
+                return next;
+              });
+            }}
+            onClick={(e) => e.stopPropagation()}
+            className={cn("rounded border-gray-300", availableInTc.length === 0 && "opacity-50")}
+          />
+          <span className="text-sm font-medium truncate">{tc.testCaseTitle}</span>
+          <span className="text-xs text-muted-foreground ml-auto flex-shrink-0">
+            {inRunCount > 0 ? (
+              <span className="text-brand-600 dark:text-brand-400">{inRunCount}/{tc.scenarios.length} in run</span>
+            ) : (
+              <span>{tc.scenarios.length}</span>
+            )}
+          </span>
+        </div>
+        {isExpanded && tc.scenarios.map(s => renderScenario(s, depth + 1))}
+      </div>
+    );
+  };
+
+  const renderFolder = (folder: FolderWithChildren, depth: number) => {
+    const isExpanded = expandedFolders.has(folder.id);
+    const folderTestCases = testCases.filter(tc => tc.folderId === folder.id);
+    const totalCount = folderTestCases.length + folder.children.length;
+    const pl = 8 + depth * 20;
+
+    if (totalCount === 0 && folder.children.length === 0 && folderTestCases.length === 0) return null;
+
+    return (
+      <div key={folder.id}>
+        <div
+          className="flex items-center gap-2 py-1.5 px-3 cursor-pointer hover:bg-[hsl(var(--muted))] select-none"
+          style={{ paddingLeft: `${pl}px` }}
+          onClick={() => toggleFolder(folder.id)}
+        >
+          <ChevronRightIcon className={cn("w-3.5 h-3.5 text-muted-foreground transition-transform flex-shrink-0", isExpanded && "rotate-90")} />
+          <FolderIcon className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+          <span className="text-sm font-medium truncate">{folder.name}</span>
+          {folderTestCases.length > 0 && (
+            <span className="text-xs text-muted-foreground ml-auto flex-shrink-0">{folderTestCases.length}</span>
+          )}
+        </div>
+        {isExpanded && (
+          <>
+            {folder.children.map(child => renderFolder(child, depth + 1))}
+            {folderTestCases.map(tc => renderTestCase(tc, depth + 1))}
+          </>
+        )}
+      </div>
+    );
+  };
+
+  const hasRootTestCases = rootTestCases.length > 0;
+
+  return (
+    <>
+      {tree.map(folder => renderFolder(folder, 0))}
+      {hasRootTestCases && (
+        <>
+          {tree.length > 0 && (
+            <div className="border-t border-border my-1" />
+          )}
+          <div
+            className="flex items-center gap-2 py-1.5 px-3 cursor-pointer hover:bg-[hsl(var(--muted))] select-none"
+            style={{ paddingLeft: "8px" }}
+            onClick={() => toggleFolder("root")}
+          >
+            <ChevronRightIcon className={cn("w-3.5 h-3.5 text-muted-foreground transition-transform flex-shrink-0", expandedFolders.has("root") && "rotate-90")} />
+            <span className="text-sm font-medium text-muted-foreground italic">Uncategorized</span>
+            <span className="text-xs text-muted-foreground ml-auto">{rootTestCases.length}</span>
+          </div>
+          {expandedFolders.has("root") && rootTestCases.map(tc => renderTestCase(tc, 1))}
+        </>
+      )}
+    </>
   );
 }

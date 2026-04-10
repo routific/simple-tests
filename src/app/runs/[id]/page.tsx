@@ -124,6 +124,7 @@ export default async function RunDetailPage({ params, searchParams }: Props) {
       title: scenarios.title,
       testCaseId: scenarios.testCaseId,
       testCaseTitle: testCases.title,
+      folderId: testCases.folderId,
       folderName: folders.name,
     })
     .from(scenarios)
