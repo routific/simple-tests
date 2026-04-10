@@ -321,6 +321,22 @@ export function registerTools(auth: AuthContext): Tool[] {
         },
       },
       {
+        name: "add_scenarios_to_run",
+        description: "Add new test cases (scenarios) to an existing test run. Skips scenarios already in the run.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            testRunId: { type: "number", description: "Test run ID to add scenarios to" },
+            scenarioIds: {
+              type: "array",
+              items: { type: "number" },
+              description: "Array of scenario IDs to add",
+            },
+          },
+          required: ["testRunId", "scenarioIds"],
+        },
+      },
+      {
         name: "link_test_run_to_issue",
         description: "Link a test run to a Linear issue",
         inputSchema: {
@@ -410,6 +426,8 @@ export async function handleToolCall(
       return updateTestResult(args, auth, auditCtx);
     case "update_test_run":
       return updateTestRun(args, auth, auditCtx);
+    case "add_scenarios_to_run":
+      return addScenariosToRun(args, auth, auditCtx);
     case "link_test_run_to_issue":
       return linkTestRunToIssue(args, auth, auditCtx);
     case "link_test_case_to_issue":
@@ -1534,6 +1552,150 @@ async function createTestRun(
             testRun,
             results,
             summary: { total: results.length, pending: results.length },
+          },
+          null,
+          2
+        ),
+      },
+    ],
+  };
+}
+
+async function addScenariosToRun(
+  args: Record<string, unknown>,
+  auth: AuthContext,
+  ctx: McpCallContext
+): Promise<CallToolResult> {
+  const { testRunId, scenarioIds } = args as {
+    testRunId: number;
+    scenarioIds: number[];
+  };
+
+  if (!testRunId || !scenarioIds || !Array.isArray(scenarioIds) || scenarioIds.length === 0) {
+    await logMcpWriteOperation(ctx, {
+      toolName: "add_scenarios_to_run",
+      toolArgs: args,
+      entityType: "test_run",
+      status: "failed",
+      errorMessage: "testRunId and non-empty scenarioIds array are required",
+    });
+    return {
+      content: [{ type: "text", text: "Error: testRunId and non-empty scenarioIds array are required" }],
+      isError: true,
+    };
+  }
+
+  // Verify test run exists and belongs to org
+  const testRun = await db
+    .select()
+    .from(testRuns)
+    .where(
+      and(
+        eq(testRuns.id, testRunId),
+        eq(testRuns.organizationId, auth.organizationId)
+      )
+    )
+    .limit(1);
+
+  if (testRun.length === 0) {
+    await logMcpWriteOperation(ctx, {
+      toolName: "add_scenarios_to_run",
+      toolArgs: args,
+      entityType: "test_run",
+      entityId: testRunId,
+      status: "failed",
+      errorMessage: `Test run not found: ${testRunId}`,
+    });
+    return {
+      content: [{ type: "text", text: `Error: Test run not found: ${testRunId}` }],
+      isError: true,
+    };
+  }
+
+  // Verify scenarios exist and belong to org
+  const existingScenarios = await db
+    .select({ scenario: scenarios, testCase: testCases })
+    .from(scenarios)
+    .innerJoin(testCases, eq(scenarios.testCaseId, testCases.id))
+    .where(
+      and(
+        inArray(scenarios.id, scenarioIds),
+        eq(testCases.organizationId, auth.organizationId)
+      )
+    );
+
+  const validIds = new Set(existingScenarios.map((s) => s.scenario.id));
+  const missingIds = scenarioIds.filter((id) => !validIds.has(id));
+
+  if (missingIds.length > 0) {
+    await logMcpWriteOperation(ctx, {
+      toolName: "add_scenarios_to_run",
+      toolArgs: args,
+      entityType: "test_run",
+      entityId: testRunId,
+      status: "failed",
+      errorMessage: `Scenarios not found: ${missingIds.join(", ")}`,
+    });
+    return {
+      content: [{ type: "text", text: `Error: Scenarios not found: ${missingIds.join(", ")}` }],
+      isError: true,
+    };
+  }
+
+  // Get existing scenario IDs in this run to avoid duplicates
+  const existingResults = await db
+    .select({ scenarioId: testRunResults.scenarioId })
+    .from(testRunResults)
+    .where(eq(testRunResults.testRunId, testRunId));
+
+  const existingResultIds = new Set(existingResults.map((r) => r.scenarioId));
+  const newScenarioIds = scenarioIds.filter((id) => !existingResultIds.has(id));
+
+  const beforeState = await getEntityState("test_run", testRunId, auth.organizationId);
+
+  if (newScenarioIds.length > 0) {
+    const maxOrder = existingResults.length;
+    await db.insert(testRunResults).values(
+      newScenarioIds.map((scenarioId, index) => ({
+        testRunId,
+        scenarioId,
+        status: "pending" as const,
+        order: maxOrder + index,
+      }))
+    );
+  }
+
+  // Fetch updated results
+  const allResults = await db
+    .select()
+    .from(testRunResults)
+    .where(eq(testRunResults.testRunId, testRunId));
+
+  const afterState = await getEntityState("test_run", testRunId, auth.organizationId);
+
+  await logMcpWriteOperation(ctx, {
+    toolName: "add_scenarios_to_run",
+    toolArgs: args,
+    entityType: "test_run",
+    entityId: testRunId,
+    beforeState,
+    afterState,
+    status: "success",
+  });
+
+  const skipped = scenarioIds.length - newScenarioIds.length;
+
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(
+          {
+            success: true,
+            added: newScenarioIds.length,
+            skipped,
+            skippedReason: skipped > 0 ? "already in run" : undefined,
+            totalResults: allResults.length,
           },
           null,
           2
