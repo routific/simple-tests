@@ -386,6 +386,13 @@ function Kbd({ children }: { children: ReactNode }) {
 // Changelog entries - newest first
 const CHANGELOG = [
   {
+    version: "26bb86a",
+    date: "2026-04-11",
+    changes: [
+      "Bulk action: \"Add to Run\" button in multi-select toolbar — add selected test cases to an existing in-progress test run",
+    ],
+  },
+  {
     version: "5427dad",
     date: "2026-04-10",
     changes: [
