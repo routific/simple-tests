@@ -21,6 +21,7 @@ import {
 } from "@/app/cases/actions";
 import { exportTestCases, importTestCases, ExportData } from "@/app/cases/export-actions";
 import { getScenarios } from "@/app/cases/scenario-actions";
+import { getInProgressRuns, addTestCasesToRun } from "@/app/runs/actions";
 import { getLastUndo, getLastRedo, getUndoStack, getRedoStack, executeUndo, executeRedo } from "@/app/cases/undo-actions";
 import { cn } from "@/lib/utils";
 import { buildFolderBreadcrumb, formatBreadcrumb } from "@/lib/folders";
@@ -887,6 +888,10 @@ function TestCaseListContent({
   const [draggedIds, setDraggedIds] = useState<Set<number>>(new Set());
   const [dropIndicator, setDropIndicator] = useState<{ id: number; position: "before" | "after" } | null>(null);
   const [showStateModal, setShowStateModal] = useState(false);
+  const [showAddToRunModal, setShowAddToRunModal] = useState(false);
+  const [inProgressRuns, setInProgressRuns] = useState<{ id: number; name: string; createdAt: Date; scenarioCount: number }[]>([]);
+  const [loadingRuns, setLoadingRuns] = useState(false);
+  const [addToRunSearch, setAddToRunSearch] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // CMD+K to focus search
@@ -941,6 +946,32 @@ function TestCaseListContent({
   const handleCloseMoveModal = () => {
     setShowMoveModal(false);
     setPendingMoveFolder(null);
+  };
+
+  const handleOpenAddToRun = async () => {
+    setShowAddToRunModal(true);
+    setLoadingRuns(true);
+    setAddToRunSearch("");
+    try {
+      const runs = await getInProgressRuns();
+      setInProgressRuns(runs);
+    } catch {
+      setInProgressRuns([]);
+    } finally {
+      setLoadingRuns(false);
+    }
+  };
+
+  const handleAddToRun = (runId: number) => {
+    startTransition(async () => {
+      const result = await addTestCasesToRun(runId, Array.from(selectedCases));
+      if ("error" in result) {
+        alert(result.error);
+      } else {
+        setShowAddToRunModal(false);
+        onSelectionAction();
+      }
+    });
   };
 
   const handleDragStart = (id: number) => {
@@ -1061,6 +1092,14 @@ function TestCaseListContent({
           >
             <PlayIcon className="w-4 h-4" />
             Create Run
+          </button>
+          <button
+            onClick={handleOpenAddToRun}
+            disabled={isPending}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-foreground rounded-lg hover:bg-muted transition-colors disabled:opacity-50"
+          >
+            <ListPlusIcon className="w-4 h-4" />
+            Add to Run
           </button>
           <button
             onClick={() => setShowStateModal(true)}
@@ -1225,6 +1264,75 @@ function TestCaseListContent({
                 </p>
               )}
             </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Add to Run Modal */}
+      {showAddToRunModal && (
+        <Modal
+          isOpen={showAddToRunModal}
+          onClose={() => setShowAddToRunModal(false)}
+          title="Add to Test Run"
+          description={`Add ${selectedCases.size} test case(s) to an existing run`}
+        >
+          <div className="p-6 min-h-[300px] flex flex-col">
+            {loadingRuns ? (
+              <div className="flex-1 flex items-center justify-center">
+                <p className="text-sm text-muted-foreground">Loading runs...</p>
+              </div>
+            ) : inProgressRuns.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center gap-2">
+                <p className="text-sm text-muted-foreground">No in-progress test runs found.</p>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowAddToRunModal(false);
+                    const ids = Array.from(selectedCases).join(",");
+                    window.location.href = `/runs/new?cases=${ids}`;
+                  }}
+                >
+                  <PlayIcon className="w-4 h-4 mr-1.5" />
+                  Create New Run
+                </Button>
+              </div>
+            ) : (
+              <>
+                {inProgressRuns.length > 5 && (
+                  <Input
+                    placeholder="Search runs..."
+                    value={addToRunSearch}
+                    onChange={(e) => setAddToRunSearch(e.target.value)}
+                    className="mb-3"
+                    autoFocus
+                  />
+                )}
+                <div className="flex-1 space-y-1 overflow-y-auto max-h-[400px]">
+                  {inProgressRuns
+                    .filter((r) =>
+                      !addToRunSearch || r.name.toLowerCase().includes(addToRunSearch.toLowerCase())
+                    )
+                    .map((run) => (
+                      <button
+                        key={run.id}
+                        onClick={() => handleAddToRun(run.id)}
+                        disabled={isPending}
+                        className="w-full p-3 text-left rounded-lg hover:bg-muted transition-colors flex items-center justify-between gap-3 disabled:opacity-50"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">{run.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {run.scenarioCount} scenario{run.scenarioCount !== 1 ? "s" : ""} &middot; {formatTimeAgo(run.createdAt)}
+                          </p>
+                        </div>
+                        <div className="shrink-0 text-xs text-muted-foreground">
+                          {isPending ? "Adding..." : "Add"}
+                        </div>
+                      </button>
+                    ))}
+                </div>
+              </>
+            )}
           </div>
         </Modal>
       )}
@@ -2501,6 +2609,29 @@ function TrashIcon({ className }: { className?: string }) {
         strokeLinecap="round"
         strokeLinejoin="round"
         d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"
+      />
+    </svg>
+  );
+}
+
+function ListPlusIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={1.5}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M12 4.5v15m7.5-7.5h-15"
+      />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M3.75 5.25h6m-6 4.5h6m-6 4.5h3.75"
       />
     </svg>
   );

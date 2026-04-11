@@ -2,7 +2,7 @@
 
 import { db } from "@/lib/db";
 import { testRuns, testRunResults, testResultHistory, releases, scenarios, testCases, users } from "@/lib/db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getSessionWithOrg } from "@/lib/auth";
 import { createIssueAttachment, deleteAttachmentByUrl, createIssueComment, createBugSubIssue, uploadScreenshotsToLinear } from "@/lib/linear";
@@ -1030,5 +1030,98 @@ export async function spawnBugIssue(input: { resultId: number; runId: number; ti
   } catch (error) {
     console.error("Failed to spawn bug issue:", error);
     return { error: "Failed to create bug ticket" };
+  }
+}
+
+export async function getInProgressRuns() {
+  const session = await getSessionWithOrg();
+  if (!session) return [];
+
+  const { organizationId } = session.user;
+
+  const runs = await db
+    .select({
+      id: testRuns.id,
+      name: testRuns.name,
+      createdAt: testRuns.createdAt,
+    })
+    .from(testRuns)
+    .where(
+      and(
+        eq(testRuns.organizationId, organizationId),
+        eq(testRuns.status, "in_progress")
+      )
+    )
+    .orderBy(desc(testRuns.createdAt));
+
+  // Get scenario counts for each run
+  const runIds = runs.map((r) => r.id);
+  if (runIds.length === 0) return [];
+
+  const counts = await db
+    .select({
+      testRunId: testRunResults.testRunId,
+      count: sql<number>`count(*)`,
+    })
+    .from(testRunResults)
+    .where(inArray(testRunResults.testRunId, runIds))
+    .groupBy(testRunResults.testRunId);
+
+  const countMap = new Map(counts.map((c) => [c.testRunId, c.count]));
+
+  return runs.map((r) => ({
+    ...r,
+    scenarioCount: countMap.get(r.id) ?? 0,
+  }));
+}
+
+export async function addTestCasesToRun(runId: number, testCaseIds: number[]) {
+  const session = await getSessionWithOrg();
+  if (!session) {
+    return { error: "Unauthorized" };
+  }
+
+  const { organizationId } = session.user;
+
+  try {
+    // Verify the run belongs to the organization and is in progress
+    const run = await db
+      .select()
+      .from(testRuns)
+      .where(
+        and(
+          eq(testRuns.id, runId),
+          eq(testRuns.organizationId, organizationId),
+          eq(testRuns.status, "in_progress")
+        )
+      )
+      .get();
+
+    if (!run) {
+      return { error: "Test run not found or already completed" };
+    }
+
+    // Get all scenario IDs for the selected test cases
+    const caseScenarios = await db
+      .select({ id: scenarios.id })
+      .from(scenarios)
+      .innerJoin(testCases, eq(scenarios.testCaseId, testCases.id))
+      .where(
+        and(
+          inArray(testCases.id, testCaseIds),
+          eq(testCases.organizationId, organizationId)
+        )
+      );
+
+    const scenarioIds = caseScenarios.map((s) => s.id);
+    if (scenarioIds.length === 0) {
+      return { error: "No scenarios found for the selected test cases" };
+    }
+
+    const result = await addScenariosToRun({ runId, scenarioIds });
+    return result;
+  } catch (error) {
+    console.error("Failed to add test cases to run:", error);
+    return { error: "Failed to add test cases to run" };
   }
 }
