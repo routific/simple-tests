@@ -386,6 +386,13 @@ function Kbd({ children }: { children: ReactNode }) {
 // Changelog entries - newest first
 const CHANGELOG = [
   {
+    version: "PENDING",
+    date: "2026-04-24",
+    changes: [
+      "MCP: add Streamable HTTP transport at /api/mcp so Claude Desktop custom connectors can discover tools (existing /api/mcp/sse endpoint kept for backward compatibility)",
+    ],
+  },
+  {
     version: "26bb86a",
     date: "2026-04-11",
     changes: [
