@@ -112,11 +112,39 @@ function withCors(response: Response): Response {
 }
 
 async function handleMcpRequest(request: NextRequest): Promise<Response> {
+  const reqId = crypto.randomUUID().slice(0, 8);
+  const sessionId = request.headers.get("mcp-session-id");
+
+  // Peek at body without consuming the stream the SDK will read.
+  let bodyPreview: string | undefined;
+  if (request.method === "POST") {
+    try {
+      bodyPreview = await request.clone().text();
+      if (bodyPreview.length > 1000) {
+        bodyPreview = bodyPreview.slice(0, 1000) + "…";
+      }
+    } catch (err) {
+      bodyPreview = `<<failed to read: ${err instanceof Error ? err.message : String(err)}>>`;
+    }
+  }
+
+  console.log(
+    `[MCP-DEBUG ${reqId}] in: ${request.method} ${request.nextUrl.pathname} ` +
+      `accept=${JSON.stringify(request.headers.get("accept"))} ` +
+      `content-type=${JSON.stringify(request.headers.get("content-type"))} ` +
+      `mcp-session-id=${JSON.stringify(sessionId)} ` +
+      `mcp-protocol-version=${JSON.stringify(request.headers.get("mcp-protocol-version"))} ` +
+      `session-known=${sessionId ? transports.has(sessionId) : "n/a"} ` +
+      `body=${bodyPreview ? JSON.stringify(bodyPreview) : "<<none>>"}`
+  );
+
   const result = await resolveAuth(request);
-  if ("errorResponse" in result) return result.errorResponse;
+  if ("errorResponse" in result) {
+    console.log(`[MCP-DEBUG ${reqId}] auth-failed status=${result.errorResponse.status}`);
+    return result.errorResponse;
+  }
   const { auth } = result;
 
-  const sessionId = request.headers.get("mcp-session-id");
   let transport = sessionId ? transports.get(sessionId) : undefined;
 
   if (!transport) {
@@ -127,9 +155,11 @@ async function handleMcpRequest(request: NextRequest): Promise<Response> {
       sessionIdGenerator: () => crypto.randomUUID(),
       onsessioninitialized: (sid) => {
         transports.set(sid, newTransport);
+        console.log(`[MCP-DEBUG ${reqId}] session-initialized sid=${sid} total=${transports.size}`);
       },
       onsessionclosed: (sid) => {
         transports.delete(sid);
+        console.log(`[MCP-DEBUG ${reqId}] session-closed sid=${sid} total=${transports.size}`);
       },
     });
 
@@ -147,6 +177,30 @@ async function handleMcpRequest(request: NextRequest): Promise<Response> {
   }
 
   const response = await transport.handleRequest(request);
+
+  // Clone the response so we can peek at the body for error responses
+  // without consuming the stream we're about to return.
+  if (response.status >= 400) {
+    let errBody: string | undefined;
+    try {
+      errBody = await response.clone().text();
+      if (errBody.length > 500) errBody = errBody.slice(0, 500) + "…";
+    } catch {
+      errBody = "<<unreadable>>";
+    }
+    console.log(
+      `[MCP-DEBUG ${reqId}] sdk-error status=${response.status} ` +
+        `mcp-session-id=${JSON.stringify(response.headers.get("mcp-session-id"))} ` +
+        `body=${JSON.stringify(errBody)}`
+    );
+  } else {
+    console.log(
+      `[MCP-DEBUG ${reqId}] sdk-ok status=${response.status} ` +
+        `mcp-session-id=${JSON.stringify(response.headers.get("mcp-session-id"))} ` +
+        `content-type=${JSON.stringify(response.headers.get("content-type"))}`
+    );
+  }
+
   return withCors(response);
 }
 
