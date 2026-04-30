@@ -386,6 +386,13 @@ function Kbd({ children }: { children: ReactNode }) {
 // Changelog entries - newest first
 const CHANGELOG = [
   {
+    version: "PENDING",
+    date: "2026-04-30",
+    changes: [
+      "MCP: switch /api/mcp Streamable HTTP route to stateless mode — fixes intermittent 400 errors caused by Vercel routing follow-up requests to function instances that don't have the session in memory",
+    ],
+  },
+  {
     version: "7e4aad0",
     date: "2026-04-30",
     changes: [

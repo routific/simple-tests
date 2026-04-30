@@ -16,11 +16,9 @@ const corsHeaders = {
   "Access-Control-Expose-Headers": "Mcp-Session-Id",
 };
 
-// In-memory map of sessionId -> transport.
-// Works for single-instance deployments; horizontal scaling would need
-// sticky sessions or a distributed transport store.
-const transports = new Map<string, WebStandardStreamableHTTPServerTransport>();
-
+// Stateless mode: each request gets a fresh transport + server. No session
+// state is held between requests, which avoids "session not found" 400s
+// on Vercel where requests can land on different function instances.
 interface ResolvedAuth {
   userId: string;
   organizationId: string;
@@ -134,7 +132,6 @@ async function handleMcpRequest(request: NextRequest): Promise<Response> {
       `content-type=${JSON.stringify(request.headers.get("content-type"))} ` +
       `mcp-session-id=${JSON.stringify(sessionId)} ` +
       `mcp-protocol-version=${JSON.stringify(request.headers.get("mcp-protocol-version"))} ` +
-      `session-known=${sessionId ? transports.has(sessionId) : "n/a"} ` +
       `body=${bodyPreview ? JSON.stringify(bodyPreview) : "<<none>>"}`
   );
 
@@ -145,36 +142,22 @@ async function handleMcpRequest(request: NextRequest): Promise<Response> {
   }
   const { auth } = result;
 
-  let transport = sessionId ? transports.get(sessionId) : undefined;
+  // Stateless: fresh transport + server per request. sessionIdGenerator
+  // undefined disables session validation in the SDK.
+  const transport = new WebStandardStreamableHTTPServerTransport({
+    sessionIdGenerator: undefined,
+  });
 
-  if (!transport) {
-    // Either an initialization request (no session id) or a request whose
-    // session is no longer in memory. Create a fresh transport and let the
-    // SDK either initialize it or reject with 404 so the client re-inits.
-    const newTransport = new WebStandardStreamableHTTPServerTransport({
-      sessionIdGenerator: () => crypto.randomUUID(),
-      onsessioninitialized: (sid) => {
-        transports.set(sid, newTransport);
-        console.log(`[MCP-DEBUG ${reqId}] session-initialized sid=${sid} total=${transports.size}`);
-      },
-      onsessionclosed: (sid) => {
-        transports.delete(sid);
-        console.log(`[MCP-DEBUG ${reqId}] session-closed sid=${sid} total=${transports.size}`);
-      },
-    });
+  const mcpAuth: AuthContext = {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    token: null as any,
+    organizationId: auth.organizationId,
+    userId: auth.userId,
+    permissions: parseScope(auth.scope),
+  };
 
-    const mcpAuth: AuthContext = {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      token: null as any,
-      organizationId: auth.organizationId,
-      userId: auth.userId,
-      permissions: parseScope(auth.scope),
-    };
-
-    const server = createMcpServer(mcpAuth, { clientId: auth.clientId });
-    await server.connect(newTransport);
-    transport = newTransport;
-  }
+  const server = createMcpServer(mcpAuth, { clientId: auth.clientId });
+  await server.connect(transport);
 
   const response = await transport.handleRequest(request);
 
