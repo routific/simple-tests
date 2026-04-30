@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { buildFolderBreadcrumb, formatBreadcrumb } from "@/lib/folders";
+import { buildFolderBreadcrumb, formatBreadcrumb, getDescendantFolderIds } from "@/lib/folders";
 import { ReleasePicker } from "@/components/release-picker";
 import { TestCasePanel, type TestCasePanelTestCase } from "@/components/test-case-panel";
 import { LinearProjectPicker, LinearMilestonePicker, LinearIssuePicker } from "@/components/linear-pickers";
@@ -108,6 +108,7 @@ export function CreateRunForm({ folders, cases, caseCounts, releases: initialRel
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState("");
   const [stateFilter, setStateFilter] = useState<string>("");
+  const [browseFolderId, setBrowseFolderId] = useState<number | null>(null);
 
   // Flatten folder tree for breadcrumb lookups
   const flatFolders = useMemo(() => {
@@ -122,9 +123,19 @@ export function CreateRunForm({ folders, cases, caseCounts, releases: initialRel
     return result;
   }, [folders]);
 
-  // Filter cases based on search and state
+  // Folder filter: when a folder is selected, include test cases in that folder and all descendants
+  const allowedFolderIds = useMemo(() => {
+    if (browseFolderId === null) return null;
+    return new Set(getDescendantFolderIds(browseFolderId, flatFolders));
+  }, [browseFolderId, flatFolders]);
+
+  // Filter cases based on folder, search, and state
   const filteredCases = useMemo(() => {
     return cases.filter((c) => {
+      // Folder filter
+      if (allowedFolderIds && (c.folderId === null || !allowedFolderIds.has(c.folderId))) {
+        return false;
+      }
       // State filter - empty string means "all states"
       if (stateFilter && c.state !== stateFilter) return false;
       // Search filter
@@ -136,7 +147,7 @@ export function CreateRunForm({ folders, cases, caseCounts, releases: initialRel
       }
       return true;
     });
-  }, [cases, searchQuery, stateFilter]);
+  }, [cases, searchQuery, stateFilter, allowedFolderIds]);
 
   // Count scenarios for selected cases
   const selectedScenarioCount = useMemo(() => {
@@ -432,9 +443,10 @@ export function CreateRunForm({ folders, cases, caseCounts, releases: initialRel
                 ))}
               </div>
             </div>
+          </div>
 
-            {/* Linear Integration */}
-            <Card className="mt-4">
+          {/* Linear Integration - Full width */}
+          <Card>
               <CardContent className="p-4">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
@@ -510,7 +522,6 @@ export function CreateRunForm({ folders, cases, caseCounts, releases: initialRel
                 )}
             </CardContent>
           </Card>
-          </div>
 
           {/* Test Case Selection - Full width */}
           <div>
@@ -529,7 +540,15 @@ export function CreateRunForm({ folders, cases, caseCounts, releases: initialRel
             <Card className="overflow-hidden">
               <CardContent className="p-0">
                 <div className="flex h-[60vh]">
-                  {/* Left: Selection List */}
+                  {/* Left: Folder Tree */}
+                  <FolderTreePicker
+                    folders={folders}
+                    selectedFolderId={browseFolderId}
+                    onSelect={setBrowseFolderId}
+                    caseCounts={caseCounts}
+                  />
+
+                  {/* Middle: Selection List */}
                   <div className="flex-1 min-w-0 border-r border-border flex flex-col">
                     {/* Search and Filter Bar */}
                     <div className="p-4 border-b border-border flex gap-3 bg-muted/20">
@@ -822,6 +841,139 @@ function SelectionPreview({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function FolderTreePicker({
+  folders,
+  selectedFolderId,
+  onSelect,
+  caseCounts,
+}: {
+  folders: Folder[];
+  selectedFolderId: number | null;
+  onSelect: (id: number | null) => void;
+  caseCounts: Record<number, number>;
+}) {
+  // Auto-expand all folders by default
+  const [expanded, setExpanded] = useState<Set<number>>(() => {
+    const ids = new Set<number>();
+    function collect(nodes: Folder[]) {
+      for (const n of nodes) {
+        ids.add(n.id);
+        if (n.children) collect(n.children);
+      }
+    }
+    collect(folders);
+    return ids;
+  });
+
+  const toggle = (id: number) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  // Cumulative count: folder's own cases + all descendants
+  const getTotalCount = (folder: Folder): number => {
+    let total = caseCounts[folder.id] || 0;
+    for (const child of folder.children || []) {
+      total += getTotalCount(child);
+    }
+    return total;
+  };
+
+  const totalAll = useMemo(
+    () => Object.values(caseCounts).reduce((a, b) => a + b, 0),
+    [caseCounts]
+  );
+
+  const renderNode = (folder: Folder, level: number) => {
+    const isExpanded = expanded.has(folder.id);
+    const hasChildren = (folder.children?.length ?? 0) > 0;
+    const isSelected = selectedFolderId === folder.id;
+    const totalCount = getTotalCount(folder);
+
+    return (
+      <div key={folder.id}>
+        <div
+          className={cn(
+            "flex items-center gap-1 mx-2 rounded-lg",
+            isSelected
+              ? "bg-brand-500/10 text-brand-600 dark:text-brand-400 font-medium"
+              : "hover:bg-muted text-muted-foreground hover:text-foreground"
+          )}
+          style={{ paddingLeft: `${4 + level * 16}px` }}
+        >
+          {hasChildren ? (
+            <button
+              type="button"
+              onClick={() => toggle(folder.id)}
+              className="p-1 hover:bg-muted-foreground/10 rounded transition-colors flex-shrink-0"
+            >
+              <ChevronIcon
+                className={cn(
+                  "w-3 h-3 text-muted-foreground transition-transform duration-200",
+                  isExpanded && "rotate-90"
+                )}
+              />
+            </button>
+          ) : (
+            <span className="w-5 flex-shrink-0" />
+          )}
+          <button
+            type="button"
+            onClick={() => onSelect(isSelected ? null : folder.id)}
+            className="flex-1 flex items-center gap-2 py-1.5 pr-2 min-w-0 text-left"
+          >
+            <FolderIcon
+              className={cn(
+                "w-4 h-4 flex-shrink-0",
+                isSelected ? "text-amber-500" : "text-amber-400"
+              )}
+            />
+            <span className="flex-1 truncate text-sm">{folder.name}</span>
+            {totalCount > 0 && (
+              <span className="text-xs text-muted-foreground tabular-nums">
+                {totalCount}
+              </span>
+            )}
+          </button>
+        </div>
+        {isExpanded && hasChildren && (
+          <div>{folder.children.map((child) => renderNode(child, level + 1))}</div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="w-64 flex-shrink-0 border-r border-border bg-muted/30 flex flex-col">
+      <div className="px-4 py-3 border-b border-border bg-muted/50">
+        <span className="text-sm font-medium text-foreground">Folders</span>
+      </div>
+      <div className="flex-1 overflow-auto py-2">
+        <button
+          type="button"
+          onClick={() => onSelect(null)}
+          className={cn(
+            "w-full flex items-center gap-2 px-3 py-2 rounded-lg mx-2 text-left text-sm transition-colors",
+            selectedFolderId === null
+              ? "bg-brand-500/10 text-brand-600 dark:text-brand-400 font-medium"
+              : "hover:bg-muted text-muted-foreground hover:text-foreground"
+          )}
+          style={{ width: "calc(100% - 16px)" }}
+        >
+          <FolderIcon className="w-4 h-4 text-amber-500 flex-shrink-0" />
+          <span className="flex-1">All Cases</span>
+          <span className="text-xs text-muted-foreground tabular-nums">{totalAll}</span>
+        </button>
+        <div className="mt-1">{folders.map((f) => renderNode(f, 0))}</div>
+      </div>
     </div>
   );
 }
