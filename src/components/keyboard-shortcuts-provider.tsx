@@ -386,7 +386,7 @@ function Kbd({ children }: { children: ReactNode }) {
 // Changelog entries - newest first
 const CHANGELOG = [
   {
-    version: "PENDING",
+    version: "bb7f115",
     date: "2026-04-30",
     changes: [
       "Create Test Run: Linear Integration card now spans full width so long Linear issue titles are readable",
