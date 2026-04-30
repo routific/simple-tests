@@ -386,7 +386,7 @@ function Kbd({ children }: { children: ReactNode }) {
 // Changelog entries - newest first
 const CHANGELOG = [
   {
-    version: "PENDING",
+    version: "7e4aad0",
     date: "2026-04-30",
     changes: [
       "MCP: add diagnostic logging to /api/mcp route to debug silent 400 responses from the Streamable HTTP transport in production",
