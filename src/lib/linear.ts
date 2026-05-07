@@ -421,12 +421,29 @@ export async function createBugSubIssue(input: CreateBugSubIssueInput): Promise<
       console.warn("[Linear] Failed to search for Bug label, creating issue without label");
     }
 
+    // Pick the first non-triage workflow state by position so new bugs skip Triage
+    let stateId: string | undefined;
+    try {
+      const states = await team.states();
+      const firstNonTriage = states.nodes
+        .filter((s) => s.type !== "triage")
+        .sort((a, b) => a.position - b.position)[0];
+      if (firstNonTriage) {
+        stateId = firstNonTriage.id;
+      } else {
+        console.warn("[Linear] No non-triage state found for team, falling back to default state");
+      }
+    } catch {
+      console.warn("[Linear] Failed to fetch team workflow states, falling back to default state");
+    }
+
     const createPayload = await client.createIssue({
       title: input.title,
       description: input.description,
       teamId: team.id,
       parentId: input.parentIssueId,
       ...(bugLabelId ? { labelIds: [bugLabelId] } : {}),
+      ...(stateId ? { stateId } : {}),
     });
 
     if (!createPayload.success) {
