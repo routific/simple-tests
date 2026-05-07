@@ -386,6 +386,13 @@ function Kbd({ children }: { children: ReactNode }) {
 // Changelog entries - newest first
 const CHANGELOG = [
   {
+    version: "39007f4",
+    date: "2026-05-07",
+    changes: [
+      "Auto-spawn bug tickets: new bug sub-issues now land in the team's first non-triage workflow state (typically Backlog) instead of Triage",
+    ],
+  },
+  {
     version: "bb7f115",
     date: "2026-04-30",
     changes: [
