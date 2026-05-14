@@ -187,6 +187,7 @@ export const testRuns = sqliteTable(
     status: text("status", { enum: ["in_progress", "completed"] })
       .notNull()
       .default("in_progress"),
+    archivedAt: integer("archived_at", { mode: "timestamp" }),
   },
   (table) => [index("test_runs_org_idx").on(table.organizationId)]
 );

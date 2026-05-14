@@ -17,6 +17,7 @@ export interface TestRunData {
   status: "in_progress" | "completed";
   environment: "sandbox" | "dev" | "staging" | "prod" | null;
   createdAt: Date | null;
+  archivedAt?: Date | null;
   linearIssueIdentifier: string | null;
   linearProjectId: string | null;
   linearProjectName: string | null;
@@ -33,6 +34,7 @@ interface TestRunRowProps {
   showActions?: boolean;
   onDuplicate?: () => void;
   onDelete?: () => void;
+  onArchive?: () => void;
   className?: string;
   draggable?: boolean;
   onDragStart?: (e: React.DragEvent) => void;
@@ -45,6 +47,7 @@ export function TestRunRow({
   showActions = false,
   onDuplicate,
   onDelete,
+  onArchive,
   className,
   draggable,
   onDragStart,
@@ -78,8 +81,13 @@ export function TestRunRow({
       )}
     >
       <div className="flex-1 min-w-0">
-        <div className="font-medium text-foreground group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
-          {run.name}
+        <div className="font-medium text-foreground group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors flex items-center gap-2">
+          <span className={cn(run.archivedAt && "text-muted-foreground italic")}>{run.name}</span>
+          {run.archivedAt && (
+            <Badge variant="secondary" className="font-normal text-xs">
+              Archived
+            </Badge>
+          )}
         </div>
         <div className="text-sm text-muted-foreground flex items-center gap-3 mt-0.5 flex-wrap">
           <span>
@@ -233,6 +241,16 @@ export function TestRunRow({
           </button>
         )}
 
+        {showActions && onArchive && (
+          <button
+            onClick={onArchive}
+            className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors opacity-0 group-hover:opacity-100"
+            title={run.archivedAt ? "Unarchive run" : "Archive run"}
+          >
+            <ArchiveIcon className="w-4 h-4" />
+          </button>
+        )}
+
         {showActions && onDelete && (
           <button
             onClick={onDelete}
@@ -288,6 +306,14 @@ function DuplicateIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" />
+    </svg>
+  );
+}
+
+function ArchiveIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
     </svg>
   );
 }

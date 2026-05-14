@@ -523,6 +523,40 @@ export async function updateTestRun(input: UpdateRunInput) {
   }
 }
 
+export async function archiveTestRun(runId: number, archived: boolean) {
+  const session = await getSessionWithOrg();
+  if (!session) {
+    return { error: "Unauthorized" };
+  }
+
+  const { organizationId } = session.user;
+
+  try {
+    const run = await db
+      .select()
+      .from(testRuns)
+      .where(and(eq(testRuns.id, runId), eq(testRuns.organizationId, organizationId)))
+      .get();
+
+    if (!run) {
+      return { error: "Test run not found" };
+    }
+
+    await db
+      .update(testRuns)
+      .set({ archivedAt: archived ? new Date() : null })
+      .where(eq(testRuns.id, runId));
+
+    revalidatePath("/runs");
+    revalidatePath(`/runs/${runId}`);
+
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to archive test run:", error);
+    return { error: "Failed to archive test run" };
+  }
+}
+
 interface AddScenariosInput {
   runId: number;
   scenarioIds: number[];

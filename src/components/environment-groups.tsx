@@ -11,6 +11,7 @@ export function EnvironmentGroups({
   linearWorkspace,
   onDuplicate,
   onDelete,
+  onArchive,
   onRunDragStart,
   onRunDragEnd,
   movingRunId,
@@ -19,6 +20,7 @@ export function EnvironmentGroups({
   linearWorkspace?: string;
   onDuplicate?: (run: TestRunData) => void;
   onDelete?: (run: TestRunData) => void;
+  onArchive?: (run: TestRunData) => void;
   onRunDragStart?: (e: React.DragEvent, run: TestRunData) => void;
   onRunDragEnd?: (e: React.DragEvent) => void;
   movingRunId?: number | null;
@@ -83,9 +85,10 @@ export function EnvironmentGroups({
             key={run.id}
             run={run}
             linearWorkspace={linearWorkspace}
-            showActions={!!(onDuplicate || onDelete)}
+            showActions={!!(onDuplicate || onDelete || onArchive)}
             onDuplicate={onDuplicate ? () => onDuplicate(run) : undefined}
             onDelete={onDelete ? () => onDelete(run) : undefined}
+            onArchive={onArchive ? () => onArchive(run) : undefined}
             draggable={!!onRunDragStart}
             onDragStart={onRunDragStart ? (e) => onRunDragStart(e, run) : undefined}
             onDragEnd={onRunDragEnd}
@@ -136,9 +139,10 @@ export function EnvironmentGroups({
                     key={run.id}
                     run={run}
                     linearWorkspace={linearWorkspace}
-                    showActions={!!(onDuplicate || onDelete)}
+                    showActions={!!(onDuplicate || onDelete || onArchive)}
                     onDuplicate={onDuplicate ? () => onDuplicate(run) : undefined}
                     onDelete={onDelete ? () => onDelete(run) : undefined}
+                    onArchive={onArchive ? () => onArchive(run) : undefined}
                     draggable={!!onRunDragStart}
                     onDragStart={onRunDragStart ? (e) => onRunDragStart(e, run) : undefined}
                     onDragEnd={onRunDragEnd}

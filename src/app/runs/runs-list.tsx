@@ -12,7 +12,7 @@ import { ReleasePicker } from "@/components/release-picker";
 import { TestRunRow, type TestRunData } from "@/components/test-run-row";
 import { EnvironmentGroups } from "@/components/environment-groups";
 import { completeRelease, reopenRelease, updateRelease } from "@/app/releases/actions";
-import { duplicateTestRun, deleteTestRun, updateTestRun } from "@/app/runs/actions";
+import { duplicateTestRun, deleteTestRun, updateTestRun, archiveTestRun } from "@/app/runs/actions";
 
 type RunWithStats = TestRunData;
 
@@ -64,6 +64,9 @@ export function RunsList({ runs, releases, linearWorkspace, initialReleaseId }: 
 
   // Search state for completed releases
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Hide archived test runs in the unassigned section (default true)
+  const [hideArchived, setHideArchived] = useState(true);
 
   // Duplicate modal state
   const [duplicateRun, setDuplicateRun] = useState<RunWithStats | null>(null);
@@ -211,6 +214,18 @@ export function RunsList({ runs, releases, linearWorkspace, initialReleaseId }: 
         router.refresh();
       } else if (result.error) {
         alert(`Failed to delete: ${result.error}`);
+      }
+    });
+  };
+
+  const handleArchive = (run: RunWithStats) => {
+    const archive = !run.archivedAt;
+    startTransition(async () => {
+      const result = await archiveTestRun(run.id, archive);
+      if (result.success) {
+        router.refresh();
+      } else if (result.error) {
+        alert(`Failed to ${archive ? "archive" : "unarchive"}: ${result.error}`);
       }
     });
   };
@@ -440,6 +455,26 @@ export function RunsList({ runs, releases, linearWorkspace, initialReleaseId }: 
             </div>
           </div>
 
+          {isUnassigned && (
+            <label
+              className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <input
+                type="checkbox"
+                checked={hideArchived}
+                onChange={(e) => setHideArchived(e.target.checked)}
+                className="h-3.5 w-3.5 rounded border-border accent-brand-500 cursor-pointer"
+              />
+              Hide archived test runs
+              {archivedUnassignedCount > 0 && (
+                <Badge variant="secondary" className="font-normal text-xs">
+                  {archivedUnassignedCount}
+                </Badge>
+              )}
+            </label>
+          )}
+
           {!isUnassigned && editingReleaseId !== release.id && (
             <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
               {status === "active" ? (
@@ -482,6 +517,7 @@ export function RunsList({ runs, releases, linearWorkspace, initialReleaseId }: 
                 linearWorkspace={linearWorkspace}
                 onDuplicate={handleOpenDuplicate}
                 onDelete={handleDelete}
+                onArchive={isUnassigned ? handleArchive : undefined}
                 onRunDragStart={handleRunDragStart}
                 onRunDragEnd={handleRunDragEnd}
                 movingRunId={movingRunId}
@@ -499,7 +535,11 @@ export function RunsList({ runs, releases, linearWorkspace, initialReleaseId }: 
     : completedReleases;
 
   const currentReleases = activeTab === "active" ? activeReleases : filteredCompletedReleases;
-  const unassignedRuns = runsByRelease.get("unassigned") || [];
+  const allUnassignedRuns = runsByRelease.get("unassigned") || [];
+  const archivedUnassignedCount = allUnassignedRuns.filter(r => r.archivedAt).length;
+  const unassignedRuns = hideArchived
+    ? allUnassignedRuns.filter(r => !r.archivedAt)
+    : allUnassignedRuns;
 
   return (
     <>
@@ -557,7 +597,7 @@ export function RunsList({ runs, releases, linearWorkspace, initialReleaseId }: 
           </div>
         </CardHeader>
         <CardContent className="p-0 mt-4">
-          {currentReleases.length === 0 && (activeTab === "completed" || unassignedRuns.length === 0) ? (
+          {currentReleases.length === 0 && (activeTab === "completed" || allUnassignedRuns.length === 0) ? (
             <div className="py-12 text-center text-muted-foreground">
               No {activeTab} releases
             </div>
@@ -569,7 +609,7 @@ export function RunsList({ runs, releases, linearWorkspace, initialReleaseId }: 
               )}
 
               {/* Unassigned runs - show in active tab */}
-              {activeTab === "active" && unassignedRuns.length > 0 &&
+              {activeTab === "active" && allUnassignedRuns.length > 0 &&
                 renderReleaseGroup("unassigned", unassignedRuns)
               }
             </div>

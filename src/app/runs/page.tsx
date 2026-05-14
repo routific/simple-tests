@@ -122,6 +122,7 @@ export default async function RunsPage({ searchParams }: PageProps) {
         status: run.status,
         environment: run.environment,
         createdAt: run.createdAt,
+        archivedAt: run.archivedAt,
         linearIssueIdentifier: run.linearIssueIdentifier,
         linearProjectId: run.linearProjectId,
         linearProjectName: run.linearProjectName,
