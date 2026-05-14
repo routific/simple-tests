@@ -386,7 +386,7 @@ function Kbd({ children }: { children: ReactNode }) {
 // Changelog entries - newest first
 const CHANGELOG = [
   {
-    version: "pending",
+    version: "3d6de2a",
     date: "2026-05-14",
     changes: [
       "Test Runs: archive runs in the Unassigned section — new archive icon on each row, plus a 'Hide archived test runs' checkbox to keep the list clean",
