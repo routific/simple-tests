@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { getSessionWithOrg } from "@/lib/auth";
 import { getReleaseLabels, getCompletedReleaseLabels, getIssuesByLabel, LinearAuthError } from "@/lib/linear";
 import { isDemoMode } from "@/lib/demo";
+import { isValidLinearLabelId } from "@/lib/utils";
 
 interface CreateReleaseInput {
   name: string;
@@ -290,7 +291,7 @@ export async function syncReleasesFromLinear() {
       );
 
     for (const release of releasesWithLabels) {
-      if (!release.linearLabelId) continue;
+      if (!isValidLinearLabelId(release.linearLabelId)) continue;
 
       try {
         // Fetch issues tagged with this release label
