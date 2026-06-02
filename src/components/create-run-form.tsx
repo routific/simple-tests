@@ -878,6 +878,24 @@ function FolderTreePicker({
     });
   };
 
+  // IDs of folders that have children (i.e. are expandable)
+  const expandableIds = useMemo(() => {
+    const ids: number[] = [];
+    function collect(nodes: Folder[]) {
+      for (const n of nodes) {
+        if (n.children?.length) {
+          ids.push(n.id);
+          collect(n.children);
+        }
+      }
+    }
+    collect(folders);
+    return ids;
+  }, [folders]);
+
+  const handleExpandAll = () => setExpanded(new Set(expandableIds));
+  const handleCollapseAll = () => setExpanded(new Set());
+
   // Cumulative count: folder's own cases + all descendants
   const getTotalCount = (folder: Folder): number => {
     let total = caseCounts[folder.id] || 0;
@@ -953,8 +971,27 @@ function FolderTreePicker({
 
   return (
     <div className="w-64 flex-shrink-0 border-r border-border bg-muted/30 flex flex-col">
-      <div className="px-4 py-3 border-b border-border bg-muted/50">
+      <div className="px-4 py-3 border-b border-border bg-muted/50 flex items-center justify-between">
         <span className="text-sm font-medium text-foreground">Folders</span>
+        {expandableIds.length > 0 && (
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={handleExpandAll}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded hover:bg-muted"
+            >
+              Expand
+            </button>
+            <span className="text-muted-foreground/50">|</span>
+            <button
+              type="button"
+              onClick={handleCollapseAll}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded hover:bg-muted"
+            >
+              Collapse
+            </button>
+          </div>
+        )}
       </div>
       <div className="flex-1 overflow-auto py-2">
         <button
