@@ -89,6 +89,21 @@ export function FolderPicker({
 
   const tree = buildTree(folders);
 
+  // IDs of folders that have children (i.e. are expandable)
+  const expandableIds = folders
+    .filter((f) => folders.some((c) => c.parentId === f.id))
+    .map((f) => f.id);
+
+  const handleExpandAll = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpandedIds(new Set(expandableIds));
+  };
+
+  const handleCollapseAll = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpandedIds(new Set());
+  };
+
   // Expand ancestors of selected value
   useEffect(() => {
     if (value) {
@@ -309,6 +324,26 @@ export function FolderPicker({
           )}
           onContextMenu={(e) => handleContextMenu(e, null)}
         >
+          {/* Expand / Collapse controls */}
+          {expandableIds.length > 0 && (
+            <div className="flex items-center gap-1 px-3 py-1.5 border-b border-border">
+              <button
+                type="button"
+                onClick={handleExpandAll}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded hover:bg-muted"
+              >
+                Expand
+              </button>
+              <span className="text-muted-foreground/50">|</span>
+              <button
+                type="button"
+                onClick={handleCollapseAll}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded hover:bg-muted"
+              >
+                Collapse
+              </button>
+            </div>
+          )}
           {/* No folder option */}
           <div
             className={cn(

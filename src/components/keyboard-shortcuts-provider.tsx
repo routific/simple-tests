@@ -386,6 +386,20 @@ function Kbd({ children }: { children: ReactNode }) {
 // Changelog entries - newest first
 const CHANGELOG = [
   {
+    version: "f3e88d0",
+    date: "2026-06-02",
+    changes: [
+      "Create Test Run: the folder tree now has Expand and Collapse buttons in its header to expand or collapse the whole tree at once, matching the repository view",
+    ],
+  },
+  {
+    version: "47e7092",
+    date: "2026-06-02",
+    changes: [
+      "New/Edit Test Case: folder picker dropdown now has Expand and Collapse buttons to expand or collapse the whole folder tree at once, matching the repository view",
+    ],
+  },
+  {
     version: "3d6de2a",
     date: "2026-05-14",
     changes: [
