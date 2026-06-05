@@ -26,6 +26,7 @@ export function SyncButton() {
         if (result.created) parts.push(`${result.created} created`);
         if (result.updated) parts.push(`${result.updated} updated`);
         if (result.completed) parts.push(`${result.completed} completed`);
+        if (result.merged) parts.push(`${result.merged} duplicate${result.merged !== 1 ? "s" : ""} merged`);
         if (result.runsAssociated) parts.push(`${result.runsAssociated} run${result.runsAssociated !== 1 ? "s" : ""} linked`);
         setMessage(parts.length > 0 ? `Synced: ${parts.join(", ")}` : "Everything up to date");
       }

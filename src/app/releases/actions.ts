@@ -1,11 +1,11 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { releases, testRuns } from "@/lib/db/schema";
+import { releases, testRuns, type Release } from "@/lib/db/schema";
 import { eq, and, inArray, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getSessionWithOrg } from "@/lib/auth";
-import { getReleaseLabels, getCompletedReleaseLabels, getIssuesByLabel, LinearAuthError } from "@/lib/linear";
+import { getReleaseLabels, getCompletedReleaseLabels, getIssuesByLabels, LinearAuthError } from "@/lib/linear";
 import { isDemoMode } from "@/lib/demo";
 
 interface CreateReleaseInput {
@@ -197,128 +197,174 @@ export async function syncReleasesFromLinear() {
       return { created: 0, updated: 0, message: "No labels found in the 'Release' or 'Completed Release' label groups in Linear." };
     }
 
-    // Build a set of label IDs that are in the "Completed Release" group
-    const completedLabelIds = new Set(completedLabels.map((l) => l.id));
+    // Linear allows the same release name to exist as a separate label in each
+    // team (and at workspace level), so a single logical release can show up as
+    // several labels with distinct IDs. Group labels by name so each name maps
+    // to ONE release that owns every matching label ID.
+    type ReleaseGroup = { name: string; labelIds: Set<string>; status: "active" | "completed" };
+    const groupsByName = new Map<string, ReleaseGroup>();
 
-    // Fetch existing releases for this org that have a linearLabelId
+    const groupFor = (name: string): ReleaseGroup => {
+      let g = groupsByName.get(name);
+      if (!g) {
+        g = { name, labelIds: new Set(), status: "active" };
+        groupsByName.set(name, g);
+      }
+      return g;
+    };
+
+    for (const label of labels) {
+      groupFor(label.name).labelIds.add(label.id);
+    }
+    // "Completed Release" group wins for status.
+    for (const label of completedLabels) {
+      const g = groupFor(label.name);
+      g.labelIds.add(label.id);
+      g.status = "completed";
+    }
+
+    // Fetch all existing releases for this org so we can match + merge duplicates.
     const existingReleases = await db
       .select()
       .from(releases)
       .where(eq(releases.organizationId, organizationId));
 
-    const existingByLabelId = new Map(
-      existingReleases
-        .filter((r) => r.linearLabelId)
-        .map((r) => [r.linearLabelId!, r])
-    );
+    const labelIdsOf = (r: Release): string[] => {
+      const ids = new Set<string>();
+      if (r.linearLabelId) ids.add(r.linearLabelId);
+      if (r.linearLabelIds) {
+        try {
+          const parsed = JSON.parse(r.linearLabelIds);
+          if (Array.isArray(parsed)) parsed.forEach((id) => typeof id === "string" && ids.add(id));
+        } catch {
+          // ignore malformed JSON
+        }
+      }
+      return Array.from(ids);
+    };
 
     let created = 0;
     let updated = 0;
     let completed = 0;
-
-    // Process active release labels
-    for (const label of labels) {
-      const existing = existingByLabelId.get(label.id);
-
-      if (existing) {
-        // Update name if changed
-        if (existing.name !== label.name) {
-          await db
-            .update(releases)
-            .set({ name: label.name })
-            .where(eq(releases.id, existing.id));
-          updated++;
-        }
-      } else {
-        // Insert new release
-        await db.insert(releases).values({
-          name: label.name,
-          organizationId,
-          linearLabelId: label.id,
-          createdBy: userId,
-          status: "active",
-        });
-        created++;
-      }
-    }
-
-    // Process completed release labels - mark matching releases as completed
-    for (const label of completedLabels) {
-      const existing = existingByLabelId.get(label.id);
-
-      if (existing) {
-        const updates: { name?: string; status?: "active" | "completed" } = {};
-        if (existing.name !== label.name) updates.name = label.name;
-        if (existing.status !== "completed") updates.status = "completed";
-
-        if (Object.keys(updates).length > 0) {
-          await db
-            .update(releases)
-            .set(updates)
-            .where(eq(releases.id, existing.id));
-          if (updates.status) completed++;
-          if (updates.name) updated++;
-        }
-      } else {
-        // Label is in "Completed Release" but we haven't seen it before - create as completed
-        await db.insert(releases).values({
-          name: label.name,
-          organizationId,
-          linearLabelId: label.id,
-          createdBy: userId,
-          status: "completed",
-        });
-        created++;
-      }
-    }
-
-    // Auto-associate test runs with releases based on linked Linear issues
+    let merged = 0;
     let runsAssociated = 0;
 
-    // Get all releases with linearLabelId for this org
-    const releasesWithLabels = await db
-      .select({
-        id: releases.id,
-        linearLabelId: releases.linearLabelId,
-      })
-      .from(releases)
-      .where(
-        and(
-          eq(releases.organizationId, organizationId),
-          // Only process releases that have a Linear label
-        )
-      );
+    // Track which existing releases have already been claimed by a group so a
+    // single release can't be merged into two groups.
+    const consumed = new Set<number>();
 
-    for (const release of releasesWithLabels) {
-      if (!release.linearLabelId) continue;
+    for (const group of Array.from(groupsByName.values())) {
+      const groupLabelIds = Array.from(group.labelIds);
 
-      try {
-        // Fetch issues tagged with this release label
-        const issues = await getIssuesByLabel(release.linearLabelId);
+      // Match existing synced releases either by an overlapping label ID or by
+      // exact name. Manually-created releases (no Linear label) are left alone.
+      const candidates = existingReleases.filter((r) => {
+        if (consumed.has(r.id)) return false;
+        const hasLabel = r.linearLabelId !== null || r.linearLabelIds !== null;
+        if (!hasLabel) return false;
+        const ids = labelIdsOf(r);
+        const overlaps = ids.some((id) => group.labelIds.has(id));
+        return overlaps || r.name === group.name;
+      });
+      candidates.forEach((c) => consumed.add(c.id));
 
-        if (issues.length === 0) continue;
+      // Keep the oldest (lowest id) as the canonical release.
+      candidates.sort((a, b) => a.id - b.id);
+      const keeper = candidates[0];
+      const duplicates = candidates.slice(1);
 
-        // Get all issue IDs
-        const issueIds = issues.map(issue => issue.id);
+      // Canonical label ID: keep the keeper's current one if it's still valid,
+      // otherwise the lowest sorted ID, for a stable URL slug.
+      const sortedIds = groupLabelIds.slice().sort();
+      const canonicalLabelId =
+        keeper?.linearLabelId && group.labelIds.has(keeper.linearLabelId)
+          ? keeper.linearLabelId
+          : sortedIds[0];
+      const labelIdsJson = JSON.stringify(sortedIds);
 
-        // Find test runs linked to these issues that don't have a release assigned
-        // and belong to this organization
-        const matchingRuns = await db
-          .select({ id: testRuns.id })
-          .from(testRuns)
-          .where(
-            and(
-              eq(testRuns.organizationId, organizationId),
-              inArray(testRuns.linearIssueId, issueIds),
-              isNull(testRuns.releaseId)
-            )
-          );
+      // Issue count + auto-association only for active releases. Completed
+      // releases rarely need it and skipping keeps sync within Linear's rate
+      // limits (one query per active release name instead of per label).
+      let issueCount: number | null = null;
+      let issueIds: string[] = [];
+      if (group.status === "active") {
+        try {
+          const issues = await getIssuesByLabels(groupLabelIds);
+          issueCount = issues.length;
+          issueIds = issues.map((i) => i.id);
+        } catch (error) {
+          if (error instanceof LinearAuthError) throw error;
+          console.error(`Failed to fetch issues for release "${group.name}":`, error);
+        }
+      }
 
-        if (matchingRuns.length > 0) {
-          // Update these test runs to associate with the release
+      if (keeper) {
+        // Re-point any test runs from duplicates onto the keeper, then delete
+        // the duplicate rows.
+        for (const dup of duplicates) {
           await db
             .update(testRuns)
-            .set({ releaseId: release.id })
+            .set({ releaseId: keeper.id })
+            .where(
+              and(
+                eq(testRuns.organizationId, organizationId),
+                eq(testRuns.releaseId, dup.id)
+              )
+            );
+          await db.delete(releases).where(eq(releases.id, dup.id));
+          merged++;
+        }
+
+        const updates: Partial<Release> = {
+          name: group.name,
+          linearLabelId: canonicalLabelId,
+          linearLabelIds: labelIdsJson,
+        };
+        if (group.status === "active") updates.issueCount = issueCount;
+        if (group.status === "completed" && keeper.status !== "completed") {
+          updates.status = "completed";
+          completed++;
+        }
+        if (keeper.name !== group.name) updated++;
+
+        await db.update(releases).set(updates).where(eq(releases.id, keeper.id));
+      } else {
+        // No existing release for this name - create one.
+        await db.insert(releases).values({
+          name: group.name,
+          organizationId,
+          linearLabelId: canonicalLabelId,
+          linearLabelIds: labelIdsJson,
+          issueCount,
+          createdBy: userId,
+          status: group.status,
+        });
+        created++;
+        if (group.status === "completed") completed++;
+      }
+
+      // Auto-associate unassigned test runs whose linked Linear issue is tagged
+      // with this release.
+      if (issueIds.length > 0) {
+        const targetId =
+          keeper?.id ??
+          (
+            await db
+              .select({ id: releases.id })
+              .from(releases)
+              .where(
+                and(
+                  eq(releases.organizationId, organizationId),
+                  eq(releases.linearLabelId, canonicalLabelId)
+                )
+              )
+              .get()
+          )?.id;
+
+        if (targetId) {
+          const matchingRuns = await db
+            .select({ id: testRuns.id })
+            .from(testRuns)
             .where(
               and(
                 eq(testRuns.organizationId, organizationId),
@@ -327,18 +373,27 @@ export async function syncReleasesFromLinear() {
               )
             );
 
-          runsAssociated += matchingRuns.length;
+          if (matchingRuns.length > 0) {
+            await db
+              .update(testRuns)
+              .set({ releaseId: targetId })
+              .where(
+                and(
+                  eq(testRuns.organizationId, organizationId),
+                  inArray(testRuns.linearIssueId, issueIds),
+                  isNull(testRuns.releaseId)
+                )
+              );
+            runsAssociated += matchingRuns.length;
+          }
         }
-      } catch (error) {
-        // Log but don't fail the whole sync if one release's issue fetch fails
-        console.error(`Failed to fetch issues for release ${release.id}:`, error);
       }
     }
 
     revalidatePath("/releases");
     revalidatePath("/runs");
 
-    return { created, updated, completed, runsAssociated };
+    return { created, updated, completed, merged, runsAssociated };
   } catch (error) {
     if (error instanceof LinearAuthError) {
       return { error: "auth_expired" };

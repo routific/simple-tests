@@ -530,11 +530,29 @@ export async function getCompletedReleaseLabels(): Promise<LinearLabel[]> {
   }
 }
 
+const LABEL_UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function getIssuesByLabel(labelId: string): Promise<LinearIssue[]> {
-  // Validate that labelId is a valid UUID before making the API call
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  if (!uuidRegex.test(labelId)) {
-    console.warn(`Invalid labelId format (not a UUID): ${labelId}`);
+  return getIssuesByLabels([labelId]);
+}
+
+/**
+ * Fetch issues tagged with ANY of the given label IDs in a single query.
+ *
+ * A logical release can map to several Linear labels (the same release name
+ * existing as a label in multiple teams), so we aggregate across all of them.
+ * Linear returns each matching issue once, so no extra de-duplication is needed.
+ */
+export async function getIssuesByLabels(labelIds: string[]): Promise<LinearIssue[]> {
+  // Validate that each labelId is a UUID before making the API call
+  const validIds = Array.from(
+    new Set(labelIds.filter((id) => LABEL_UUID_REGEX.test(id)))
+  );
+
+  if (validIds.length === 0) {
+    if (labelIds.length > 0) {
+      console.warn(`No valid labelIds (not UUIDs): ${labelIds.join(", ")}`);
+    }
     return [];
   }
 
@@ -544,7 +562,7 @@ export async function getIssuesByLabel(labelId: string): Promise<LinearIssue[]> 
     const issues = await client.issues({
       first: 100,
       filter: {
-        labels: { some: { id: { eq: labelId } } },
+        labels: { some: { id: { in: validIds } } },
       },
     });
 
@@ -566,7 +584,7 @@ export async function getIssuesByLabel(labelId: string): Promise<LinearIssue[]> 
     return results;
   } catch (error) {
     if (error instanceof LinearAuthError) throw error;
-    console.error("Failed to fetch issues by label:", error);
+    console.error("Failed to fetch issues by labels:", error);
     return [];
   }
 }
