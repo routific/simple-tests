@@ -386,7 +386,7 @@ function Kbd({ children }: { children: ReactNode }) {
 // Changelog entries - newest first
 const CHANGELOG = [
   {
-    version: "PENDING",
+    version: "bd568ae",
     date: "2026-06-05",
     changes: [
       "Releases: fixed duplicate releases from Linear — the same release name across multiple Linear teams now collapses into a single release, and existing duplicates are merged (their test runs are re-pointed) on the next sync",
