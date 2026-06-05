@@ -327,7 +327,8 @@ Test cases can contain multiple scenarios, each with their own Gherkin content. 
 
 ### Releases
 - **Releases list** - View all releases with status and test run counts
-- **Linear label sync** - Sync releases from Linear labels (Release label group)
+- **Linear label sync** - Sync releases from Linear labels (Release label group). The same release name across multiple Linear teams collapses into a single release that owns all matching label IDs; duplicates from earlier syncs are merged automatically (their runs are re-pointed)
+- **Cached issue counts** - Linear issue counts are cached on the release during sync (not fetched live per release on every page load), so list counts stay accurate and fast
 - **Auto-association** - Test runs linked to Linear issues are automatically associated with releases
 - **Release detail page** - View all test runs associated with a release
 - **Complete/Reopen** - Mark releases as complete with confetti celebration
