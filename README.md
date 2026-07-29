@@ -152,9 +152,9 @@ src/
 │   │   └── connect/             # MCP connection instructions
 │   ├── api/
 │   │   ├── auth/[...nextauth]/  # Auth.js route handler
-│   │   ├── mcp/                 # Model Context Protocol endpoints
-│   │   │   ├── sse/             # SSE transport for MCP
-│   │   │   └── messages/        # MCP message handler
+│   │   ├── mcp/                 # Model Context Protocol endpoint (Streamable HTTP)
+│   │   │   ├── sse/             # Legacy URL alias (serves Streamable HTTP)
+│   │   │   └── messages/        # Retired HTTP+SSE message handler (410 Gone)
 │   │   ├── repository/          # Import/export endpoints
 │   │   └── linear/              # Linear API endpoints
 │   │       ├── projects/        # Fetch Linear projects
@@ -198,7 +198,7 @@ src/
 │   │   ├── tools.ts             # MCP tool definitions
 │   │   ├── resources.ts         # MCP resource definitions
 │   │   ├── auth.ts              # Token validation
-│   │   ├── session-store.ts     # Session management
+│   │   ├── streamable-http.ts   # Stateless Streamable HTTP request handler
 │   │   └── audit-log.ts         # Write operation logging
 │   ├── oauth/                   # OAuth utilities for MCP
 │   │   └── utils.ts             # Token generation, validation
@@ -433,7 +433,7 @@ The app runs at http://localhost:3000.
 | `src/app/folders/actions.ts` | Folder management mutations |
 | `src/app/runs/actions.ts` | Test run mutations (create, update, add/remove scenarios) |
 | `src/app/releases/actions.ts` | Release management mutations |
-| `src/app/api/mcp/sse/route.ts` | MCP SSE transport endpoint |
+| `src/app/api/mcp/route.ts` | MCP endpoint (Streamable HTTP, stateless) |
 | `src/app/oauth/` | OAuth 2.0 server for MCP authentication |
 | `src/lib/mcp/` | MCP server implementation (tools, resources, auth) |
 | `src/app/settings/connect/` | MCP connection instructions page |

@@ -386,6 +386,13 @@ function Kbd({ children }: { children: ReactNode }) {
 // Changelog entries - newest first
 const CHANGELOG = [
   {
+    version: "pending",
+    date: "2026-07-29",
+    changes: [
+      "MCP: retired the legacy HTTP+SSE transport that caused 300s timeouts and repeated reauthentication prompts on Vercel — /api/mcp/sse now serves the stateless Streamable HTTP transport, and connection instructions point to /api/mcp",
+    ],
+  },
+  {
     version: "3d6de2a",
     date: "2026-05-14",
     changes: [

@@ -10,7 +10,7 @@ interface ConnectInstructionsProps {
 export function ConnectInstructions({ baseUrl }: ConnectInstructionsProps) {
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
 
-  const mcpUrl = `${baseUrl}/api/mcp/sse`;
+  const mcpUrl = `${baseUrl}/api/mcp`;
 
   const copyToClipboard = async (text: string, section: string) => {
     await navigator.clipboard.writeText(text);

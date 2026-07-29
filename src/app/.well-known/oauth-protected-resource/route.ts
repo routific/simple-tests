@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
 
   const metadata = {
     // The resource identifier for this MCP server
-    resource: `${baseUrl}/api/mcp/sse`,
+    resource: `${baseUrl}/api/mcp`,
 
     // Authorization servers that can issue tokens for this resource
     authorization_servers: [`${baseUrl}`],
