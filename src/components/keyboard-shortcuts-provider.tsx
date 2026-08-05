@@ -393,6 +393,28 @@ const CHANGELOG = [
     ],
   },
   {
+    version: "bd568ae",
+    date: "2026-06-05",
+    changes: [
+      "Releases: fixed duplicate releases from Linear — the same release name across multiple Linear teams now collapses into a single release, and existing duplicates are merged (their test runs are re-pointed) on the next sync",
+      "Releases: fixed issue counts showing '0 issues' on the list while the detail page showed the real count — counts are now cached during sync instead of firing a live Linear API call per release on every page load (which got rate-limited)",
+    ],
+  },
+  {
+    version: "f3e88d0",
+    date: "2026-06-02",
+    changes: [
+      "Create Test Run: the folder tree now has Expand and Collapse buttons in its header to expand or collapse the whole tree at once, matching the repository view",
+    ],
+  },
+  {
+    version: "47e7092",
+    date: "2026-06-02",
+    changes: [
+      "New/Edit Test Case: folder picker dropdown now has Expand and Collapse buttons to expand or collapse the whole folder tree at once, matching the repository view",
+    ],
+  },
+  {
     version: "3d6de2a",
     date: "2026-05-14",
     changes: [

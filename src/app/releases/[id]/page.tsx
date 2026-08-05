@@ -5,7 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { getSessionWithOrg } from "@/lib/auth";
 import { isValidLinearLabelId } from "@/lib/utils";
-import { getIssuesByLabel } from "@/lib/linear";
+import { getIssuesByLabels } from "@/lib/linear";
 import { type TestRunData } from "@/components/test-run-row";
 import { EnvironmentGroups } from "@/components/environment-groups";
 import { ReleaseHeader } from "./release-header";
@@ -36,6 +36,16 @@ export default async function ReleaseDetailPage({ params }: Props) {
     .where(eq(releases.linearLabelId, decodedId))
     .get();
 
+  if (!release && isValidLinearLabelId(decodedId)) {
+    // A release can own several label IDs; the slug might be a non-canonical
+    // one stored in the linearLabelIds JSON array.
+    release = await db
+      .select()
+      .from(releases)
+      .where(sql`${releases.linearLabelIds} LIKE ${"%\"" + decodedId + "\"%"}`)
+      .get();
+  }
+
   if (!release && /^\d+$/.test(decodedId)) {
     // Only try numeric ID if the slug is purely numeric
     release = await db
@@ -60,14 +70,32 @@ export default async function ReleaseDetailPage({ params }: Props) {
 
   const releaseId = release.id;
 
+  // Collect every Linear label ID this release owns (a release name can map to
+  // labels in multiple Linear teams).
+  const releaseLabelIds = (() => {
+    const ids = new Set<string>();
+    if (release.linearLabelId) ids.add(release.linearLabelId);
+    if (release.linearLabelIds) {
+      try {
+        const parsed = JSON.parse(release.linearLabelIds);
+        if (Array.isArray(parsed)) {
+          parsed.forEach((id) => typeof id === "string" && ids.add(id));
+        }
+      } catch {
+        // ignore malformed JSON
+      }
+    }
+    return Array.from(ids);
+  })();
+
   // Fetch Linear issues if synced from Linear
   // Handle expired tokens gracefully
-  let linearIssues: Awaited<ReturnType<typeof getIssuesByLabel>> = [];
+  let linearIssues: Awaited<ReturnType<typeof getIssuesByLabels>> = [];
   let linearAuthExpired = false;
 
-  if (isValidLinearLabelId(release.linearLabelId)) {
+  if (releaseLabelIds.length > 0) {
     try {
-      linearIssues = await getIssuesByLabel(release.linearLabelId);
+      linearIssues = await getIssuesByLabels(releaseLabelIds);
     } catch (error) {
       // Use error.name check instead of instanceof - instanceof can fail across module boundaries in Next.js
       if (error instanceof Error && error.name === "LinearAuthError") {

@@ -150,6 +150,13 @@ export const releases = sqliteTable(
       .notNull()
       .references(() => organizations.id),
     linearLabelId: text("linear_label_id"),
+    // JSON array of every Linear label ID that maps to this release name.
+    // Linear allows the same label-group/label name to exist per-team, so one
+    // logical release ("Platform v3.2.156") can have several distinct label IDs.
+    linearLabelIds: text("linear_label_ids"),
+    // Cached count of Linear issues across all linearLabelIds, refreshed during
+    // sync. Avoids a live per-release Linear API call on every list render.
+    issueCount: integer("issue_count"),
     status: text("status", { enum: ["active", "completed"] })
       .notNull()
       .default("active"),
