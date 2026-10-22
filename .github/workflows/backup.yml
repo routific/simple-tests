@@ -1,0 +1,29 @@
+# Daily copy of the production database kept as a workflow artifact, outside Turso and Vercel. Needs the repo secrets
+# TURSO_DATABASE_URL and TURSO_AUTH_TOKEN. See scripts/backup.mjs for how to restore.
+name: Backup
+on:
+  schedule:
+    - cron: '27 7 * * *'
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --omit=dev
+      - run: node scripts/backup.mjs backup
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backup-${{ github.run_number }}
+          path: backup
+          retention-days: 30
+          if-no-files-found: error

@@ -416,6 +416,10 @@ The app runs at http://localhost:3000.
 | `AUTH_SECRET` | Yes | NextAuth.js secret (generate with `openssl rand -base64 32`) |
 | `DEMO_MODE` | No | Set to `"true"` to bypass Linear auth and use demo data (for preview deployments) |
 
+## Backups
+
+A GitHub Action (`.github/workflows/backup.yml`) copies the production database every day with `scripts/backup.mjs` and keeps 30 days of copies as workflow artifacts, outside Turso. It needs the repo secrets `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`, and can be run on demand from the Actions tab. To restore, download an artifact and run `turso db create <name> --from-file simple-tests.db`.
+
 ## Security
 
 - **Organization isolation** - All data is scoped by Linear organization ID
@@ -441,6 +445,7 @@ The app runs at http://localhost:3000.
 | `src/components/keyboard-shortcuts-provider.tsx` | Global keyboard shortcuts and version info modal |
 | `scripts/import-testmo.ts` | CSV import script |
 | `scripts/seed-demo.ts` | Demo mode data seeding script |
+| `scripts/backup.mjs` | Copies the Turso database to a local SQLite file (run daily by `.github/workflows/backup.yml`) |
 | `src/lib/demo.ts` | Demo mode configuration and session helpers |
 | `drizzle.config.ts` | Database migration config |
 
