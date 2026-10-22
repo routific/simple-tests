@@ -33,8 +33,15 @@ for (const t of tables) await local.execute(t.sql);
 
 // Tables are copied row by row in pages, keyed on rowid.
 const PAGE = 500;
+// Live credentials stay out of the copy (anyone who can read the repo can download an artifact): these tables are
+// created empty, so after a restore MCP clients and API users sign in again.
+const SECRET = new Set(["oauth_access_tokens", "oauth_refresh_tokens", "oauth_authorization_codes", "api_tokens"]);
 const counts = {};
 for (const { name } of tables) {
+  if (SECRET.has(name)) {
+    console.log(`${name}: skipped`);
+    continue;
+  }
   let copied = 0;
   for (let after = -9223372036854775808n; ; ) {
     const rs = await remote.execute({

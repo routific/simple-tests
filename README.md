@@ -418,7 +418,7 @@ The app runs at http://localhost:3000.
 
 ## Backups
 
-A GitHub Action (`.github/workflows/backup.yml`) copies the production database every day with `scripts/backup.mjs` and keeps 30 days of copies as workflow artifacts, outside Turso. It needs the repo secrets `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`, and can be run on demand from the Actions tab. To restore, download an artifact and run `turso db create <name> --from-file simple-tests.db`.
+A GitHub Action (`.github/workflows/backup.yml`) copies the production database every day with `scripts/backup.mjs` and keeps 30 days of copies as workflow artifacts, outside Turso. It needs the repo secrets `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`, and can be run on demand from the Actions tab. To restore, download an artifact and run `turso db create <name> --from-file simple-tests.db`. The OAuth and API token tables are backed up empty, so MCP clients and API users sign in again after a restore.
 
 ## Security
 
